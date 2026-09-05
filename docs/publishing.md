@@ -40,6 +40,16 @@ historical uses of the word. This is not a formal trademark clearance. The
 README identifies RoboWindows as independent and acknowledges Microsoft's
 Windows trademark; no project text claims Microsoft endorsement.
 
+## CI validation record
+
+The initial public CI run on 2026-09-05 passed repository, host-test, Android
+toolchain, and source-fetch stages, then failed dependency verification because
+the warm development cache had not requested two transitive metadata artifacts:
+the Guava parent POM and JUnit BOM module metadata. Regenerating
+`gradle/verification-metadata.xml` from an empty Gradle cache added only those
+two SHA-256 records. This clean-cache finding is retained here so future
+dependency allowlist updates are also generated and tested from an empty cache.
+
 ## Never publish
 
 - `backups/`, user disk images, ISO files, installed applications, or keys;
