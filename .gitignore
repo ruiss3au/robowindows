@@ -1,0 +1,33 @@
+# Local toolchains and generated output
+.gradle/
+.idea/
+.cxx/
+local.properties
+build/
+artifacts/
+third_party/
+backups/
+
+# User-owned and proprietary guest media
+*.iso
+*.img
+*.img.gz
+*.ima
+*.vhd
+*.vhdx
+*.qcow2
+*.apk
+*.key
+*.keystore
+*.jks
+*.p12
+*.pem
+.env
+.env.*
+!.env.example
+
+# Local logs and machine-specific files
+*.log
+realtime-report-*.txt
+*.part
+.DS_Store

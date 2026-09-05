@@ -1,0 +1,23 @@
+diff --git a/dosbox_pure_libretro.cpp b/dosbox_pure_libretro.cpp
+index ec99bf3..142dcab 100644
+--- a/dosbox_pure_libretro.cpp
++++ b/dosbox_pure_libretro.cpp
+@@ -2700,12 +2700,16 @@ static void init_dosbox(bool forcemenu = false, bool reinit = false, const std::
+ 		#endif
+ 	}
+ 	const int path_extlen = (path ? (int)((path_fragment ? path_fragment : path + dbp_content_path.length()) - path_ext) : 0);
+-	const bool newcontent = !dbp_wasloaded, force_puremenu = forcemenu || (dbp_biosreboot && dbp_wasloaded);
++	const bool is_conf_content = (path_extlen == 4 && !strncasecmp(path_ext, "conf", 4));
++	const bool newcontent = !dbp_wasloaded;
++	// RoboWindows launches only generated .conf content. A guest BIOS reboot must reload that
++	// configuration instead of forcing DOSBox Pure's menu into the visible guest surface.
++	const bool force_puremenu = forcemenu || (dbp_biosreboot && dbp_wasloaded && !is_conf_content);
+ 	if (newcontent) dbp_biosreboot = dbp_reboot_set64mem = false; // ignore this when switching content
+ 	if (newcontent && !reinit) dbp_auto_mapping = NULL; // re-acquire when switching content
+ 
+ 	// Loading a .conf file behaves like regular DOSBox (no union drive mounting, save file, start menu, etc.)
+-	dbp_skip_c_mount = (path_extlen == 4 && !strncasecmp(path_ext, "conf", 4));
++	dbp_skip_c_mount = is_conf_content;
+ 	if (dbp_skip_c_mount && !dbconf)
+ 	{
+ 		std::string confcontent;

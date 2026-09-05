@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="rw_background">#101318</color>
+    <color name="rw_surface">#191E26</color>
+    <color name="rw_surface_high">#222A35</color>
+    <color name="rw_primary">#75D5B5</color>
+    <color name="rw_text">#EEF3F7</color>
+    <color name="rw_text_muted">#9DAAB7</color>
+    <color name="rw_guest">#080A0D</color>
+</resources>
+

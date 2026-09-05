@@ -1,0 +1,19 @@
+# Source pins selected during Phase 0 research on 2026-08-09.
+# Update intentionally; never replace these with branches in build scripts.
+
+dosbox-pure-unleashed https://github.com/schellingb/dosbox-pure-unleashed.git 4a11412248ca4c862751a7d9e6818023795031e9
+dosbox-pure https://github.com/schellingb/dosbox-pure.git 7f6e8fb7385fa446d1444d671063268520bf9b54
+ZillaLib https://github.com/schellingb/ZillaLib.git a2796bfe0faebe3e5de14b75d6b45866f1576f14
+
+# Android toolchain pins
+java 17
+gradle 9.1.0
+android-gradle-plugin 9.0.1
+android-command-line-tools 13114758
+android-build-tools 36.0.0
+android-compile-sdk 36
+android-target-sdk 36
+android-min-sdk 26
+android-ndk 28.2.13676358
+android-abi arm64-v8a
+

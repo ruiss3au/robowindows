@@ -1,0 +1,54 @@
+package org.robowindows.app;
+
+import android.content.Context;
+import android.graphics.Canvas;
+import android.graphics.Color;
+import android.view.SurfaceHolder;
+import android.view.SurfaceView;
+import android.view.MotionEvent;
+import java.util.function.IntUnaryOperator;
+
+final class GuestDisplayView extends SurfaceView implements SurfaceHolder.Callback {
+    private final IntUnaryOperator deviceHandle;
+
+    GuestDisplayView(Context context, IntUnaryOperator deviceHandle) {
+        super(context);
+        this.deviceHandle = deviceHandle;
+        setContentDescription("Guest display");
+        getHolder().addCallback(this);
+        setFocusable(true);
+        setFocusableInTouchMode(true);
+    }
+
+    private void drawWaitingFrame() {
+        Canvas canvas = getHolder().lockCanvas();
+        if (canvas == null) return;
+        try {
+            canvas.drawColor(Color.rgb(8, 10, 13));
+        } finally {
+            getHolder().unlockCanvasAndPost(canvas);
+        }
+    }
+
+    @Override public boolean onCapturedPointerEvent(MotionEvent event) {
+        NativeHost.pushMouse(event.getActionMasked(),
+                event.getAxisValue(MotionEvent.AXIS_RELATIVE_X),
+                event.getAxisValue(MotionEvent.AXIS_RELATIVE_Y), event.getX(), event.getY(),
+                event.getButtonState(), event.getActionButton(),
+                event.getAxisValue(MotionEvent.AXIS_VSCROLL),
+                event.getAxisValue(MotionEvent.AXIS_HSCROLL), event.getSource(),
+                deviceHandle.applyAsInt(event.getDeviceId()),
+                event.getEventTime() * 1_000_000L, true);
+        return true;
+    }
+
+    @Override public void surfaceCreated(SurfaceHolder holder) {
+        NativeHost.setSurface(holder.getSurface());
+        drawWaitingFrame();
+    }
+    @Override public void surfaceChanged(SurfaceHolder holder, int format, int width, int height) {
+        NativeHost.setSurface(holder.getSurface());
+        drawWaitingFrame();
+    }
+    @Override public void surfaceDestroyed(SurfaceHolder holder) { NativeHost.setSurface(null); }
+}
