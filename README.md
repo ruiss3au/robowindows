@@ -35,6 +35,54 @@ also passed. Bootable Windows installation ISOs create a private hard disk and
 installer profile; other ISO files remain attachable media rather than being
 misrepresented as directly bootable machine disks.
 
+## Run Windows
+
+RoboWindows does not include Windows, installation media, product keys, or
+drivers. Use only media you are licensed to use. Keep the tablet unlocked and
+RoboWindows in the foreground while importing large files.
+
+### Install Windows from an ISO
+
+The current installer workflow is intended for Windows 9x-style, BIOS-bootable
+ISOs that use El Torito floppy emulation. Other ISO layouts are rejected, but an
+ordinary ISO can still be attached to an existing machine.
+
+1. Make sure the tablet has room for the ISO plus a new 2 GB working disk.
+2. On the RoboWindows home screen, choose **Add machine** → **Windows**, then
+   select the ISO with Android's document picker.
+3. After the import completes, choose **Install**. Inside the guest, partition
+   and format the new disk and run Windows Setup normally.
+4. Enter any registration key only inside the guest. RoboWindows does not ask
+   for, store, or log it.
+5. Before Setup's first restart from the hard disk, leave the guest with
+   **Exit**, open the machine's **Settings**, and choose **Boot Windows disk**.
+6. Choose **Start** to continue Setup from the installed disk. The ISO remains
+   attached as the guest CD-ROM. Use **Boot installer** in Settings if recovery
+   requires the installer again.
+
+See [Windows installation](docs/windows-installation.md) for the detailed
+Windows 98 workflow and optional utility-disk handling.
+
+### Load an already-installed Windows disk
+
+1. Prepare the existing boot disk as an `.img`, `.ima`, or `.vhd` file. An ISO
+   alone is installation/optical media, not an installed machine disk.
+2. Choose **Add machine** → **Windows**, then select the disk image with
+   Android's document picker.
+3. Wait for the import to finish. RoboWindows keeps the imported source
+   read-only and creates a separate private writable working copy, so allow
+   roughly twice the image size as free tablet storage.
+4. Choose **Start** beside the new machine. The default **Windows compatible**
+   configuration uses the conservative CPU core; arbitrary images and Windows
+   releases are not guaranteed compatible.
+5. To attach an ISO after Windows starts, reveal the session controls and choose
+   **Change media**.
+
+Shut Windows down inside the guest before choosing **Exit** whenever possible.
+The writable machine lives in RoboWindows app-private storage; back it up before
+clearing app data or uninstalling the app. The developer backup procedure is in
+[Backup and restore operations](docs/backup-and-restore.md).
+
 ## Working scope
 
 - Primary target: Samsung SM-T500, ARM64, Android 16/API 36

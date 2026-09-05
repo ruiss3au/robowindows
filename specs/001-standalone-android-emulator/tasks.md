@@ -132,6 +132,8 @@ MVP even before guest boot.
   GitHub launch and add an explicit non-endorsement/trademark statement
 - [ ] T055 Converge code, tests, docs, manifests, and compatibility claims against
   all accepted requirements
+- [x] T056 Add a README quick-start for installing Windows from user-owned media
+  and importing an already-installed disk
 
 ## Dependencies and safe parallelism
 

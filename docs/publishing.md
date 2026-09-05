@@ -42,13 +42,13 @@ Windows trademark; no project text claims Microsoft endorsement.
 
 ## CI validation record
 
-The initial public CI run on 2026-09-05 passed repository, host-test, Android
-toolchain, and source-fetch stages, then failed dependency verification because
-the warm development cache had not requested two transitive metadata artifacts:
-the Guava parent POM and JUnit BOM module metadata. Regenerating
-`gradle/verification-metadata.xml` from an empty Gradle cache added only those
-two SHA-256 records. This clean-cache finding is retained here so future
-dependency allowlist updates are also generated and tested from an empty cache.
+The first two public CI runs on 2026-09-05 passed repository, host-test, Android
+toolchain, and source-fetch stages, then exposed dependency-verification records
+that a warm development tree had not requested: first the Guava parent POM and
+JUnit BOM module metadata, then the Linux AAPT2 artifacts. Regenerate and test
+`gradle/verification-metadata.xml` from both an empty Gradle cache and a clean
+project checkout. This clean-run finding is retained here so future dependency
+allowlist updates use the same procedure.
 
 ## Never publish
 
