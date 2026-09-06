@@ -23,6 +23,10 @@ final class MachineStore {
     private static final String PREFS = "machine_store";
     private static final String KEY = "profiles";
     private static final String ACTIVE_SESSION = "active_session";
+    private static final String CLEAN_SHUTDOWN_MACHINE = "clean_shutdown_machine";
+    private static final long COPY_SAFETY_MARGIN_BYTES = 256L * 1024L * 1024L;
+    static final int SAFE_EXPERIMENTAL_CYCLES = 12000;
+    static final int[] EXPERIMENTAL_CYCLE_CANDIDATES = {10000, 12000, 14000};
     private final Context context;
     private final File filesRoot;
     private final String preferencesName;
@@ -75,7 +79,8 @@ final class MachineStore {
                                 profile.mediaName, profile.mediaPath, runtime.getAbsolutePath(),
                                 profile.mediaSha256, launch.getAbsolutePath(), profile.memoryMb,
                                 profile.cpuCore, profile.soundEnabled, profile.createdAt,
-                                profile.lastBootedAt, profile.mediaAssets);
+                                profile.lastBootedAt, profile.mediaAssets, profile.role,
+                                profile.fixedCycles, profile.lastKnownSafeCycles);
                         migrated = true;
                     }
                     profiles.add(profile);
@@ -313,7 +318,8 @@ final class MachineStore {
                         profile.mediaName, profile.mediaPath, profile.runtimePath, profile.mediaSha256,
                         profile.launchPath, profile.memoryMb, profile.cpuCore,
                         profile.soundEnabled, profile.createdAt, System.currentTimeMillis(),
-                        profile.mediaAssets));
+                        profile.mediaAssets, profile.role, profile.fixedCycles,
+                        profile.lastKnownSafeCycles));
                 break;
             }
         }
@@ -322,7 +328,8 @@ final class MachineStore {
 
     void markSessionStarted(String machineId) {
         context.getSharedPreferences(preferencesName, Context.MODE_PRIVATE).edit()
-                .putString(ACTIVE_SESSION, machineId).commit();
+                .putString(ACTIVE_SESSION, machineId)
+                .remove(CLEAN_SHUTDOWN_MACHINE).commit();
     }
 
     void markSessionStopped() {
@@ -339,21 +346,127 @@ final class MachineStore {
         markSessionStopped();
     }
 
+    void markGuestShutdown(String machineId) {
+        context.getSharedPreferences(preferencesName, Context.MODE_PRIVATE).edit()
+                .putString(CLEAN_SHUTDOWN_MACHINE, machineId).commit();
+    }
+
+    boolean hasCleanGuestShutdown(String machineId) {
+        return machineId.equals(context.getSharedPreferences(preferencesName, Context.MODE_PRIVATE)
+                .getString(CLEAN_SHUTDOWN_MACHINE, null));
+    }
+
+    boolean recoverInterruptedExperimental() {
+        String machineId = context.getSharedPreferences(preferencesName, Context.MODE_PRIVATE)
+                .getString(ACTIVE_SESSION, null);
+        if (machineId == null) return false;
+        List<MachineProfile> profiles = load();
+        for (int i = 0; i < profiles.size(); i++) {
+            MachineProfile profile = profiles.get(i);
+            if (!profile.id.equals(machineId) || !profile.isExperimental() ||
+                    profile.fixedCycles == profile.lastKnownSafeCycles) continue;
+            try {
+                MachineProfile recovered = updatePerformanceProfile(profile,
+                        profile.lastKnownSafeCycles);
+                profiles.set(i, recovered);
+                return true;
+            } catch (IOException ignored) {
+                return false;
+            }
+        }
+        return false;
+    }
+
+    MachineProfile createExperimentalCopy(MachineProfile source) throws IOException {
+        if (source == null || !new File(source.runtimePath).isFile()) {
+            throw new IOException("The source machine disk is unavailable");
+        }
+        if (hasInterruptedSession() || !hasCleanGuestShutdown(source.id)) {
+            throw new IOException("Shut down the source machine inside Windows first");
+        }
+        long writableBytes = new File(source.runtimePath).length();
+        for (MediaAsset asset : source.mediaAssets) {
+            if (!asset.runtimePath.equals(asset.sourcePath)) {
+                File runtime = new File(asset.runtimePath);
+                if (!runtime.isFile()) throw new IOException("Attached writable media is unavailable");
+                writableBytes += runtime.length();
+            }
+        }
+        File directory = new File(filesRoot, "machines/" + UUID.randomUUID());
+        if (directory.getUsableSpace() < writableBytes + COPY_SAFETY_MARGIN_BYTES) {
+            throw new IOException("Not enough storage for an independent copy");
+        }
+        if (!directory.mkdirs() || !directory.isDirectory()) {
+            throw new IOException("Cannot create experimental machine storage");
+        }
+        try {
+            String extension = extension(new File(source.runtimePath).getName());
+            if (!isBootMedia(extension)) throw new IOException("Unsupported source disk");
+            File disk = new File(directory, "disk." + extension);
+            copyAndVerify(new File(source.runtimePath), disk);
+            ArrayList<MediaAsset> assets = copyWritableAssets(source.mediaAssets, directory);
+            File launch = new File(directory, "launch.conf");
+            MachineProfile copy = new MachineProfile(UUID.randomUUID().toString(),
+                    source.name + " - copy", source.family, source.mediaName, source.mediaPath,
+                    disk.getAbsolutePath(), source.mediaSha256, launch.getAbsolutePath(),
+                    source.memoryMb, "normal", source.soundEnabled, System.currentTimeMillis(), 0,
+                    assets, MachineProfile.ROLE_EXPERIMENTAL, SAFE_EXPERIMENTAL_CYCLES,
+                    SAFE_EXPERIMENTAL_CYCLES);
+            writeProfileLaunchConfig(copy, isWindowsInstaller(source) && bootsInstaller(source));
+            List<MachineProfile> profiles = load();
+            profiles.add(copy);
+            if (!save(profiles)) throw new IOException("Cannot save experimental machine");
+            return copy;
+        } catch (IOException error) {
+            deleteTree(directory);
+            throw error;
+        }
+    }
+
+    MachineProfile updatePerformanceProfile(MachineProfile selected, int fixedCycles)
+            throws IOException {
+        if (!selected.isExperimental() || !isExperimentalCycleCandidate(fixedCycles)) {
+            throw new IOException("This performance profile is unavailable");
+        }
+        MachineProfile updated = new MachineProfile(selected.id, selected.name, selected.family,
+                selected.mediaName, selected.mediaPath, selected.runtimePath, selected.mediaSha256,
+                selected.launchPath, selected.memoryMb, "normal", selected.soundEnabled,
+                selected.createdAt, selected.lastBootedAt, selected.mediaAssets, selected.role,
+                fixedCycles, selected.lastKnownSafeCycles);
+        boolean bootInstaller = isWindowsInstaller(selected) && bootsInstaller(selected);
+        writeProfileLaunchConfig(updated, bootInstaller);
+        try {
+            replaceProfile(updated);
+        } catch (IOException error) {
+            writeProfileLaunchConfig(selected, bootInstaller);
+            throw error;
+        }
+        return updated;
+    }
+
+    private static boolean isExperimentalCycleCandidate(int fixedCycles) {
+        for (int candidate : EXPERIMENTAL_CYCLE_CANDIDATES) {
+            if (candidate == fixedCycles) return true;
+        }
+        return false;
+    }
+
     MachineProfile updateConfiguration(MachineProfile selected, int memoryMb, String cpuCore,
             boolean soundEnabled) throws IOException {
         String extension = extension(selected.mediaName);
         if (isWindowsInstaller(selected)) {
             writeWindowsLaunchConfig(new File(selected.launchPath), new File(selected.runtimePath),
                     new File(selected.mediaPath), windowsBootFloppy(selected),
-                    bootsInstaller(selected), memoryMb, cpuCore, soundEnabled);
+                    bootsInstaller(selected), memoryMb, cpuCore, selected.fixedCycles, soundEnabled);
         } else {
             writeLaunchConfig(new File(selected.launchPath), new File(selected.runtimePath), extension,
-                    memoryMb, cpuCore, soundEnabled);
+                    memoryMb, cpuCore, selected.fixedCycles, soundEnabled);
         }
         MachineProfile updated = new MachineProfile(selected.id, selected.name, selected.family,
                 selected.mediaName, selected.mediaPath, selected.runtimePath, selected.mediaSha256, selected.launchPath,
                 memoryMb, cpuCore, soundEnabled, selected.createdAt, selected.lastBootedAt,
-                selected.mediaAssets);
+                selected.mediaAssets, selected.role, selected.fixedCycles,
+                selected.lastKnownSafeCycles);
         List<MachineProfile> profiles = load();
         for (int i = 0; i < profiles.size(); i++) {
             if (profiles.get(i).id.equals(selected.id)) {
@@ -366,10 +479,11 @@ final class MachineStore {
                 writeWindowsLaunchConfig(new File(selected.launchPath),
                         new File(selected.runtimePath), new File(selected.mediaPath),
                         windowsBootFloppy(selected), bootsInstaller(selected), selected.memoryMb,
-                        selected.cpuCore, selected.soundEnabled);
+                        selected.cpuCore, selected.fixedCycles, selected.soundEnabled);
             } else {
                 writeLaunchConfig(new File(selected.launchPath), new File(selected.runtimePath),
-                        extension, selected.memoryMb, selected.cpuCore, selected.soundEnabled);
+                        extension, selected.memoryMb, selected.cpuCore, selected.fixedCycles,
+                        selected.soundEnabled);
             }
             throw new IOException("Cannot save machine settings");
         }
@@ -395,7 +509,7 @@ final class MachineStore {
         if (!isWindowsInstaller(profile)) throw new IOException("Not a Windows installer profile");
         writeWindowsLaunchConfig(new File(profile.launchPath), new File(profile.runtimePath),
                 new File(profile.mediaPath), windowsBootFloppy(profile), installer,
-                profile.memoryMb, profile.cpuCore, profile.soundEnabled);
+                profile.memoryMb, profile.cpuCore, profile.fixedCycles, profile.soundEnabled);
     }
 
     void setWindowsUtilityBoot(MachineProfile profile, File utilityDisk) throws IOException {
@@ -406,7 +520,7 @@ final class MachineStore {
         }
         writeConfigAtomically(new File(profile.launchPath), LaunchConfig.createWindowsUtility(
                 profile.runtimePath, profile.mediaPath, utilityDisk.getAbsolutePath(),
-                profile.memoryMb, profile.cpuCore, profile.soundEnabled));
+                profile.memoryMb, profile.cpuCore, profile.fixedCycles, profile.soundEnabled));
     }
 
     private static File windowsBootFloppy(MachineProfile profile) {
@@ -423,9 +537,57 @@ final class MachineStore {
             profiles.set(i, new MachineProfile(profile.id, profile.name, profile.family,
                     profile.mediaName, profile.mediaPath, profile.runtimePath, profile.mediaSha256,
                     profile.launchPath, profile.memoryMb, profile.cpuCore, profile.soundEnabled,
-                    profile.createdAt, profile.lastBootedAt, assets));
+                    profile.createdAt, profile.lastBootedAt, assets, profile.role,
+                    profile.fixedCycles, profile.lastKnownSafeCycles));
             if (!save(profiles)) throw new IOException("Cannot save media metadata");
             return;
+        }
+        throw new IOException("Machine profile is unavailable");
+    }
+
+    private void writeProfileLaunchConfig(MachineProfile profile, boolean bootInstaller)
+            throws IOException {
+        File launch = new File(profile.launchPath);
+        if (isWindowsInstaller(profile)) {
+            writeWindowsLaunchConfig(launch, new File(profile.runtimePath), new File(profile.mediaPath),
+                    windowsBootFloppy(profile), bootInstaller, profile.memoryMb, profile.cpuCore,
+                    profile.fixedCycles, profile.soundEnabled);
+        } else {
+            writeLaunchConfig(launch, new File(profile.runtimePath),
+                    extension(new File(profile.runtimePath).getName()), profile.memoryMb,
+                    profile.cpuCore, profile.fixedCycles, profile.soundEnabled);
+        }
+    }
+
+    private ArrayList<MediaAsset> copyWritableAssets(List<MediaAsset> sourceAssets, File directory)
+            throws IOException {
+        ArrayList<MediaAsset> copied = new ArrayList<>();
+        for (MediaAsset asset : sourceAssets) {
+            if (asset.runtimePath.equals(asset.sourcePath)) {
+                copied.add(asset);
+                continue;
+            }
+            File source = new File(asset.runtimePath);
+            String extension = extension(source.getName());
+            File target = new File(directory, "media/" + UUID.randomUUID() + "-disk." + extension);
+            File parent = target.getParentFile();
+            if (!parent.mkdirs() && !parent.isDirectory()) {
+                throw new IOException("Cannot create copied media storage");
+            }
+            copyAndVerify(source, target);
+            copied.add(new MediaAsset(asset.name, asset.sourcePath, target.getAbsolutePath(),
+                    asset.sha256, asset.importedAt));
+        }
+        return copied;
+    }
+
+    private void replaceProfile(MachineProfile updated) throws IOException {
+        List<MachineProfile> profiles = load();
+        for (int i = 0; i < profiles.size(); i++) {
+            if (!profiles.get(i).id.equals(updated.id)) continue;
+            profiles.set(i, updated);
+            if (save(profiles)) return;
+            throw new IOException("Cannot save machine settings");
         }
         throw new IOException("Machine profile is unavailable");
     }
@@ -476,29 +638,29 @@ final class MachineStore {
 
     static void writeLaunchConfig(File launch, File media, String extension, int memoryMb,
             String cpuCore, boolean soundEnabled) throws IOException {
+        writeLaunchConfig(launch, media, extension, memoryMb, cpuCore, 0, soundEnabled);
+    }
+
+    static void writeLaunchConfig(File launch, File media, String extension, int memoryMb,
+            String cpuCore, int fixedCycles, boolean soundEnabled) throws IOException {
         String config = LaunchConfig.create(media.getAbsolutePath(), extension, memoryMb,
-                cpuCore, soundEnabled);
-        File staged = new File(launch.getParentFile(), launch.getName() + ".part");
-        try (FileOutputStream output = new FileOutputStream(staged)) {
-            output.write(config.getBytes(StandardCharsets.UTF_8));
-            output.getFD().sync();
-        }
-        try {
-            java.nio.file.Files.move(staged.toPath(), launch.toPath(),
-                    java.nio.file.StandardCopyOption.ATOMIC_MOVE,
-                    java.nio.file.StandardCopyOption.REPLACE_EXISTING);
-        } catch (IOException error) {
-            staged.delete();
-            throw error;
-        }
+                cpuCore, fixedCycles, soundEnabled);
+        writeConfigAtomically(launch, config);
     }
 
     static void writeWindowsLaunchConfig(File launch, File disk, File iso, File bootFloppy,
             boolean bootInstaller, int memoryMb, String cpuCore, boolean soundEnabled)
             throws IOException {
+        writeWindowsLaunchConfig(launch, disk, iso, bootFloppy, bootInstaller, memoryMb, cpuCore,
+                0, soundEnabled);
+    }
+
+    static void writeWindowsLaunchConfig(File launch, File disk, File iso, File bootFloppy,
+            boolean bootInstaller, int memoryMb, String cpuCore, int fixedCycles,
+            boolean soundEnabled) throws IOException {
         writeConfigAtomically(launch, LaunchConfig.createWindowsInstall(disk.getAbsolutePath(),
                 iso.getAbsolutePath(), bootFloppy.getAbsolutePath(), bootInstaller, memoryMb,
-                cpuCore, soundEnabled));
+                cpuCore, fixedCycles, soundEnabled));
     }
 
     private static void writeConfigAtomically(File launch, String config) throws IOException {
@@ -530,6 +692,41 @@ final class MachineStore {
             for (int read; (read = input.read(buffer)) != -1;) output.write(buffer, 0, read);
             output.getFD().sync();
         }
+    }
+
+    private static void copyAndVerify(File source, File target) throws IOException {
+        File staged = new File(target.getParentFile(), target.getName() + ".part");
+        try {
+            String sourceHash = sha256(source);
+            copyFile(source, staged);
+            String stagedHash = sha256(staged);
+            if (!sourceHash.equals(stagedHash)) throw new IOException("Copied disk checksum mismatch");
+            java.nio.file.Files.move(staged.toPath(), target.toPath(),
+                    java.nio.file.StandardCopyOption.ATOMIC_MOVE);
+        } catch (IOException error) {
+            staged.delete();
+            throw error;
+        }
+    }
+
+    private static String sha256(File file) throws IOException {
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            try (InputStream input = new java.io.FileInputStream(file)) {
+                byte[] buffer = new byte[128 * 1024];
+                for (int read; (read = input.read(buffer)) != -1;) digest.update(buffer, 0, read);
+            }
+            return hex(digest.digest());
+        } catch (NoSuchAlgorithmException impossible) {
+            throw new IOException(impossible);
+        }
+    }
+
+    private static void deleteTree(File file) {
+        if (!file.exists()) return;
+        File[] children = file.listFiles();
+        if (children != null) for (File child : children) deleteTree(child);
+        file.delete();
     }
 
     private static void removeInterruptedImports(File file) {

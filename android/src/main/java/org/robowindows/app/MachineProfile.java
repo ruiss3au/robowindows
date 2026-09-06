@@ -9,7 +9,9 @@ import java.util.Collections;
 import java.util.List;
 
 final class MachineProfile {
-    static final int SCHEMA_VERSION = 5;
+    static final int SCHEMA_VERSION = 6;
+    static final String ROLE_STABLE = "stable";
+    static final String ROLE_EXPERIMENTAL = "experimental";
 
     final String id;
     final String name;
@@ -22,6 +24,9 @@ final class MachineProfile {
     final int memoryMb;
     final String cpuCore;
     final boolean soundEnabled;
+    final String role;
+    final int fixedCycles;
+    final int lastKnownSafeCycles;
     final long createdAt;
     final long lastBootedAt;
     final List<MediaAsset> mediaAssets;
@@ -37,6 +42,15 @@ final class MachineProfile {
     MachineProfile(String id, String name, String family, String mediaName, String mediaPath,
             String runtimePath, String mediaSha256, String launchPath, int memoryMb, String cpuCore,
             boolean soundEnabled, long createdAt, long lastBootedAt, List<MediaAsset> mediaAssets) {
+        this(id, name, family, mediaName, mediaPath, runtimePath, mediaSha256, launchPath,
+                memoryMb, cpuCore, soundEnabled, createdAt, lastBootedAt, mediaAssets,
+                ROLE_STABLE, 0, 0);
+    }
+
+    MachineProfile(String id, String name, String family, String mediaName, String mediaPath,
+            String runtimePath, String mediaSha256, String launchPath, int memoryMb, String cpuCore,
+            boolean soundEnabled, long createdAt, long lastBootedAt, List<MediaAsset> mediaAssets,
+            String role, int fixedCycles, int lastKnownSafeCycles) {
         this.id = id;
         this.name = name;
         this.family = family;
@@ -48,6 +62,9 @@ final class MachineProfile {
         this.memoryMb = memoryMb;
         this.cpuCore = cpuCore;
         this.soundEnabled = soundEnabled;
+        this.role = ROLE_EXPERIMENTAL.equals(role) ? ROLE_EXPERIMENTAL : ROLE_STABLE;
+        this.fixedCycles = fixedCycles;
+        this.lastKnownSafeCycles = lastKnownSafeCycles;
         this.createdAt = createdAt;
         this.lastBootedAt = lastBootedAt;
         this.mediaAssets = Collections.unmodifiableList(new ArrayList<>(mediaAssets));
@@ -67,6 +84,9 @@ final class MachineProfile {
         json.put("memoryMb", memoryMb);
         json.put("cpuCore", cpuCore);
         json.put("soundEnabled", soundEnabled);
+        json.put("role", role);
+        json.put("fixedCycles", fixedCycles);
+        json.put("lastKnownSafeCycles", lastKnownSafeCycles);
         json.put("createdAt", createdAt);
         json.put("lastBootedAt", lastBootedAt);
         JSONArray assets = new JSONArray();
@@ -96,6 +116,12 @@ final class MachineProfile {
                 mediaPath, runtimePath, json.getString("mediaSha256"), launchPath,
                 json.optInt("memoryMb", 64), json.optString("cpuCore", "normal"),
                 json.optBoolean("soundEnabled", true), json.getLong("createdAt"),
-                json.optLong("lastBootedAt", 0), assets);
+                json.optLong("lastBootedAt", 0), assets,
+                json.optString("role", ROLE_STABLE), json.optInt("fixedCycles", 0),
+                json.optInt("lastKnownSafeCycles", 0));
+    }
+
+    boolean isExperimental() {
+        return ROLE_EXPERIMENTAL.equals(role);
     }
 }

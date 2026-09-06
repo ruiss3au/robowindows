@@ -52,6 +52,7 @@ public final class MainActivity extends Activity {
     private View sessionControls;
     private boolean consumingRevealTouch;
     private MachineStore machineStore;
+    private boolean experimentalRecoveryApplied;
     private String pendingFamily;
     private boolean sessionActive;
     private boolean sessionPaused;
@@ -121,6 +122,7 @@ public final class MainActivity extends Activity {
         getWindow().setStatusBarColor(BG);
         getWindow().setNavigationBarColor(BG);
         machineStore = new MachineStore(this);
+        experimentalRecoveryApplied = machineStore.recoverInterruptedExperimental();
         audioManager = (AudioManager) getSystemService(Context.AUDIO_SERVICE);
         ((InputManager) getSystemService(Context.INPUT_SERVICE))
                 .registerInputDeviceListener(inputListener, handler);
@@ -297,6 +299,15 @@ public final class MainActivity extends Activity {
             recoveryParams.topMargin = dp(16);
             content.addView(recovery, recoveryParams);
         }
+        if (experimentalRecoveryApplied) {
+            LinearLayout recovery = card();
+            recovery.addView(text("An interrupted experimental run was restored to its safe " +
+                    "performance profile.", 15, TEXT));
+            LinearLayout.LayoutParams recoveryParams = new LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+            recoveryParams.topMargin = dp(16);
+            content.addView(recovery, recoveryParams);
+        }
 
         ScrollView scroll = new ScrollView(this);
         LinearLayout library = new LinearLayout(this);
@@ -338,7 +349,8 @@ public final class MainActivity extends Activity {
         TextView name = text(profile.name, 20, TEXT);
         name.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
         labels.addView(name);
-        String detail = profile.family;
+        String detail = profile.isExperimental() ? "Experimental copy · " + profile.family :
+                profile.family;
         if (profile.lastBootedAt > 0) {
             detail += " · Used " + DateUtils.getRelativeTimeSpanString(profile.lastBootedAt,
                     System.currentTimeMillis(), DateUtils.MINUTE_IN_MILLIS);
@@ -389,14 +401,35 @@ public final class MainActivity extends Activity {
         balanced.leftMargin = dp(12);
         presets.addView(button("Windows compatible", v -> saveConfiguration(profile, 64, "normal",
                 profile.soundEnabled)), balanced);
-        LinearLayout.LayoutParams conservative = new LinearLayout.LayoutParams(dp(260), dp(54));
-        conservative.leftMargin = dp(12);
-        presets.addView(button("Windows experimental", v -> saveConfiguration(profile, 64, "auto",
-                profile.soundEnabled)), conservative);
         LinearLayout.LayoutParams presetsParams = new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         presetsParams.topMargin = dp(24);
         page.addView(presets, presetsParams);
+        if (profile.isExperimental()) {
+            TextView performance = text("Performance trial: normal CPU only. Each option uses " +
+                    "a separate disk from the stable machine.", 15, MUTED);
+            LinearLayout.LayoutParams performanceParams = new LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+            performanceParams.topMargin = dp(20);
+            page.addView(performance, performanceParams);
+            LinearLayout trials = new LinearLayout(this);
+            int[] cycles = MachineStore.EXPERIMENTAL_CYCLE_CANDIDATES;
+            for (int cycle : cycles) {
+                LinearLayout.LayoutParams trialParams = new LinearLayout.LayoutParams(dp(130), dp(54));
+                if (trials.getChildCount() > 0) trialParams.leftMargin = dp(12);
+                trials.addView(button(cycle / 1000 + "k cycles", v ->
+                        savePerformanceProfile(profile, cycle)), trialParams);
+            }
+            LinearLayout.LayoutParams trialsParams = new LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+            trialsParams.topMargin = dp(12);
+            page.addView(trials, trialsParams);
+        } else {
+            LinearLayout.LayoutParams copyParams = new LinearLayout.LayoutParams(dp(270), dp(54));
+            copyParams.topMargin = dp(20);
+            page.addView(button("Create experimental copy", v -> createExperimentalCopy(profile)),
+                    copyParams);
+        }
         LinearLayout.LayoutParams soundParams = new LinearLayout.LayoutParams(dp(190), dp(54));
         soundParams.topMargin = dp(16);
         page.addView(button(profile.soundEnabled ? "Turn sound off" : "Turn sound on",
@@ -423,8 +456,9 @@ public final class MainActivity extends Activity {
     }
 
     private String configurationSummary(MachineProfile profile) {
-        String cpu = profile.cpuCore.equals("normal") ? "Compatibility CPU" :
-                "Experimental automatic CPU";
+        String cpu = profile.fixedCycles > 0 ? "Performance trial " + profile.fixedCycles +
+                " cycles" : profile.cpuCore.equals("normal") ? "Compatibility CPU" :
+                "Automatic CPU";
         return profile.memoryMb + " MB memory · " + cpu + " · Sound " +
                 (profile.soundEnabled ? "on" : "off");
     }
@@ -438,6 +472,39 @@ public final class MainActivity extends Activity {
         } catch (IOException error) {
             Toast.makeText(this, "Settings could not be saved.", Toast.LENGTH_LONG).show();
         }
+    }
+
+    private void savePerformanceProfile(MachineProfile profile, int cycles) {
+        try {
+            MachineProfile updated = machineStore.updatePerformanceProfile(profile, cycles);
+            showSettings(updated);
+        } catch (IOException error) {
+            Toast.makeText(this, "The performance profile could not be saved.",
+                    Toast.LENGTH_LONG).show();
+        }
+    }
+
+    private void createExperimentalCopy(MachineProfile profile) {
+        if (machineStore.hasInterruptedSession() || !machineStore.hasCleanGuestShutdown(profile.id)) {
+            Toast.makeText(this, "Shut down the source machine normally before copying it.",
+                    Toast.LENGTH_LONG).show();
+            return;
+        }
+        Toast.makeText(this, "Creating an independent experimental disk…", Toast.LENGTH_LONG).show();
+        new Thread(() -> {
+            try {
+                MachineProfile copy = machineStore.createExperimentalCopy(profile);
+                handler.post(() -> {
+                    Toast.makeText(this, copy.name + " is ready for performance trials.",
+                            Toast.LENGTH_LONG).show();
+                    showHome();
+                });
+            } catch (IOException error) {
+                handler.post(() -> Toast.makeText(this,
+                        "The experimental copy could not be created: " + error.getMessage(),
+                        Toast.LENGTH_LONG).show());
+            }
+        }, "RoboWindowsCopy").start();
     }
 
     private void showAddMachine() {
@@ -626,6 +693,7 @@ public final class MainActivity extends Activity {
         if (!isCurrentSession(profile, generation)) return;
         int status = NativeHost.sessionStatus();
         if (status == NativeHost.SESSION_GUEST_SHUTDOWN) {
+            if (!transientDebugSession) machineStore.markGuestShutdown(profile.id);
             showHome();
             return;
         }

@@ -81,6 +81,30 @@ final class DebugSelfTest {
             require(configured.memoryMb == 64 && configured.soundEnabled &&
                     configuredReloaded.memoryMb == 64 && configuredReloaded.cpuCore.equals("auto"),
                     "persisted configuration update");
+            isolated.markGuestShutdown(configured.id);
+            MachineProfile experimental = isolated.createExperimentalCopy(configured);
+            require(experimental.isExperimental() && experimental.name.equals("probe - copy"),
+                    "experimental copy identity");
+            require(!experimental.runtimePath.equals(configured.runtimePath) &&
+                    new File(experimental.runtimePath).isFile(), "independent experimental disk");
+            require(readFirstByte(new File(experimental.runtimePath)) ==
+                    readFirstByte(new File(configured.runtimePath)), "experimental copy checksum content");
+            try (RandomAccessFile experimentalDisk = new RandomAccessFile(experimental.runtimePath, "rw")) {
+                experimentalDisk.seek(0); experimentalDisk.write(7);
+            }
+            require(readFirstByte(new File(configured.runtimePath)) == 9,
+                    "experimental disk cannot modify stable runtime");
+            MachineProfile tuned = isolated.updatePerformanceProfile(experimental, 14000);
+            require(tuned.fixedCycles == 14000 && tuned.cpuCore.equals("normal") &&
+                    readText(new File(tuned.launchPath)).contains("cycles=fixed 14000"),
+                    "fixed-cycle normal performance profile");
+            isolated.markSessionStarted(tuned.id);
+            require(isolated.recoverInterruptedExperimental(), "experimental recovery applied");
+            MachineProfile recovered = isolated.load().get(1);
+            require(recovered.fixedCycles == MachineStore.SAFE_EXPERIMENTAL_CYCLES &&
+                    readText(new File(recovered.launchPath)).contains("cycles=fixed 12000"),
+                    "experimental recovery returns safe profile");
+            isolated.markSessionStopped();
             File windowsInput = new File(testRoot, "windows.img");
             writeBytes(windowsInput, new byte[]{9, 8, 7, 6});
             MachineProfile windows = isolated.importMachine(Uri.fromFile(windowsInput), "Windows");
