@@ -167,11 +167,14 @@ tests must use a writable clone. Exact pre/post image equality is required only 
 pre-execution crash; booted Windows tests instead check clone filesystem health and expected
 persistence.
 
-The isolated device clone is
-`files/realtime-tests/win98-baseline/disk.img` inside the debug application's private storage.
-Its size is 2,096,898,048 bytes and its SHA-256 is
-`059b9c4bf18f3c18d0092a047d0c77c608471e644e65fb27da906b651d1cec83`, identical to the
-installed source disk at clone time. The guarded harness refuses to overwrite this clone.
+## 2026-09-06 tablet storage cleanup
+
+The retired real-time test area and an unreferenced debug Windows-import area were permanently
+removed through the debug application's sandbox after a Machines-screen preflight confirmed no
+active session and no metadata reference. The protected machine library remained present at
+5,023,321,088 bytes before and after each deletion. The two target areas totaled
+2,756,698,112 bytes (about 2.57 GiB); no app-storage reset occurred, and RoboWindows remained
+at Machines without booting a guest. The protected host backup remains the recovery source.
 
 ## Dynamic cadence and sustained tablet profile
 

@@ -21,6 +21,8 @@ guest media, and backups are intentionally outside Git.
 | `scripts/check-repository.sh` | Check Git hygiene and shell syntax | Read-only |
 | `scripts/test-sm-t500-core.sh` | Run the disposable direct-core device test | Installs APK and creates temporary tablet files |
 | `scripts/test-sm-t500-realtime.sh` | Legacy realtime clone/environment test modes | Some modes create explicit host/device clones |
+| `scripts/cleanup-tablet-storage.sh --preflight` | Verify the two disposable tablet areas and protected library | Read-only; requires RoboWindows at Machines |
+| `scripts/cleanup-tablet-storage.sh --delete` | Permanently remove only verified disposable tablet areas | Re-runs preflight and checks library invariants |
 
 ## Tablet operations
 
