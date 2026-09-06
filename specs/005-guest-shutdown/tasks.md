@@ -7,5 +7,8 @@
 - [x] T005 Return the running Android session to Machines on guest shutdown.
 - [x] T006 Add host regressions and verify patch reproducibility.
 - [x] T007 Build and install the Android debug APK on the SM-T500.
-- [ ] T008 Shut down the backed-up Windows 98 profile normally and confirm one
+- [x] T008 Shut down the backed-up Windows 98 profile normally and confirm one
       return to Machines without a guest reboot.
+- [x] T009 Reuse the initialized static core for the next machine launch.
+- [x] T010 Start a machine after normal Windows shutdown on the SM-T500 and
+      confirm no Android-process crash.

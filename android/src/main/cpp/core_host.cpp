@@ -33,6 +33,12 @@ std::atomic<bool> paused{false};
 std::atomic<bool> shutdown_requested{false};
 std::atomic<bool> reset_requested{false};
 std::atomic<int> session_state{robowindows::SESSION_STOPPED};
+// DOSBox Pure is linked into this process. Its retro_deinit implementation
+// releases frame buffers but does not reset all of its process-global runtime
+// state, so a second retro_init after a completed guest is not a supported
+// session boundary. Keep the frontend initialized and use unload/load between
+// RoboWindows sessions instead.
+bool core_initialized = false;
 std::string content_path;
 std::string content_directory;
 std::string system_path;
@@ -452,19 +458,21 @@ uint16_t android_modifiers(int meta) {
 }
 
 void run_core() {
-    retro_set_environment(environment);
-    retro_set_video_refresh(video_refresh);
-    retro_set_audio_sample_batch(audio_batch);
-    retro_set_input_poll(input_poll);
-    retro_set_input_state(input_state);
-    retro_init();
+    if (!core_initialized) {
+        retro_set_environment(environment);
+        retro_set_video_refresh(video_refresh);
+        retro_set_audio_sample_batch(audio_batch);
+        retro_set_input_poll(input_poll);
+        retro_set_input_state(input_state);
+        retro_init();
+        core_initialized = true;
+    }
     retro_game_info game{content_path.c_str(), nullptr, 0, nullptr};
     if (!retro_load_game(&game)) {
         __android_log_print(ANDROID_LOG_ERROR, "RoboWindowsCore", "guest load failed");
         running = false;
         session_state = robowindows::SESSION_FAILED;
         frame_presenter.stop();
-        retro_deinit();
         return;
     }
     retro_system_av_info av{};
@@ -520,7 +528,6 @@ void run_core() {
     frame_presenter.stop();
     stop_audio();
     retro_unload_game();
-    retro_deinit();
     running = false;
     session_state = robowindows::SessionStateAfterCoreCleanup(session_state.load());
     telemetry.set_state(RuntimeState::Stopped);

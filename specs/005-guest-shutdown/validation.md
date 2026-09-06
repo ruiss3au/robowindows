@@ -14,11 +14,10 @@
   installed on the connected SM-T500 without clearing application data. The
   RoboWindows process was confirmed stopped before installation.
 
-## Pending hands-on acceptance
+## 2026-09-06 — SM-T500 acceptance
 
-- Start the already-backed-up Windows 98 profile on the unlocked, foregrounded
-  SM-T500 and choose Start > Shut Down > Shut down the computer.
-- Pass condition: the core logs `guest requested shutdown`, unloads cleanly, and
-  RoboWindows returns once to Machines without showing another Windows boot.
-- Also press the RoboWindows Restart control once to confirm it still resets the
-  guest and remains in the session.
+- On the unlocked, foregrounded SM-T500, Windows shut down normally and
+  RoboWindows returned to Machines without rebooting the guest.
+- The user then started the machine again from Machines. The guest ran normally
+  with no Android-process crash after the static core's unload/load transition.
+- The accepted debug APK was installed without clearing RoboWindows app data.

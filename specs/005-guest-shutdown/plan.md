@@ -11,11 +11,17 @@
 - Poll session status after startup with a generation token. A shutdown state
   returns to Machines; stale callbacks from an earlier session do nothing.
 - Keep explicit Restart on the existing `retro_reset` path.
+- Treat DOSBox Pure initialization as process-scoped. Each RoboWindows session
+  unloads its guest, but later sessions reuse that initialized core and load a
+  new guest; `retro_deinit` is not a per-session operation for the statically
+  linked core.
 
 ## Safety and Rollback
 
-- Shutdown continues through `retro_unload_game`, `retro_deinit`, audio stop, and
-  the existing orderly session marker before the UI changes screen.
+- Shutdown continues through audio stop, `retro_unload_game`, and the existing
+  orderly session marker before the UI changes screen. The core stays
+  initialized for the Android process so its global state is not reinitialized
+  on the next launch.
 - No guest media or profile schema changes are made.
 - Rollback consists of the second upstream patch hunk, native status, Android
   monitor, and their tests.
@@ -26,4 +32,3 @@
 - The upstream change is one ordered condition in the existing isolated patch.
 - Guest state uses the existing clean unload/join path.
 - RoboWindows remains the sole visible host interface.
-

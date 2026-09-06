@@ -26,6 +26,9 @@ RoboWindows machine list instead of watching the guest boot again.
 4. **Given** shutdown is in progress, **When** RoboWindows observes completion,
    **Then** it releases pointer capture, cancels held input, and records an
    orderly stopped session once.
+5. **Given** RoboWindows has returned to Machines after a guest power-off,
+   **When** the user starts that machine (or another machine), **Then** a new
+   guest session starts without crashing the Android process.
 
 ## Requirements
 
@@ -41,6 +44,9 @@ RoboWindows machine list instead of watching the guest boot again.
   unchanged.
 - **FR-006**: No DOSBox Pure menu, shutdown screen, or other upstream interface
   may become visible during the transition.
+- **FR-007**: A completed guest session MUST use the core's supported
+  unload/load boundary. A process-global core initialization MUST NOT be
+  repeated between machine launches.
 
 ## Success Criteria
 
@@ -50,6 +56,8 @@ RoboWindows machine list instead of watching the guest boot again.
   power-off-before-reboot distinction.
 - **SC-003**: On the SM-T500, Shut Down in the backed-up Windows 98 profile
   returns to Machines once without rebooting Windows.
+- **SC-004**: On the SM-T500, starting a machine after that return reaches a
+  running guest without an Android crash.
 
 ## Explicitly Out of Scope
 
