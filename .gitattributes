@@ -1,0 +1,2 @@
+# Unified-diff context prefixes necessarily appear before source indentation.
+*.patch whitespace=-space-before-tab

@@ -1,5 +1,5 @@
 diff --git a/dosbox_pure_libretro.cpp b/dosbox_pure_libretro.cpp
-index ec99bf3..142dcab 100644
+index ec99bf3..0577f79 100644
 --- a/dosbox_pure_libretro.cpp
 +++ b/dosbox_pure_libretro.cpp
 @@ -2700,12 +2700,16 @@ static void init_dosbox(bool forcemenu = false, bool reinit = false, const std::
@@ -21,3 +21,12 @@ index ec99bf3..142dcab 100644
  	if (dbp_skip_c_mount && !dbconf)
  	{
  		std::string confcontent;
+@@ -3537,6 +3541,8 @@ void retro_run(void)
+ 			DBP_Buffer& buf = dbp_buffers[buffer_active];
+ 			if (!dbp_crash_message.empty()) // unexpected shutdown
+ 				DBP_Shutdown();
++			else if (dbp_biospoweroff) // guest APM power-off is not a reboot
++				environ_cb(RETRO_ENVIRONMENT_SHUTDOWN, 0);
+ 			else if (dbp_state == DBPSTATE_REBOOT || dbp_biosreboot)
+ 				DBP_ForceReset();
+ 			else if (dbp_state == DBPSTATE_EXITED) // expected shutdown

@@ -55,6 +55,7 @@ public final class MainActivity extends Activity {
     private String pendingFamily;
     private boolean sessionActive;
     private boolean sessionPaused;
+    private long sessionGeneration;
     private MachineProfile currentSessionProfile;
     private MachineProfile pendingUtilityProfile;
     private boolean transientDebugSession;
@@ -257,8 +258,14 @@ public final class MainActivity extends Activity {
         TextView brand = text("ROBOWINDOWS", 15, PRIMARY);
         brand.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
         rail.addView(brand);
+        TextView buildIdentity = text(BuildIdentity.label(
+                BuildConfig.VERSION_NAME, BuildConfig.SOURCE_REVISION), 12, MUTED);
+        LinearLayout.LayoutParams identityParams = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        identityParams.topMargin = dp(3);
+        rail.addView(buildIdentity, identityParams);
         LinearLayout.LayoutParams diagnosticParams = new LinearLayout.LayoutParams(dp(190), dp(46));
-        diagnosticParams.topMargin = dp(28);
+        diagnosticParams.topMargin = dp(22);
         rail.addView(button("Input test", v -> showDiagnostics()), diagnosticParams);
 
         content = new LinearLayout(this);
@@ -519,6 +526,7 @@ public final class MainActivity extends Activity {
     }
 
     private void showSession(MachineProfile profile) {
+        long generation = ++sessionGeneration;
         currentSessionProfile = profile;
         FrameLayout page = new FrameLayout(this);
         page.setBackgroundColor(BG);
@@ -581,7 +589,7 @@ public final class MainActivity extends Activity {
         scheduleControlsHide();
         if (audioFocusPaused) NativeHost.setPaused(true);
         if (sessionActive && !transientDebugSession) machineStore.markSessionStarted(profile.id);
-        handler.postDelayed(() -> confirmSessionStarted(profile), 700);
+        handler.postDelayed(() -> confirmSessionStarted(profile, generation), 700);
     }
 
     private void pickSessionMedia() {
@@ -599,21 +607,43 @@ public final class MainActivity extends Activity {
         }
     }
 
-    private void confirmSessionStarted(MachineProfile profile) {
-        if (!sessionActive || currentSessionProfile != profile) return;
+    private void confirmSessionStarted(MachineProfile profile, long generation) {
+        if (!isCurrentSession(profile, generation)) return;
         int status = NativeHost.sessionStatus();
-        if (status == 2) {
+        if (status == NativeHost.SESSION_RUNNING) {
             if (!transientDebugSession) machineStore.markBooted(profile);
-        } else if (status == 3) {
+            handler.postDelayed(() -> monitorSession(profile, generation), 250);
+        } else if (status == NativeHost.SESSION_FAILED) {
             stopActiveSession();
             showHome();
             Toast.makeText(this, "This machine could not start.", Toast.LENGTH_LONG).show();
-        } else if (status == 1) {
-            handler.postDelayed(() -> confirmSessionStarted(profile), 700);
+        } else if (status == NativeHost.SESSION_STARTING) {
+            handler.postDelayed(() -> confirmSessionStarted(profile, generation), 700);
         }
     }
 
+    private void monitorSession(MachineProfile profile, long generation) {
+        if (!isCurrentSession(profile, generation)) return;
+        int status = NativeHost.sessionStatus();
+        if (status == NativeHost.SESSION_GUEST_SHUTDOWN) {
+            showHome();
+            return;
+        }
+        if (status == NativeHost.SESSION_FAILED || status == NativeHost.SESSION_STOPPED) {
+            stopActiveSession();
+            showHome();
+            Toast.makeText(this, "This machine stopped unexpectedly.", Toast.LENGTH_LONG).show();
+            return;
+        }
+        handler.postDelayed(() -> monitorSession(profile, generation), 250);
+    }
+
+    private boolean isCurrentSession(MachineProfile profile, long generation) {
+        return sessionActive && currentSessionProfile == profile && sessionGeneration == generation;
+    }
+
     private void stopActiveSession() {
+        ++sessionGeneration;
         releasePointerCaptureAndCancel();
         sessionUiState.exit();
         handler.removeCallbacks(hideSessionControls);

@@ -95,6 +95,9 @@ other.
    **Then** the original disk remains byte-for-byte unchanged.
 3. **Given** a running profile, **When** the user requests orderly exit, **Then**
    writes are flushed before the session closes.
+4. **Given** a running guest, **When** the guest completes a normal power-off,
+   **Then** writes are flushed and RoboWindows returns to the machine list
+   without rebooting the guest.
 
 ---
 
@@ -164,6 +167,7 @@ audio, suspend/resume, and stability checks on the SM-T500.
 - **FR-010**: The system MUST never modify the user's sole source media and MUST
   offer a copy-based workflow for destructive or writable testing.
 - **FR-011**: The system MUST save or flush writable guest state on orderly exit
+  or guest-requested power-off, return a powered-off guest to the machine list,
   and handle Android pause/resume without silent corruption.
 - **FR-012**: The system MUST support named guest profiles with explicit media,
   machine configuration, provenance, and compatibility status.

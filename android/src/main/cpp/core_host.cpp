@@ -23,6 +23,7 @@
 #include "frame_mailbox.h"
 #include "frame_presenter.h"
 #include "runtime_telemetry.h"
+#include "session_state.h"
 
 namespace {
 std::mutex lifecycle_mutex;
@@ -31,8 +32,7 @@ std::atomic<bool> running{false};
 std::atomic<bool> paused{false};
 std::atomic<bool> shutdown_requested{false};
 std::atomic<bool> reset_requested{false};
-// 0 stopped, 1 starting, 2 running, 3 failed.
-std::atomic<int> session_state{0};
+std::atomic<int> session_state{robowindows::SESSION_STOPPED};
 std::string content_path;
 std::string content_directory;
 std::string system_path;
@@ -149,7 +149,10 @@ bool environment(unsigned command, void* data) {
             keyboard_callback = static_cast<retro_keyboard_callback*>(data)->callback;
             return true;
         case RETRO_ENVIRONMENT_SHUTDOWN:
+            session_state = robowindows::SESSION_GUEST_SHUTDOWN;
             shutdown_requested = true;
+            __android_log_print(ANDROID_LOG_INFO, "RoboWindowsCore",
+                    "guest requested shutdown");
             return true;
         case RETRO_ENVIRONMENT_GET_FASTFORWARDING:
             *static_cast<bool*>(data) = false;
@@ -459,7 +462,7 @@ void run_core() {
     if (!retro_load_game(&game)) {
         __android_log_print(ANDROID_LOG_ERROR, "RoboWindowsCore", "guest load failed");
         running = false;
-        session_state = 3;
+        session_state = robowindows::SESSION_FAILED;
         frame_presenter.stop();
         retro_deinit();
         return;
@@ -468,7 +471,7 @@ void run_core() {
     retro_get_system_av_info(&av);
     __android_log_print(ANDROID_LOG_INFO, "RoboWindowsCore",
             "guest started fps=%.2f audio=%.0f", av.timing.fps, av.timing.sample_rate);
-    session_state = 2;
+    session_state = robowindows::SESSION_RUNNING;
     telemetry.set_state(RuntimeState::Foreground);
     start_audio(static_cast<int>(av.timing.sample_rate > 1.0 ? av.timing.sample_rate : 44100.0));
     double fps = av.timing.fps > 1.0 ? av.timing.fps : 60.0;
@@ -519,7 +522,7 @@ void run_core() {
     retro_unload_game();
     retro_deinit();
     running = false;
-    session_state = 0;
+    session_state = robowindows::SessionStateAfterCoreCleanup(session_state.load());
     telemetry.set_state(RuntimeState::Stopped);
     __android_log_print(ANDROID_LOG_INFO, "RoboWindowsCore", "guest stopped cleanly");
 }
@@ -573,7 +576,7 @@ Java_org_robowindows_app_NativeHost_startSession(JNIEnv* env, jclass, jstring co
     reset_requested = false;
     paused = false;
     running = true;
-    session_state = 1;
+    session_state = robowindows::SESSION_STARTING;
     submitted_frames = 0;
     telemetry.reset(RuntimeState::Starting);
     telemetry_report_time = std::chrono::steady_clock::now();
@@ -606,7 +609,7 @@ Java_org_robowindows_app_NativeHost_stopSession(JNIEnv*, jclass) {
     telemetry.set_state(RuntimeState::Stopping);
     running = false;
     if (core_thread.joinable()) core_thread.join();
-    session_state = 0;
+    session_state = robowindows::SESSION_STOPPED;
     CoreInputCancel();
 }
 
@@ -617,7 +620,7 @@ Java_org_robowindows_app_NativeHost_sessionStatus(JNIEnv*, jclass) {
 
 extern "C" JNIEXPORT jboolean JNICALL
 Java_org_robowindows_app_NativeHost_restartSession(JNIEnv*, jclass) {
-    if (!running || session_state != 2) return JNI_FALSE;
+    if (!running || session_state != robowindows::SESSION_RUNNING) return JNI_FALSE;
     paused = false;
     reset_requested = true;
     return JNI_TRUE;

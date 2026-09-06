@@ -3,6 +3,12 @@ package org.robowindows.app;
 import android.view.Surface;
 
 final class NativeHost {
+    static final int SESSION_STOPPED = 0;
+    static final int SESSION_STARTING = 1;
+    static final int SESSION_RUNNING = 2;
+    static final int SESSION_FAILED = 3;
+    static final int SESSION_GUEST_SHUTDOWN = 4;
+
     static {
         System.loadLibrary("robowindows_host");
     }
