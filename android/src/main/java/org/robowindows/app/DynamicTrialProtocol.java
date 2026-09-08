@@ -22,6 +22,7 @@ final class DynamicTrialProtocol {
     static final String PAUSED = "paused";
     static final String STATUS_VALUE = "status";
     static final String ERROR = "error";
+    static final String LIVENESS = "liveness";
     static final String ACTION = "action";
     static final String KEY_CODE = "keyCode";
     static final String SCAN_CODE = "scanCode";

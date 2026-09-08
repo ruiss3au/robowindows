@@ -18,7 +18,7 @@ import java.io.IOException;
 /** Host-process proxy for the one isolated dynamic-core emulator process. */
 final class DynamicTrialClient {
     interface Listener {
-        void onDynamicStatus(int status, String error);
+        void onDynamicStatus(int status, String error, String liveness);
     }
 
     private final Context context;
@@ -35,7 +35,8 @@ final class DynamicTrialClient {
             if (message.what == DynamicTrialProtocol.STATUS) {
                 Bundle data = message.getData();
                 listener.onDynamicStatus(data.getInt(DynamicTrialProtocol.STATUS_VALUE,
-                        NativeHost.SESSION_STOPPED), data.getString(DynamicTrialProtocol.ERROR));
+                        NativeHost.SESSION_STOPPED), data.getString(DynamicTrialProtocol.ERROR),
+                        data.getString(DynamicTrialProtocol.LIVENESS));
             }
             return true;
         }));
@@ -143,7 +144,7 @@ final class DynamicTrialClient {
             service.send(message);
         } catch (RemoteException error) {
             service = null;
-            listener.onDynamicStatus(NativeHost.SESSION_FAILED, "Dynamic runner disconnected");
+            listener.onDynamicStatus(NativeHost.SESSION_FAILED, "Dynamic runner disconnected", null);
             throw new IOException("Dynamic runner disconnected", error);
         }
     }
@@ -167,12 +168,12 @@ final class DynamicTrialClient {
 
         @Override public void onServiceDisconnected(ComponentName name) {
             service = null;
-            listener.onDynamicStatus(NativeHost.SESSION_FAILED, "Dynamic runner disconnected");
+            listener.onDynamicStatus(NativeHost.SESSION_FAILED, "Dynamic runner disconnected", null);
         }
 
         @Override public void onBindingDied(ComponentName name) {
             service = null;
-            listener.onDynamicStatus(NativeHost.SESSION_FAILED, "Dynamic runner process ended");
+            listener.onDynamicStatus(NativeHost.SESSION_FAILED, "Dynamic runner process ended", null);
         }
     };
 }

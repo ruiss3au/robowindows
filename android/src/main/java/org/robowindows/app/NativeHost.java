@@ -28,6 +28,7 @@ final class NativeHost {
     static native String lastInputEvent();
     static native boolean startSession(String contentPath, String filesPath);
     static native int sessionStatus();
+    static native String sessionLiveness();
     static native boolean restartSession();
     static native void setPaused(boolean paused);
     static native void stopSession();

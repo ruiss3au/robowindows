@@ -169,6 +169,7 @@ public final class DynamicTrialService extends Service {
         Bundle data = new Bundle();
         data.putInt(DynamicTrialProtocol.STATUS_VALUE,
                 started ? NativeHost.sessionStatus() : NativeHost.SESSION_STOPPED);
+        if (started) data.putString(DynamicTrialProtocol.LIVENESS, NativeHost.sessionLiveness());
         if (error != null) data.putString(DynamicTrialProtocol.ERROR, error);
         reply.setData(data);
         try {

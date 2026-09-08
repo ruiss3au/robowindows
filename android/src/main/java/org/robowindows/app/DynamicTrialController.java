@@ -1,6 +1,9 @@
 package org.robowindows.app;
 
 import android.content.Context;
+import android.os.Handler;
+import android.os.Looper;
+import android.os.SystemClock;
 import android.view.Surface;
 
 import java.io.IOException;
@@ -18,6 +21,9 @@ final class DynamicTrialController implements DynamicTrialClient.Listener {
     private MachineProfile profile;
     private boolean guestShutdownObserved;
     private boolean finished;
+    private long startedAtMillis;
+    private final Handler handler = new Handler(Looper.getMainLooper());
+    private final Runnable livenessPoll = this::pollLiveness;
 
     DynamicTrialController(Context context, Listener listener) {
         machineStore = new MachineStore(context);
@@ -29,10 +35,12 @@ final class DynamicTrialController implements DynamicTrialClient.Listener {
         if (attempt != null || finished) throw new IOException("Dynamic trial is already active");
         profile = selected;
         attempt = machineStore.prepareDynamicStart(selected);
+        startedAtMillis = SystemClock.elapsedRealtime();
         try {
             client.connect(() -> {
                 try {
                     client.start(attempt, profile, surface);
+                    handler.postDelayed(livenessPoll, 250);
                 } catch (IOException error) {
                     quarantine(error.getMessage());
                 }
@@ -61,9 +69,10 @@ final class DynamicTrialController implements DynamicTrialClient.Listener {
     void destroy() {
         if (attempt != null && !finished) quarantine("Dynamic runner was destroyed");
         client.disconnect();
+        handler.removeCallbacks(livenessPoll);
     }
 
-    @Override public void onDynamicStatus(int status, String error) {
+    @Override public void onDynamicStatus(int status, String error, String liveness) {
         if (attempt == null || finished) return;
         if (error != null || status == NativeHost.SESSION_FAILED) {
             quarantine(error == null ? "Dynamic runner failed" : error);
@@ -71,7 +80,9 @@ final class DynamicTrialController implements DynamicTrialClient.Listener {
         }
         try {
             if (status == NativeHost.SESSION_RUNNING &&
-                    DynamicAttempt.EXECUTING.equals(attempt.state)) {
+                    DynamicAttempt.EXECUTING.equals(attempt.state) &&
+                    DynamicLiveness.parse(liveness).provesRunning(
+                            SystemClock.elapsedRealtime() - startedAtMillis)) {
                 attempt = machineStore.markDynamicRunning(attempt);
             } else if (status == NativeHost.SESSION_GUEST_SHUTDOWN) {
                 guestShutdownObserved = true;
@@ -80,6 +91,7 @@ final class DynamicTrialController implements DynamicTrialClient.Listener {
                 if (guestShutdownObserved && DynamicAttempt.RUNNING.equals(attempt.state)) {
                     machineStore.closeDynamicAttemptCleanly(attempt);
                     finished = true;
+                    handler.removeCallbacks(livenessPoll);
                     client.disconnect();
                 } else {
                     quarantine("Dynamic trial stopped without guest shutdown");
@@ -100,8 +112,19 @@ final class DynamicTrialController implements DynamicTrialClient.Listener {
             // The durable journal remains in place and startup recovery will block it.
         }
         finished = true;
+        handler.removeCallbacks(livenessPoll);
         client.disconnect();
         listener.onStatus(NativeHost.SESSION_FAILED,
                 error == null ? "Dynamic trial needs a disk health check" : error);
+    }
+
+    private void pollLiveness() {
+        if (attempt == null || finished || !DynamicAttempt.EXECUTING.equals(attempt.state)) return;
+        try {
+            client.queryStatus();
+            handler.postDelayed(livenessPoll, 250);
+        } catch (IOException error) {
+            quarantine(error.getMessage());
+        }
     }
 }

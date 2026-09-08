@@ -67,3 +67,7 @@ injection at storage boundaries, and device validation remain open.
 The internal dynamic trial controller owns status-to-journal decisions: only a
 guest-shutdown status followed by native stop may close cleanly; every other
 runner failure or stop is quarantined. Visible Start wiring remains gated.
+
+Liveness uses bounded aggregate evidence only: elapsed unpaused foreground time,
+completed `retro_run` calls, and published video frames. It requires at least
+one second, ten calls and two publications before the durable `running` state.

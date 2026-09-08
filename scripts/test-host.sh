@@ -26,6 +26,11 @@ javac -d "$classes_dir" \
   "$repo_dir/tests/java/org/robowindows/app/DynamicAttemptStateTest.java"
 java -cp "$classes_dir" org.robowindows.app.DynamicAttemptStateTest
 
+javac -d "$classes_dir" \
+  "$repo_dir/android/src/main/java/org/robowindows/app/DynamicLiveness.java" \
+  "$repo_dir/tests/java/org/robowindows/app/DynamicLivenessTest.java"
+java -cp "$classes_dir" org.robowindows.app.DynamicLivenessTest
+
 "$repo_dir/tests/scripts/check-experimental-fat-test.sh"
 
 g++ -std=c++17 -Wall -Wextra -Werror \

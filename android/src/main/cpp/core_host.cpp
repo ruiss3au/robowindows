@@ -46,6 +46,8 @@ std::string save_path;
 
 std::atomic<bool> video_enabled{false};
 std::atomic<uint64_t> submitted_frames{0};
+std::atomic<uint64_t> liveness_run_calls{0};
+std::atomic<uint64_t> liveness_frames_published{0};
 std::atomic<double> requested_run_fps{60.0};
 
 std::mutex input_mutex;
@@ -222,7 +224,10 @@ void video_refresh(const void* data, unsigned width, unsigned height, size_t pit
                 "first guest frame %ux%u pitch=%zu sample=%08x", width, height, pitch, sample);
     }
     const FramePublishResult result = frame_mailbox.publish(data, width, height, pitch);
-    if (result.published) telemetry.add_frames_published();
+    if (result.published) {
+        telemetry.add_frames_published();
+        ++liveness_frames_published;
+    }
     telemetry.add_frames_coalesced(result.coalesced);
 }
 
@@ -517,6 +522,7 @@ void run_core() {
         }
         retro_run();
         telemetry.add_emulator_run_calls();
+        ++liveness_run_calls;
         report_telemetry_if_due();
         next_frame += frame_time;
         const auto now = std::chrono::steady_clock::now();
@@ -585,6 +591,8 @@ Java_org_robowindows_app_NativeHost_startSession(JNIEnv* env, jclass, jstring co
     running = true;
     session_state = robowindows::SESSION_STARTING;
     submitted_frames = 0;
+    liveness_run_calls = 0;
+    liveness_frames_published = 0;
     telemetry.reset(RuntimeState::Starting);
     telemetry_report_time = std::chrono::steady_clock::now();
     logged_non_silent_audio = false;
@@ -623,6 +631,15 @@ Java_org_robowindows_app_NativeHost_stopSession(JNIEnv*, jclass) {
 extern "C" JNIEXPORT jint JNICALL
 Java_org_robowindows_app_NativeHost_sessionStatus(JNIEnv*, jclass) {
     return session_state.load();
+}
+
+extern "C" JNIEXPORT jstring JNICALL
+Java_org_robowindows_app_NativeHost_sessionLiveness(JNIEnv* env, jclass) {
+    char result[96];
+    std::snprintf(result, sizeof(result), "runs=%llu frames=%llu",
+            static_cast<unsigned long long>(liveness_run_calls.load()),
+            static_cast<unsigned long long>(liveness_frames_published.load()));
+    return env->NewStringUTF(result);
 }
 
 extern "C" JNIEXPORT jboolean JNICALL
