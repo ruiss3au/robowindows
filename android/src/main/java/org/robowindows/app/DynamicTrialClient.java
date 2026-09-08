@@ -63,10 +63,13 @@ final class DynamicTrialClient {
         send(DynamicTrialProtocol.START, data);
     }
 
-    void stopAndDisconnect() {
+    void requestStop() throws IOException {
         if (service != null) {
-            try { send(DynamicTrialProtocol.STOP, new Bundle()); } catch (IOException ignored) {}
+            send(DynamicTrialProtocol.STOP, new Bundle());
         }
+    }
+
+    void disconnect() {
         if (bound) context.unbindService(connection);
         bound = false;
         service = null;

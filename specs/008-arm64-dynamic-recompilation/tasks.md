@@ -63,3 +63,7 @@ validation remain open.
 T001 now has host-testable transition coverage for durable dynamic attempt
 states. Wiring liveness evidence, child teardown acknowledgement, fault
 injection at storage boundaries, and device validation remain open.
+
+The internal dynamic trial controller owns status-to-journal decisions: only a
+guest-shutdown status followed by native stop may close cleanly; every other
+runner failure or stop is quarantined. Visible Start wiring remains gated.
