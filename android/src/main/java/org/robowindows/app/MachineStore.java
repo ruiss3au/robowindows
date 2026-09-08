@@ -150,7 +150,7 @@ final class MachineStore {
                 DynamicAttempt attempt = DynamicAttempt.read(journal);
                 if (!profile.id.equals(attempt.machineId) ||
                         profile.configurationGeneration != attempt.generation) {
-                    attempt.withState(DynamicAttempt.BLOCKED).writeAtomically(journal);
+                    attempt.blocked().writeAtomically(journal);
                     continue;
                 }
                 MachineProfile fallback = normalFallbackProfile(profile, attempt.normalFallback);
@@ -159,8 +159,13 @@ final class MachineStore {
                 replaceProfile(fallback);
                 if (DynamicAttempt.PREPARED.equals(attempt.state)) {
                     if (!journal.delete()) throw new IOException("Cannot clear prepared trial record");
-                } else {
+                } else if (DynamicAttempt.EXECUTING.equals(attempt.state) ||
+                        DynamicAttempt.RUNNING.equals(attempt.state)) {
                     attempt.withState(DynamicAttempt.NEEDS_CHECK).writeAtomically(journal);
+                } else if (!DynamicAttempt.NEEDS_CHECK.equals(attempt.state) &&
+                        !DynamicAttempt.BLOCKED.equals(attempt.state) &&
+                        !DynamicAttempt.CLOSED_CLEAN.equals(attempt.state)) {
+                    attempt.blocked().writeAtomically(journal);
                 }
                 recovered = true;
             } catch (IOException error) {

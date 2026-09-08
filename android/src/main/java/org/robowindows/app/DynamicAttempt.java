@@ -12,11 +12,12 @@ import java.nio.file.StandardCopyOption;
 
 /** Durable, per-machine record of a dynamic-core handoff. */
 final class DynamicAttempt {
-    static final String PREPARED = "prepared";
-    static final String EXECUTING = "executing";
-    static final String RUNNING = "running";
-    static final String NEEDS_CHECK = "needs-check";
-    static final String BLOCKED = "blocked";
+    static final String PREPARED = DynamicAttemptState.PREPARED;
+    static final String EXECUTING = DynamicAttemptState.EXECUTING;
+    static final String RUNNING = DynamicAttemptState.RUNNING;
+    static final String CLOSED_CLEAN = DynamicAttemptState.CLOSED_CLEAN;
+    static final String NEEDS_CHECK = DynamicAttemptState.NEEDS_CHECK;
+    static final String BLOCKED = DynamicAttemptState.BLOCKED;
 
     final String machineId;
     final String attemptId;
@@ -34,7 +35,16 @@ final class DynamicAttempt {
     }
 
     DynamicAttempt withState(String nextState) {
+        if (!DynamicAttemptState.mayTransition(state, nextState)) {
+            throw new IllegalArgumentException("Invalid dynamic attempt transition: " + state +
+                    " -> " + nextState);
+        }
         return new DynamicAttempt(machineId, attemptId, generation, nextState, normalFallback);
+    }
+
+    /** Corrupt or mismatched durable records are conservatively terminal. */
+    DynamicAttempt blocked() {
+        return new DynamicAttempt(machineId, attemptId, generation, BLOCKED, normalFallback);
     }
 
     static DynamicAttempt read(File file) throws IOException {

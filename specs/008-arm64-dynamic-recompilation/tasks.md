@@ -59,3 +59,7 @@ T014 has begun with a versioned host checker for raw FAT volumes. It is tested
 with pass, filesystem-reject, unreadable-fixture, unsupported-container and
 unchanged-image paths. App-side evidence import/unquarantine and real-media
 validation remain open.
+
+T001 now has host-testable transition coverage for durable dynamic attempt
+states. Wiring liveness evidence, child teardown acknowledgement, fault
+injection at storage boundaries, and device validation remain open.
