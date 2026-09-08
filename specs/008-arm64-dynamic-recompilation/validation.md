@@ -41,6 +41,19 @@ remain unavailable.
 Host checks and repository hygiene passed, and the Android debug build compiled
 on 2026-09-08. No guest was booted, modified, or installed during this work.
 
+## Synthetic recovery probe — 2026-09-08
+
+The debug APK was installed without clearing data and its `testPersistence`
+entry point passed on the SM-T500. The log reported `persistence and input
+bridge probes passed`. This creates and removes only synthetic files in the
+debug package's private storage; it does not boot a guest or access either
+machine profile. The probe includes the dynamic prepared/executing journal,
+path-free fallback, stale handoff rejection, pre-native persistence fault
+injection, liveness/quarantine transitions, and the existing input bridge.
+
+This is not dynrec execution evidence. The dynamic UI remains hidden pending
+the remaining recovery, health-evidence, and symbolized diagnostic gates.
+
 ## Pinned-core audit — 2026-09-08
 
 The pinned `dosbox-pure` ARM64 build selects `C_DYNREC` and `ARMV8LE` for
