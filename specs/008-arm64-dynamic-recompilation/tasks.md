@@ -51,5 +51,6 @@ remain open. Dynamic UI and native handoff remain disabled.
 
 T013 has begun with the process boundary: a non-exported `:dynrec` service will
 accept only an already-validated dynamic launch file and proxy native lifecycle
-and input operations. Binding it to the session UI, child-death acknowledgement,
-and disposable-fixture validation remain open.
+and input operations. The next substep is a host-side binder client; binding it
+to the session UI, child-death acknowledgement, and disposable-fixture
+validation remain open.
