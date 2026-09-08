@@ -34,7 +34,8 @@ scripts/
 docs/
 ├── development.md               # contributor workflow
 ├── backup-and-restore.md        # backup format and operations
-└── publishing.md                # GitHub release gate
+├── publishing.md                # GitHub release gate
+└── ../specs/README.md           # public specification-system entry point and feature index
 ```
 
 ## Design Decisions
@@ -52,6 +53,9 @@ docs/
 - Publish an orphan `main` root snapshot for the first GitHub push. Preserve the
   pre-publication lineage in the verified Git bundle and a local-only backup ref;
   never push that ref.
+- Keep the constitution in its existing Spec Kit-compatible location, but link it from a
+  non-hidden specification index and README. The roadmap is a prioritization aid, not a release
+  commitment or a substitute for acceptance evidence.
 
 ## Rollback
 

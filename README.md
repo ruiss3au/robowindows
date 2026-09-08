@@ -14,9 +14,9 @@ RoboWindows is an independent project and is not affiliated with, endorsed by,
 or sponsored by Microsoft. Microsoft and Windows are trademarks of the
 Microsoft group of companies.
 
-Development follows Specification-Driven Development. Product intent begins in
-[`specs/001-standalone-android-emulator/spec.md`](specs/001-standalone-android-emulator/spec.md),
-with later numbered specifications recording runtime and repository evolution.
+Development follows Specification-Driven Development. Start with the public
+[specification index and roadmap](specs/README.md), which links the governing
+constitution and each numbered feature record.
 
 ## Status
 

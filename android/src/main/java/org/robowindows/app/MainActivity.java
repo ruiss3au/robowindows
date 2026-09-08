@@ -1,6 +1,7 @@
 package org.robowindows.app;
 
 import android.app.Activity;
+import android.app.AlertDialog;
 import android.content.Intent;
 import android.content.Context;
 import android.content.pm.ApplicationInfo;
@@ -24,6 +25,7 @@ import android.view.ViewGroup;
 import android.widget.Button;
 import android.widget.FrameLayout;
 import android.widget.LinearLayout;
+import android.widget.ProgressBar;
 import android.widget.ScrollView;
 import android.widget.TextView;
 import android.widget.Toast;
@@ -53,6 +55,10 @@ public final class MainActivity extends Activity {
     private boolean consumingRevealTouch;
     private MachineStore machineStore;
     private boolean experimentalRecoveryApplied;
+    private boolean copyInProgress;
+    private ProgressBar copyProgressBar;
+    private TextView copyProgressStatus;
+    private TextView copyProgressPercent;
     private String pendingFamily;
     private boolean sessionActive;
     private boolean sessionPaused;
@@ -236,6 +242,15 @@ public final class MainActivity extends Activity {
         return button;
     }
 
+    // Product-wide selected-control treatment: retain the dark interface surface and use the
+    // primary color only for the active label and checkmark, rather than a separate status line.
+    private Button selectedButton(String label, View.OnClickListener listener) {
+        Button button = button("✓ " + label, listener);
+        button.setTextColor(PRIMARY);
+        button.setBackground(background(SURFACE_HIGH, 12));
+        return button;
+    }
+
     private LinearLayout card() {
         LinearLayout card = new LinearLayout(this);
         card.setOrientation(LinearLayout.VERTICAL);
@@ -413,12 +428,30 @@ public final class MainActivity extends Activity {
             performanceParams.topMargin = dp(20);
             page.addView(performance, performanceParams);
             LinearLayout trials = new LinearLayout(this);
+            trials.setOrientation(LinearLayout.VERTICAL);
+            LinearLayout trialRow = null;
             int[] cycles = MachineStore.EXPERIMENTAL_CYCLE_CANDIDATES;
-            for (int cycle : cycles) {
+            for (int index = 0; index < cycles.length; index++) {
+                int cycle = cycles[index];
+                if (index % 2 == 0) {
+                    trialRow = new LinearLayout(this);
+                    if (index > 0) {
+                        LinearLayout.LayoutParams rowParams = new LinearLayout.LayoutParams(
+                                ViewGroup.LayoutParams.WRAP_CONTENT,
+                                ViewGroup.LayoutParams.WRAP_CONTENT);
+                        rowParams.topMargin = dp(12);
+                        trials.addView(trialRow, rowParams);
+                    } else {
+                        trials.addView(trialRow);
+                    }
+                }
                 LinearLayout.LayoutParams trialParams = new LinearLayout.LayoutParams(dp(130), dp(54));
-                if (trials.getChildCount() > 0) trialParams.leftMargin = dp(12);
-                trials.addView(button(cycle / 1000 + "k cycles", v ->
-                        savePerformanceProfile(profile, cycle)), trialParams);
+                if (trialRow.getChildCount() > 0) trialParams.leftMargin = dp(12);
+                String label = cycle / 1000 + "k cycles";
+                Button trial = profile.fixedCycles == cycle ? selectedButton(label, v ->
+                        savePerformanceProfile(profile, cycle)) : button(label, v ->
+                        savePerformanceProfile(profile, cycle));
+                trialRow.addView(trial, trialParams);
             }
             LinearLayout.LayoutParams trialsParams = new LinearLayout.LayoutParams(
                     ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
@@ -452,6 +485,12 @@ public final class MainActivity extends Activity {
             utilityParams.topMargin = dp(16);
             page.addView(button("Boot utility disk", v -> pickWindowsUtility(profile)), utilityParams);
         }
+        Button delete = button("Delete machine", v -> confirmDeleteMachine(profile));
+        delete.setTextColor(TEXT);
+        delete.setBackground(background(Color.rgb(201, 78, 72), 12));
+        LinearLayout.LayoutParams deleteParams = new LinearLayout.LayoutParams(dp(210), dp(54));
+        deleteParams.topMargin = dp(30);
+        page.addView(delete, deleteParams);
         setContentView(page);
     }
 
@@ -485,26 +524,102 @@ public final class MainActivity extends Activity {
     }
 
     private void createExperimentalCopy(MachineProfile profile) {
+        if (copyInProgress) return;
         if (machineStore.hasInterruptedSession() || !machineStore.hasCleanGuestShutdown(profile.id)) {
             Toast.makeText(this, "Shut down the source machine normally before copying it.",
                     Toast.LENGTH_LONG).show();
             return;
         }
-        Toast.makeText(this, "Creating an independent experimental disk…", Toast.LENGTH_LONG).show();
+        copyInProgress = true;
+        showCopyProgress(profile);
         new Thread(() -> {
             try {
-                MachineProfile copy = machineStore.createExperimentalCopy(profile);
+                MachineProfile copy = machineStore.createExperimentalCopy(profile,
+                        (stage, completedBytes, totalBytes) -> handler.post(() ->
+                                updateCopyProgress(stage, completedBytes, totalBytes)));
                 handler.post(() -> {
+                    copyInProgress = false;
                     Toast.makeText(this, copy.name + " is ready for performance trials.",
                             Toast.LENGTH_LONG).show();
                     showHome();
                 });
             } catch (IOException error) {
-                handler.post(() -> Toast.makeText(this,
-                        "The experimental copy could not be created: " + error.getMessage(),
-                        Toast.LENGTH_LONG).show());
+                handler.post(() -> {
+                    copyInProgress = false;
+                    showSettings(profile);
+                    Toast.makeText(this, "The experimental copy could not be created: " +
+                            error.getMessage(), Toast.LENGTH_LONG).show();
+                });
             }
         }, "RoboWindowsCopy").start();
+    }
+
+    private void confirmDeleteMachine(MachineProfile profile) {
+        if (copyInProgress) {
+            Toast.makeText(this, "Wait for the machine copy to finish first.",
+                    Toast.LENGTH_LONG).show();
+            return;
+        }
+        new AlertDialog.Builder(this)
+                .setTitle("Delete " + profile.name + "?")
+                .setMessage("This permanently deletes this machine and its private disk. " +
+                        "Other machines are not affected.")
+                .setNegativeButton("Cancel", null)
+                .setPositiveButton("Delete machine", (dialog, which) -> deleteMachine(profile))
+                .show();
+    }
+
+    private void deleteMachine(MachineProfile profile) {
+        try {
+            machineStore.deleteMachine(profile);
+            showHome();
+            Toast.makeText(this, profile.name + " was deleted.", Toast.LENGTH_LONG).show();
+        } catch (IOException error) {
+            Toast.makeText(this, "The machine could not be deleted: " + error.getMessage(),
+                    Toast.LENGTH_LONG).show();
+        }
+    }
+
+    private void showCopyProgress(MachineProfile profile) {
+        LinearLayout page = new LinearLayout(this);
+        page.setOrientation(LinearLayout.VERTICAL);
+        page.setPadding(dp(28), dp(22), dp(28), dp(22));
+        page.setBackgroundColor(BG);
+        TextView title = text("Creating " + profile.name + " - copy", 28, TEXT);
+        title.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+        page.addView(title);
+        TextView detail = text("Creating an independent disk. Keep RoboWindows open until this " +
+                "finishes; your stable machine is not changed.", 16, MUTED);
+        LinearLayout.LayoutParams detailParams = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        detailParams.topMargin = dp(16);
+        page.addView(detail, detailParams);
+        copyProgressBar = new ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal);
+        copyProgressBar.setMax(1000);
+        copyProgressBar.setProgress(0);
+        LinearLayout.LayoutParams progressParams = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, dp(12));
+        progressParams.topMargin = dp(30);
+        page.addView(copyProgressBar, progressParams);
+        copyProgressStatus = text("Preparing copy", 16, TEXT);
+        LinearLayout.LayoutParams statusParams = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        statusParams.topMargin = dp(16);
+        page.addView(copyProgressStatus, statusParams);
+        copyProgressPercent = text("0%", 14, MUTED);
+        LinearLayout.LayoutParams percentParams = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        percentParams.topMargin = dp(6);
+        page.addView(copyProgressPercent, percentParams);
+        setContentView(page);
+    }
+
+    private void updateCopyProgress(String stage, long completedBytes, long totalBytes) {
+        if (!copyInProgress || copyProgressBar == null) return;
+        if (!stage.isEmpty() && copyProgressStatus != null) copyProgressStatus.setText(stage);
+        int progress = (int) Math.min(1000L, completedBytes * 1000L / Math.max(1L, totalBytes));
+        copyProgressBar.setProgress(progress);
+        if (copyProgressPercent != null) copyProgressPercent.setText((progress / 10) + "%");
     }
 
     private void showAddMachine() {

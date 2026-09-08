@@ -26,10 +26,14 @@ final class MachineStore {
     private static final String CLEAN_SHUTDOWN_MACHINE = "clean_shutdown_machine";
     private static final long COPY_SAFETY_MARGIN_BYTES = 256L * 1024L * 1024L;
     static final int SAFE_EXPERIMENTAL_CYCLES = 12000;
-    static final int[] EXPERIMENTAL_CYCLE_CANDIDATES = {10000, 12000, 14000};
+    static final int[] EXPERIMENTAL_CYCLE_CANDIDATES = {10000, 12000, 14000, 20000, 30000};
     private final Context context;
     private final File filesRoot;
     private final String preferencesName;
+
+    interface CopyProgress {
+        void update(String stage, long completedBytes, long totalBytes);
+    }
 
     MachineStore(Context context) {
         this(context, context.getFilesDir(), PREFS);
@@ -378,6 +382,11 @@ final class MachineStore {
     }
 
     MachineProfile createExperimentalCopy(MachineProfile source) throws IOException {
+        return createExperimentalCopy(source, null);
+    }
+
+    MachineProfile createExperimentalCopy(MachineProfile source, CopyProgress progress)
+            throws IOException {
         if (source == null || !new File(source.runtimePath).isFile()) {
             throw new IOException("The source machine disk is unavailable");
         }
@@ -393,18 +402,22 @@ final class MachineStore {
             }
         }
         File directory = new File(filesRoot, "machines/" + UUID.randomUUID());
-        if (directory.getUsableSpace() < writableBytes + COPY_SAFETY_MARGIN_BYTES) {
+        File machinesDirectory = directory.getParentFile();
+        if (machinesDirectory == null || machinesDirectory.getUsableSpace() <
+                writableBytes + COPY_SAFETY_MARGIN_BYTES) {
             throw new IOException("Not enough storage for an independent copy");
         }
         if (!directory.mkdirs() || !directory.isDirectory()) {
             throw new IOException("Cannot create experimental machine storage");
         }
+        CopyProgressReporter reporter = new CopyProgressReporter(progress, writableBytes * 3L);
         try {
             String extension = extension(new File(source.runtimePath).getName());
             if (!isBootMedia(extension)) throw new IOException("Unsupported source disk");
             File disk = new File(directory, "disk." + extension);
-            copyAndVerify(new File(source.runtimePath), disk);
-            ArrayList<MediaAsset> assets = copyWritableAssets(source.mediaAssets, directory);
+            copyAndVerify(new File(source.runtimePath), disk, reporter);
+            ArrayList<MediaAsset> assets = copyWritableAssets(source.mediaAssets, directory, reporter);
+            reporter.stage("Finalizing machine");
             File launch = new File(directory, "launch.conf");
             MachineProfile copy = new MachineProfile(UUID.randomUUID().toString(),
                     source.name + " - copy", source.family, source.mediaName, source.mediaPath,
@@ -442,6 +455,46 @@ final class MachineStore {
             throw error;
         }
         return updated;
+    }
+
+    void deleteMachine(MachineProfile selected) throws IOException {
+        if (selected == null || hasInterruptedSession()) {
+            throw new IOException("A machine session must be stopped before deletion");
+        }
+        File machinesDirectory = new File(filesRoot, "machines").getCanonicalFile();
+        File directory = new File(selected.runtimePath).getParentFile().getCanonicalFile();
+        if (!directory.getParentFile().equals(machinesDirectory) || !directory.isDirectory()) {
+            throw new IOException("The selected machine storage is unavailable");
+        }
+        List<MachineProfile> profiles = load();
+        boolean removed = profiles.removeIf(profile -> profile.id.equals(selected.id));
+        if (!removed) throw new IOException("The selected machine profile is unavailable");
+        File staged = new File(machinesDirectory, ".delete-" + UUID.randomUUID());
+        try {
+            java.nio.file.Files.move(directory.toPath(), staged.toPath(),
+                    java.nio.file.StandardCopyOption.ATOMIC_MOVE);
+        } catch (IOException error) {
+            throw new IOException("The selected machine could not be staged for deletion", error);
+        }
+        if (!save(profiles)) {
+            try {
+                java.nio.file.Files.move(staged.toPath(), directory.toPath(),
+                        java.nio.file.StandardCopyOption.ATOMIC_MOVE);
+            } catch (IOException restoreError) {
+                throw new IOException("The machine profile could not be saved and its disk could " +
+                        "not be restored", restoreError);
+            }
+            throw new IOException("The machine profile could not be saved");
+        }
+        String cleanShutdown = context.getSharedPreferences(preferencesName, Context.MODE_PRIVATE)
+                .getString(CLEAN_SHUTDOWN_MACHINE, null);
+        if (selected.id.equals(cleanShutdown)) {
+            context.getSharedPreferences(preferencesName, Context.MODE_PRIVATE).edit()
+                    .remove(CLEAN_SHUTDOWN_MACHINE).commit();
+        }
+        deleteTree(staged);
+        if (staged.exists()) throw new IOException("The machine was removed but its staged files " +
+                "need cleanup");
     }
 
     private static boolean isExperimentalCycleCandidate(int fixedCycles) {
@@ -559,8 +612,8 @@ final class MachineStore {
         }
     }
 
-    private ArrayList<MediaAsset> copyWritableAssets(List<MediaAsset> sourceAssets, File directory)
-            throws IOException {
+    private ArrayList<MediaAsset> copyWritableAssets(List<MediaAsset> sourceAssets, File directory,
+            CopyProgressReporter reporter) throws IOException {
         ArrayList<MediaAsset> copied = new ArrayList<>();
         for (MediaAsset asset : sourceAssets) {
             if (asset.runtimePath.equals(asset.sourcePath)) {
@@ -574,7 +627,7 @@ final class MachineStore {
             if (!parent.mkdirs() && !parent.isDirectory()) {
                 throw new IOException("Cannot create copied media storage");
             }
-            copyAndVerify(source, target);
+            copyAndVerify(source, target, reporter);
             copied.add(new MediaAsset(asset.name, asset.sourcePath, target.getAbsolutePath(),
                     asset.sha256, asset.importedAt));
         }
@@ -694,12 +747,13 @@ final class MachineStore {
         }
     }
 
-    private static void copyAndVerify(File source, File target) throws IOException {
+    private static void copyAndVerify(File source, File target, CopyProgressReporter reporter)
+            throws IOException {
         File staged = new File(target.getParentFile(), target.getName() + ".part");
         try {
-            String sourceHash = sha256(source);
-            copyFile(source, staged);
-            String stagedHash = sha256(staged);
+            String sourceHash = sha256(source, reporter, "Verifying source disk");
+            copyFileTracked(source, staged, reporter, "Copying disk");
+            String stagedHash = sha256(staged, reporter, "Verifying copied disk");
             if (!sourceHash.equals(stagedHash)) throw new IOException("Copied disk checksum mismatch");
             java.nio.file.Files.move(staged.toPath(), target.toPath(),
                     java.nio.file.StandardCopyOption.ATOMIC_MOVE);
@@ -709,16 +763,61 @@ final class MachineStore {
         }
     }
 
-    private static String sha256(File file) throws IOException {
+    private static String sha256(File file, CopyProgressReporter reporter, String stage)
+            throws IOException {
         try {
             MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            reporter.stage(stage);
             try (InputStream input = new java.io.FileInputStream(file)) {
                 byte[] buffer = new byte[128 * 1024];
-                for (int read; (read = input.read(buffer)) != -1;) digest.update(buffer, 0, read);
+                for (int read; (read = input.read(buffer)) != -1;) {
+                    digest.update(buffer, 0, read);
+                    reporter.advance(read);
+                }
             }
             return hex(digest.digest());
         } catch (NoSuchAlgorithmException impossible) {
             throw new IOException(impossible);
+        }
+    }
+
+    private static void copyFileTracked(File source, File target, CopyProgressReporter reporter,
+            String stage) throws IOException {
+        reporter.stage(stage);
+        try (InputStream input = new java.io.FileInputStream(source);
+             FileOutputStream output = new FileOutputStream(target)) {
+            byte[] buffer = new byte[128 * 1024];
+            for (int read; (read = input.read(buffer)) != -1;) {
+                output.write(buffer, 0, read);
+                reporter.advance(read);
+            }
+            output.getFD().sync();
+        }
+    }
+
+    private static final class CopyProgressReporter {
+        private final CopyProgress callback;
+        private final long totalBytes;
+        private long completedBytes;
+        private long reportedBytes;
+
+        CopyProgressReporter(CopyProgress callback, long totalBytes) {
+            this.callback = callback;
+            this.totalBytes = Math.max(1L, totalBytes);
+            stage("Preparing copy");
+        }
+
+        void stage(String stage) {
+            if (callback != null) callback.update(stage, completedBytes, totalBytes);
+        }
+
+        void advance(long bytes) {
+            completedBytes = Math.min(totalBytes, completedBytes + bytes);
+            if (callback != null && (completedBytes == totalBytes ||
+                    completedBytes - reportedBytes >= 1024L * 1024L)) {
+                reportedBytes = completedBytes;
+                callback.update("", completedBytes, totalBytes);
+            }
         }
     }
 

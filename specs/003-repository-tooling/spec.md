@@ -67,6 +67,9 @@ publishing to GitHub.
   third-party notice review are completed.
 - **FR-009**: The first public push MUST contain only the audited source snapshot;
   pre-publication commits and backup refs MUST remain local.
+- **FR-010**: The tracked repository MUST expose a public specification index and roadmap that
+  link the constitution, numbered feature records, current work, dependencies, and explicit
+  non-promises without requiring readers to discover dot-prefixed directories.
 
 ## Success Criteria
 

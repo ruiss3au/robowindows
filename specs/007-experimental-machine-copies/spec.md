@@ -21,10 +21,21 @@ performance trials without sharing its writable disk with my stable machine.
 - **FR-005**: Existing profiles MUST remain stable profiles after metadata migration. New copies
   MUST be visibly marked experimental and default to `core=normal`, `pentium_slow`, and
   `cycles=fixed 12000`.
-- **FR-006**: Experimental profiles MAY select only fixed 10,000, 12,000, or 14,000 cycles on
-  the normal CPU core. Automatic, dynamic, and raw upstream configuration MUST not be exposed.
+- **FR-006**: Experimental profiles MAY select only fixed 10,000, 12,000, 14,000, 20,000, or 30,000
+  cycles on the normal CPU core. Automatic, dynamic, and raw upstream configuration MUST not be
+  exposed. The 20,000-cycle profile remains an experimental trial and MUST recover to the safe
+  12,000-cycle profile after an interrupted session.
 - **FR-007**: An interrupted experimental run MUST restore its last known-safe cycle profile on
   the next app start without changing guest media.
+- **FR-008**: While copy creation is in progress, RoboWindows MUST show a product-owned
+  determinate progress indicator and current stage: source verification, copying, target
+  verification, or finalization.
+- **FR-009**: Machine settings MUST offer `Delete machine`. It MUST require explicit
+  confirmation, refuse while a session is active or interrupted, and remove only the selected
+  machine's app-private directory and profile; no machine is deleted merely by showing the
+  control.
+- **FR-010**: The selected experimental cycle profile MUST use the shared RoboWindows selected
+  button treatment: dark surface, primary checkmarked label, and no redundant status line.
 
 ## Acceptance Scenarios
 
@@ -36,9 +47,19 @@ performance trials without sharing its writable disk with my stable machine.
    the normal core, requested fixed cycles, existing SB16 resources, and `pentium_slow`.
 4. Given a failed 14,000-cycle experimental session, when RoboWindows restarts, then the copy
    returns to its safe 12,000-cycle profile while the stable machine remains unchanged.
+5. Given a multi-gigabyte source disk, when copy creation runs, then RoboWindows visibly reports
+   progress through source verification, copying, target verification, and finalization until it
+   either creates the new machine or reports failure.
+6. Given a stopped machine, when its owner selects `Delete machine`, then RoboWindows explains
+   that the selected machine and its disk will be permanently removed and changes nothing until
+   the owner confirms. Given confirmation, no other profile or directory is removed.
+7. Given a 12,000-cycle experimental profile, when its settings are shown, then only its
+   `12k cycles` button has the shared dark, checkmarked selected state.
+8. Given an experimental copy, when its owner selects `20k cycles` or `30k cycles`, then its
+   launch file uses the corresponding fixed-cycle value; the stable machine remains unchanged.
 
 ## Out of Scope
 
-- ARM64 dynamic recompilation, automatic CPU mode, GPU renderer work, and promotion of a trial
+- ARM64 dynamic recompilation (Feature 008), automatic CPU mode, GPU renderer work, and promotion of a trial
   as performance-validated.
 - Copying while a guest is running, or modifying a user-owned source disk during testing.

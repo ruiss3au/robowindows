@@ -82,9 +82,23 @@ final class DebugSelfTest {
                     configuredReloaded.memoryMb == 64 && configuredReloaded.cpuCore.equals("auto"),
                     "persisted configuration update");
             isolated.markGuestShutdown(configured.id);
-            MachineProfile experimental = isolated.createExperimentalCopy(configured);
+            ArrayList<String> copyStages = new ArrayList<>();
+            long[] copyProgress = {0, 0};
+            MachineProfile experimental = isolated.createExperimentalCopy(configured,
+                    (stage, completed, total) -> {
+                        if (!stage.isEmpty()) copyStages.add(stage);
+                        require(total > 0 && completed >= copyProgress[0] && completed <= total,
+                                "monotonic copy progress");
+                        copyProgress[0] = completed;
+                        copyProgress[1] = total;
+                    });
             require(experimental.isExperimental() && experimental.name.equals("probe - copy"),
                     "experimental copy identity");
+            require(copyStages.contains("Verifying source disk") &&
+                    copyStages.contains("Copying disk") &&
+                    copyStages.contains("Verifying copied disk") &&
+                    copyStages.contains("Finalizing machine") && copyProgress[0] == copyProgress[1],
+                    "copy progress stages");
             require(!experimental.runtimePath.equals(configured.runtimePath) &&
                     new File(experimental.runtimePath).isFile(), "independent experimental disk");
             require(readFirstByte(new File(experimental.runtimePath)) ==
@@ -94,9 +108,9 @@ final class DebugSelfTest {
             }
             require(readFirstByte(new File(configured.runtimePath)) == 9,
                     "experimental disk cannot modify stable runtime");
-            MachineProfile tuned = isolated.updatePerformanceProfile(experimental, 14000);
-            require(tuned.fixedCycles == 14000 && tuned.cpuCore.equals("normal") &&
-                    readText(new File(tuned.launchPath)).contains("cycles=fixed 14000"),
+            MachineProfile tuned = isolated.updatePerformanceProfile(experimental, 30000);
+            require(tuned.fixedCycles == 30000 && tuned.cpuCore.equals("normal") &&
+                    readText(new File(tuned.launchPath)).contains("cycles=fixed 30000"),
                     "fixed-cycle normal performance profile");
             isolated.markSessionStarted(tuned.id);
             require(isolated.recoverInterruptedExperimental(), "experimental recovery applied");
@@ -105,6 +119,11 @@ final class DebugSelfTest {
                     readText(new File(recovered.launchPath)).contains("cycles=fixed 12000"),
                     "experimental recovery returns safe profile");
             isolated.markSessionStopped();
+            File experimentalDirectory = new File(recovered.runtimePath).getParentFile();
+            isolated.deleteMachine(recovered);
+            require(!experimentalDirectory.exists() && isolated.load().size() == 1 &&
+                    isolated.load().get(0).id.equals(configured.id),
+                    "selected machine deletion preserves stable source");
             File windowsInput = new File(testRoot, "windows.img");
             writeBytes(windowsInput, new byte[]{9, 8, 7, 6});
             MachineProfile windows = isolated.importMachine(Uri.fromFile(windowsInput), "Windows");

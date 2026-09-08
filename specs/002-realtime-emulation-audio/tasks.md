@@ -15,7 +15,8 @@ audio and real-time execution improvements. ARM64 dynrec remains optional and qu
 - [x] T002 Verify the installed Windows backup and create/checksum a writable test clone
   using a non-destructive mode added to `scripts/test-sm-t500-realtime.sh`
 - [ ] T003 [P] Define the versioned Windows and redistributable DOS timer-and-tone workloads
-  in `tests/realtime/workloads.md`
+  in `tests/realtime/workloads.md`, including a small Windows 98 benchmark program for future
+  fixed-cycle trials.
 - [ ] T004 [P] Add repository redaction assertions for disk images, ISO media, registration
   data, PCM dumps, and private device paths to `scripts/verify-assets.sh`
 
@@ -194,6 +195,10 @@ redaction decisions.
 ---
 
 ## Phase 7: User Story 3 — Safe acceleration recovery (Priority: P2, optional optimization)
+
+Delivery of T043–T050 is superseded by
+[Feature 008](../008-arm64-dynamic-recompilation/tasks.md). The tasks below remain
+historical scope; use Feature 008's execution contract and task list for new work.
 
 **Goal**: An experimental execution mode cannot trap the user in a crash loop or endanger
 the guest image.

@@ -15,3 +15,4 @@
 - [x] T012 Add pinned GitHub CI and public contribution/security documents.
 - [x] T013 Create and verify an audited, history-free public root snapshot while
   retaining the pre-publication lineage only in local backups.
+- [x] T014 Add a public specification index and roadmap, linked from the README and constitution.
