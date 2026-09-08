@@ -40,3 +40,18 @@ remain unavailable.
 
 Host checks and repository hygiene passed, and the Android debug build compiled
 on 2026-09-08. No guest was booted, modified, or installed during this work.
+
+## Pinned-core audit — 2026-09-08
+
+The pinned `dosbox-pure` ARM64 build selects `C_DYNREC` and `ARMV8LE` for
+`arm64-v8a`; its Android makefile also selects the `arm64` dynarec path. The
+ARMV8 emitter explicitly performs data-cache clean, barriers, instruction-cache
+invalidation and an instruction barrier whenever it closes generated blocks.
+The shared dynrec cache still requests writable-and-executable memory through
+`mprotect`, rather than a strict write/execute transition. That is an upstream
+behavior, not a RoboWindows change, and this feature must not paper over a
+failure by weakening Android executable-memory protections. The next diagnostic
+step remains a symbolized reproduction on the experimental copy. Its
+decoder-name helper is hidden inside the pinned core library, so effective
+decoder evidence requires a minimal, isolated upstream patch after that
+reproduction; no core patch is justified from this static audit alone.
