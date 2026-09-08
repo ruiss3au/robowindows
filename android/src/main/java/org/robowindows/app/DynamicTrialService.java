@@ -104,6 +104,12 @@ public final class DynamicTrialService extends Service {
                 case DynamicTrialProtocol.STATUS:
                     sendStatus(null);
                     break;
+                case DynamicTrialProtocol.RESTART:
+                    requireStarted();
+                    if (!NativeHost.restartSession()) {
+                        throw new IOException("Dynamic runner could not restart the active trial");
+                    }
+                    break;
                 default:
                     throw new IOException("Unsupported dynamic runner command");
             }

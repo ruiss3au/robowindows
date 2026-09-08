@@ -12,6 +12,7 @@ final class DynamicTrialProtocol {
     static final int CANCEL_INPUT = 8;
     static final int CHANGE_MEDIA = 9;
     static final int STATUS = 10;
+    static final int RESTART = 11;
 
     static final String LAUNCH_PATH = "launchPath";
     static final String FILES_PATH = "filesPath";

@@ -55,6 +55,7 @@ final class DynamicTrialController implements DynamicTrialClient.Listener {
     void setSurface(Surface surface) throws IOException { client.setSurface(surface); }
     void cancelInput() throws IOException { client.cancelInput(); }
     void queryStatus() throws IOException { client.queryStatus(); }
+    void restart() throws IOException { client.restart(); }
 
     /** User Exit is uncertain even when the process appears to stop normally. */
     void stop() {

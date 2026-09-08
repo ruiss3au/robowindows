@@ -61,6 +61,8 @@ Selection does not create an attempt journal or boot anything.
 verified closure clears it. Stale callbacks with a different attempt ID or
 generation have no effect. Recovery is repeatable after another process death.
 Never automatically boot a fallback or retry dynrec.
+Restart is forwarded only to the active child within the same attempt; it does
+not create, clear, or replace that attempt journal.
 
 A foreground, unpaused attempt with no completed emulator call for 30 seconds
 is treated as hung. The host remains responsive and offers Stop trial. Explicit

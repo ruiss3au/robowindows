@@ -134,6 +134,10 @@ final class DynamicTrialClient {
         send(DynamicTrialProtocol.STATUS, new Bundle());
     }
 
+    void restart() throws IOException {
+        send(DynamicTrialProtocol.RESTART, new Bundle());
+    }
+
     private void send(int what, Bundle data) throws IOException {
         if (service == null) throw new IOException("Dynamic runner is not connected");
         Message message = Message.obtain();
