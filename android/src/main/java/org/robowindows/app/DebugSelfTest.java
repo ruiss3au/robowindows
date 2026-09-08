@@ -124,6 +124,23 @@ final class DebugSelfTest {
             MachineProfile dynamic = isolated.selectDynamicProfile(recovered);
             require(dynamic.isDynamicSelected() && dynamic.configurationGeneration >
                     recovered.configurationGeneration, "dynamic selection is persisted only");
+            for (String faultPoint : new String[]{"journal-prepared", "dynamic-launch",
+                    "journal-executing"}) {
+                MachineStore faulty = new MachineStore(context, new File(testRoot, "private"),
+                        "machine_store_debug_probe", point -> {
+                            if (faultPoint.equals(point)) throw new IOException("injected " + point);
+                        });
+                boolean rejected = false;
+                try {
+                    faulty.prepareDynamicStart(dynamic);
+                } catch (IOException expected) {
+                    rejected = true;
+                }
+                require(rejected && readText(new File(dynamic.launchPath)).contains("core=normal") &&
+                        !new File(new File(dynamic.runtimePath).getParentFile(),
+                                "dynamic-attempt.json").exists(),
+                        "dynamic pre-native failure restores normal: " + faultPoint);
+            }
             DynamicAttempt attempt = isolated.prepareDynamicStart(dynamic);
             String journalText = readText(new File(new File(dynamic.runtimePath).getParentFile(),
                     "dynamic-attempt.json"));

@@ -34,19 +34,31 @@ final class MachineStore {
     private final Context context;
     private final File filesRoot;
     private final String preferencesName;
+    private final FaultInjector faults;
 
     interface CopyProgress {
         void update(String stage, long completedBytes, long totalBytes);
     }
 
+    interface FaultInjector {
+        void before(String persistencePoint) throws IOException;
+    }
+
+    private static final FaultInjector NO_FAULTS = point -> {};
+
     MachineStore(Context context) {
-        this(context, context.getFilesDir(), PREFS);
+        this(context, context.getFilesDir(), PREFS, NO_FAULTS);
     }
 
     MachineStore(Context context, File filesRoot, String preferencesName) {
+        this(context, filesRoot, preferencesName, NO_FAULTS);
+    }
+
+    MachineStore(Context context, File filesRoot, String preferencesName, FaultInjector faults) {
         this.context = context.getApplicationContext();
         this.filesRoot = filesRoot;
         this.preferencesName = preferencesName;
+        this.faults = faults == null ? NO_FAULTS : faults;
         removeInterruptedImports(new File(filesRoot, "machines"));
         new File(filesRoot, "system").mkdirs();
         new File(filesRoot, "saves").mkdirs();
@@ -106,11 +118,12 @@ final class MachineStore {
         } catch (JSONException error) {
             throw new IOException("Cannot save dynamic fallback", error);
         }
-        prepared.writeAtomically(journal);
+        writeAttempt(prepared, journal, "journal-prepared");
         try {
+            faults.before("dynamic-launch");
             writeDynamicLaunchConfig(current);
             DynamicAttempt executing = prepared.withState(DynamicAttempt.EXECUTING);
-            executing.writeAtomically(journal);
+            writeAttempt(executing, journal, "journal-executing");
             return executing;
         } catch (IOException | RuntimeException error) {
             // A launch publication failure has never handed media to native code.
@@ -907,6 +920,12 @@ final class MachineStore {
                 profile.memoryMb, profile.cpuCore, profile.soundEnabled, profile.createdAt,
                 profile.lastBootedAt, profile.mediaAssets, profile.role, profile.fixedCycles,
                 profile.lastKnownSafeCycles, execution, generation);
+    }
+
+    private void writeAttempt(DynamicAttempt attempt, File journal, String persistencePoint)
+            throws IOException {
+        faults.before(persistencePoint);
+        attempt.writeAtomically(journal);
     }
 
     /**
