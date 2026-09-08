@@ -91,6 +91,16 @@ repair or replacement of the experimental copy is separate work. A successful
 check enables a normal recovery boot, whose normal Windows shutdown re-establishes
 clean provenance. The stable machine remains available throughout recovery.
 
+The checker accepts only a raw FAT volume, never a disk container, partitioned
+image, or mounted block device. Those inputs are unsupported and remain
+quarantined until a separately specified, read-only extractor is available. It
+uses `fsck.fat -n` (or `dosfsck -n`) and `mtype` against the image directly,
+requires one or more relative persistence fixtures to be readable without
+printing their contents, and compares the image SHA-256 before and after every
+operation. It never invokes a repair flag, mounts the image, or writes a result
+into app storage. Its output contains only checker version, pass/fail, image
+hash and fixture count.
+
 ## Process and build boundary
 
 Each dynamic attempt runs in a dedicated Android emulator process. Wait for its

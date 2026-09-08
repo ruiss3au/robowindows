@@ -54,3 +54,8 @@ accept only an already-validated dynamic launch file and proxy native lifecycle
 and input operations. The next substep is a host-side binder client; binding it
 to the session UI, child-death acknowledgement, and disposable-fixture
 validation remain open.
+
+T014 has begun with a versioned host checker for raw FAT volumes. It is tested
+with pass, filesystem-reject, unreadable-fixture, unsupported-container and
+unchanged-image paths. App-side evidence import/unquarantine and real-media
+validation remain open.

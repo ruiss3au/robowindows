@@ -19,6 +19,7 @@ guest media, and backups are intentionally outside Git.
 | `scripts/build-android.sh --debug` | Build the ARM64 debug APK and checksum | Writes ignored build/artifact output |
 | `scripts/test-host.sh` | Compile and run Java/C++ host checks | Temporary files only |
 | `scripts/check-repository.sh` | Check Git hygiene and shell syntax | Read-only |
+| `scripts/check-experimental-fat.sh --image FILE --expected PATH` | Read-only FAT health check for a quarantined experimental volume | Requires `fsck.fat`/`dosfsck` and `mtype`; never mounts or repairs |
 | `scripts/test-sm-t500-core.sh` | Run the disposable direct-core device test | Installs APK and creates temporary tablet files |
 | `scripts/test-sm-t500-realtime.sh` | Legacy realtime clone/environment test modes | Some modes create explicit host/device clones |
 | `scripts/cleanup-tablet-storage.sh --preflight` | Verify the two disposable tablet areas and protected library | Read-only; requires RoboWindows at Machines |
@@ -53,3 +54,10 @@ The primary acceptance model is `SM-T500`. A deliberate porting test may set
 No script may silently overwrite a guest disk or backup. Device tests use
 disposable fixtures or explicit clones. Shut down the guest from Windows and
 stop RoboWindows before creating or restoring a backup.
+
+`check-experimental-fat.sh` accepts a raw FAT volume only. It deliberately
+rejects VHD/VHDX/QCOW2 containers and partitioned disk images rather than using
+loop mounts or attempting a repair. Supply each expected persistence fixture as
+a relative DOS-style path (for example `WINDOWS/WIN.INI`). Its output is safe to
+record because it omits local paths and fixture contents; it is not an app-side
+unquarantine action by itself.

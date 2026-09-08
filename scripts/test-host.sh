@@ -21,6 +21,8 @@ javac -d "$classes_dir" \
   "$repo_dir/tests/java/org/robowindows/app/SessionUiStateTest.java"
 java -cp "$classes_dir" org.robowindows.app.SessionUiStateTest
 
+"$repo_dir/tests/scripts/check-experimental-fat-test.sh"
+
 g++ -std=c++17 -Wall -Wextra -Werror \
   -I"$repo_dir/android/src/main/cpp" \
   "$repo_dir/tests/input/input_event_test.cpp" -o "$classes_dir/input_event_test"
