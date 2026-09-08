@@ -1,6 +1,7 @@
 package org.robowindows.app;
 
 final class LaunchConfig {
+    static final int DYNAMIC_EXPERIMENTAL_CYCLES = 20000;
     private LaunchConfig() {}
 
     static boolean supportsBoot(String extension) {
@@ -96,8 +97,9 @@ final class LaunchConfig {
 
     private static void validateCycles(String cpuCore, int fixedCycles) {
         if (fixedCycles < 0) throw new IllegalArgumentException("Invalid fixed cycles");
-        if (fixedCycles > 0 && !cpuCore.equals("normal")) {
-            throw new IllegalArgumentException("Fixed cycles require the normal CPU core");
+        if (fixedCycles > 0 && !cpuCore.equals("normal") &&
+                !(cpuCore.equals("dynamic") && fixedCycles == DYNAMIC_EXPERIMENTAL_CYCLES)) {
+            throw new IllegalArgumentException("Fixed cycles require the named experimental policy");
         }
     }
 

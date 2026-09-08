@@ -9,9 +9,11 @@ import java.util.Collections;
 import java.util.List;
 
 final class MachineProfile {
-    static final int SCHEMA_VERSION = 6;
+    static final int SCHEMA_VERSION = 7;
     static final String ROLE_STABLE = "stable";
     static final String ROLE_EXPERIMENTAL = "experimental";
+    static final String EXECUTION_NORMAL = "normal";
+    static final String EXECUTION_DYNAMIC = "dynamic";
 
     final String id;
     final String name;
@@ -27,6 +29,8 @@ final class MachineProfile {
     final String role;
     final int fixedCycles;
     final int lastKnownSafeCycles;
+    final String selectedExecution;
+    final long configurationGeneration;
     final long createdAt;
     final long lastBootedAt;
     final List<MediaAsset> mediaAssets;
@@ -51,6 +55,16 @@ final class MachineProfile {
             String runtimePath, String mediaSha256, String launchPath, int memoryMb, String cpuCore,
             boolean soundEnabled, long createdAt, long lastBootedAt, List<MediaAsset> mediaAssets,
             String role, int fixedCycles, int lastKnownSafeCycles) {
+        this(id, name, family, mediaName, mediaPath, runtimePath, mediaSha256, launchPath,
+                memoryMb, cpuCore, soundEnabled, createdAt, lastBootedAt, mediaAssets, role,
+                fixedCycles, lastKnownSafeCycles, EXECUTION_NORMAL, 0);
+    }
+
+    MachineProfile(String id, String name, String family, String mediaName, String mediaPath,
+            String runtimePath, String mediaSha256, String launchPath, int memoryMb, String cpuCore,
+            boolean soundEnabled, long createdAt, long lastBootedAt, List<MediaAsset> mediaAssets,
+            String role, int fixedCycles, int lastKnownSafeCycles, String selectedExecution,
+            long configurationGeneration) {
         this.id = id;
         this.name = name;
         this.family = family;
@@ -65,6 +79,9 @@ final class MachineProfile {
         this.role = ROLE_EXPERIMENTAL.equals(role) ? ROLE_EXPERIMENTAL : ROLE_STABLE;
         this.fixedCycles = fixedCycles;
         this.lastKnownSafeCycles = lastKnownSafeCycles;
+        this.selectedExecution = EXECUTION_DYNAMIC.equals(selectedExecution)
+                ? EXECUTION_DYNAMIC : EXECUTION_NORMAL;
+        this.configurationGeneration = Math.max(0, configurationGeneration);
         this.createdAt = createdAt;
         this.lastBootedAt = lastBootedAt;
         this.mediaAssets = Collections.unmodifiableList(new ArrayList<>(mediaAssets));
@@ -87,6 +104,8 @@ final class MachineProfile {
         json.put("role", role);
         json.put("fixedCycles", fixedCycles);
         json.put("lastKnownSafeCycles", lastKnownSafeCycles);
+        json.put("selectedExecution", selectedExecution);
+        json.put("configurationGeneration", configurationGeneration);
         json.put("createdAt", createdAt);
         json.put("lastBootedAt", lastBootedAt);
         JSONArray assets = new JSONArray();
@@ -118,10 +137,16 @@ final class MachineProfile {
                 json.optBoolean("soundEnabled", true), json.getLong("createdAt"),
                 json.optLong("lastBootedAt", 0), assets,
                 json.optString("role", ROLE_STABLE), json.optInt("fixedCycles", 0),
-                json.optInt("lastKnownSafeCycles", 0));
+                json.optInt("lastKnownSafeCycles", 0),
+                json.optString("selectedExecution", EXECUTION_NORMAL),
+                json.optLong("configurationGeneration", 0));
     }
 
     boolean isExperimental() {
         return ROLE_EXPERIMENTAL.equals(role);
+    }
+
+    boolean isDynamicSelected() {
+        return EXECUTION_DYNAMIC.equals(selectedExecution);
     }
 }

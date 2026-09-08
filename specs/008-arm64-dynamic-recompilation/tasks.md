@@ -38,3 +38,13 @@
 Execution order: T001–002, T012–014, T003, T008, T004–007, T015–016,
 then repeat applicable T008 checks and execute T009–011. Keep ordinary dynamic
 UI hidden until the safety stages pass; release visibility also requires SC-001–005.
+
+## Implementation progress — 2026-09-08
+
+T001/T002/T012 have begun with a schema-v7 authoritative selection/generation,
+per-machine clean-shutdown provenance, atomic `prepared`/`executing` journals,
+fresh normal-start ownership checks, and conservative startup recovery. The
+host probe covers selection, journal ordering, normal fallback regeneration and
+quarantine. This is not completion: fault injection, all state transitions,
+read-only health checking, separate-process execution and every device gate
+remain open. Dynamic UI and native handoff remain disabled.

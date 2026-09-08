@@ -55,6 +55,7 @@ public final class MainActivity extends Activity {
     private boolean consumingRevealTouch;
     private MachineStore machineStore;
     private boolean experimentalRecoveryApplied;
+    private boolean dynamicRecoveryApplied;
     private boolean copyInProgress;
     private ProgressBar copyProgressBar;
     private TextView copyProgressStatus;
@@ -129,6 +130,7 @@ public final class MainActivity extends Activity {
         getWindow().setNavigationBarColor(BG);
         machineStore = new MachineStore(this);
         experimentalRecoveryApplied = machineStore.recoverInterruptedExperimental();
+        dynamicRecoveryApplied = machineStore.recoverDynamicAttempts();
         audioManager = (AudioManager) getSystemService(Context.AUDIO_SERVICE);
         ((InputManager) getSystemService(Context.INPUT_SERVICE))
                 .registerInputDeviceListener(inputListener, handler);
@@ -323,6 +325,16 @@ public final class MainActivity extends Activity {
             recoveryParams.topMargin = dp(16);
             content.addView(recovery, recoveryParams);
         }
+        if (dynamicRecoveryApplied) {
+            LinearLayout recovery = card();
+            recovery.addView(text("An unfinished dynamic trial was returned to its normal " +
+                    "profile. Its experimental disk remains quarantined for a health check.",
+                    15, TEXT));
+            LinearLayout.LayoutParams recoveryParams = new LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+            recoveryParams.topMargin = dp(16);
+            content.addView(recovery, recoveryParams);
+        }
 
         ScrollView scroll = new ScrollView(this);
         LinearLayout library = new LinearLayout(this);
@@ -383,7 +395,12 @@ public final class MainActivity extends Activity {
         startParams.leftMargin = dp(10);
         String startLabel = machineStore.isWindowsInstaller(profile) &&
                 machineStore.bootsInstaller(profile) ? "Install" : "Start";
-        row.addView(button(startLabel, v -> showSession(profile)), startParams);
+        Button start = button(startLabel, v -> showSession(profile));
+        if (machineStore.requiresDynamicMediaCheck(profile)) {
+            start.setEnabled(false);
+            start.setText("Needs disk check");
+        }
+        row.addView(start, startParams);
         item.addView(row);
         LinearLayout.LayoutParams itemParams = new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
@@ -708,8 +725,15 @@ public final class MainActivity extends Activity {
     }
 
     private void showSession(MachineProfile profile) {
+        try {
+            profile = machineStore.prepareNormalStart(profile);
+        } catch (IOException error) {
+            Toast.makeText(this, error.getMessage(), Toast.LENGTH_LONG).show();
+            return;
+        }
+        final MachineProfile sessionProfile = profile;
         long generation = ++sessionGeneration;
-        currentSessionProfile = profile;
+        currentSessionProfile = sessionProfile;
         FrameLayout page = new FrameLayout(this);
         page.setBackgroundColor(BG);
         GuestDisplayView guest = new GuestDisplayView(this, this::deviceHandle);
@@ -720,7 +744,7 @@ public final class MainActivity extends Activity {
         controls.setBackground(background(Color.argb(238, 25, 30, 38), 0));
         sessionControls = controls;
         controls.addView(button("Exit", v -> showHome()), new LinearLayout.LayoutParams(dp(110), dp(44)));
-        TextView title = text(profile.name, 20, TEXT);
+        TextView title = text(sessionProfile.name, 20, TEXT);
         title.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
         LinearLayout.LayoutParams sessionTitleParams = new LinearLayout.LayoutParams(0,
                 ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
@@ -745,7 +769,7 @@ public final class MainActivity extends Activity {
         restartParams.leftMargin = dp(10);
         controls.addView(button("Restart", v -> {
             releasePointerAndShowControls();
-            restartSession(profile);
+            restartSession(sessionProfile);
             pause.setText("Pause");
         }), restartParams);
         LinearLayout.LayoutParams mediaParams = new LinearLayout.LayoutParams(dp(170), dp(44));
@@ -760,7 +784,8 @@ public final class MainActivity extends Activity {
         guest.requestFocus();
         sessionPaused = false;
         requestGuestAudioFocus();
-        sessionActive = NativeHost.startSession(profile.launchPath, getFilesDir().getAbsolutePath());
+        sessionActive = NativeHost.startSession(sessionProfile.launchPath,
+                getFilesDir().getAbsolutePath());
         if (!sessionActive) {
             showHome();
             Toast.makeText(this, "This machine could not start.", Toast.LENGTH_LONG).show();
@@ -770,8 +795,8 @@ public final class MainActivity extends Activity {
         syncSessionControls();
         scheduleControlsHide();
         if (audioFocusPaused) NativeHost.setPaused(true);
-        if (sessionActive && !transientDebugSession) machineStore.markSessionStarted(profile.id);
-        handler.postDelayed(() -> confirmSessionStarted(profile, generation), 700);
+        if (sessionActive && !transientDebugSession) machineStore.markSessionStarted(sessionProfile.id);
+        handler.postDelayed(() -> confirmSessionStarted(sessionProfile, generation), 700);
     }
 
     private void pickSessionMedia() {

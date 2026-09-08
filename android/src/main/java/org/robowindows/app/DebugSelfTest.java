@@ -119,8 +119,23 @@ final class DebugSelfTest {
                     readText(new File(recovered.launchPath)).contains("cycles=fixed 12000"),
                     "experimental recovery returns safe profile");
             isolated.markSessionStopped();
+            isolated.markGuestShutdown(recovered.id);
+            MachineProfile dynamic = isolated.selectDynamicProfile(recovered);
+            require(dynamic.isDynamicSelected() && dynamic.configurationGeneration >
+                    recovered.configurationGeneration, "dynamic selection is persisted only");
+            DynamicAttempt attempt = isolated.prepareDynamicStart(dynamic);
+            require(attempt.state.equals(DynamicAttempt.EXECUTING) &&
+                    readText(new File(dynamic.launchPath)).contains("core=dynamic") &&
+                    readText(new File(dynamic.launchPath)).contains("cycles=fixed 20000"),
+                    "dynamic handoff is journaled before native execution");
+            require(isolated.recoverDynamicAttempts(), "unfinished dynamic handoff is recovered");
+            MachineProfile dynamicRecovered = isolated.load().get(1);
+            require(!dynamicRecovered.isDynamicSelected() &&
+                    isolated.requiresDynamicMediaCheck(dynamicRecovered) &&
+                    readText(new File(dynamicRecovered.launchPath)).contains("core=normal"),
+                    "dynamic recovery restores normal and quarantines disk");
             File experimentalDirectory = new File(recovered.runtimePath).getParentFile();
-            isolated.deleteMachine(recovered);
+            isolated.deleteMachine(dynamicRecovered);
             require(!experimentalDirectory.exists() && isolated.load().size() == 1 &&
                     isolated.load().get(0).id.equals(configured.id),
                     "selected machine deletion preserves stable source");

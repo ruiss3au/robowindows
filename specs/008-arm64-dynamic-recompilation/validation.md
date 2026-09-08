@@ -13,7 +13,7 @@ No dynamic execution is authorized or claimed by this specification alone.
 
 ## Pending
 
-- Host-tested crash recovery and last-known-safe selection.
+- Full fault-injection coverage for crash recovery and fallback persistence.
 - Symbolized SM-T500 root cause on a verified experimental copy.
 - Correctness parity, benchmark improvement, clean audio, and thermal soak.
 
@@ -26,3 +26,17 @@ failed-recovery blocking, return-to-Normal UI, transactional ordering and media
 quarantine. Dedicated dynamic processes also address retained native core state.
 All implementation/device tasks remain pending. Separate processes reduce
 accidental state sharing; they do not make arbitrary native bugs harmless.
+
+## Safety-envelope implementation — 2026-09-08
+
+The diagnostic-only safety envelope now persists schema-v7 execution selection
+and configuration generations; per-machine clean shutdown provenance no longer
+uses the former single global marker. `prepared` is durably recorded before
+dynamic launch publication, then `executing` before any future native handoff.
+An interrupted executing record restores the complete normal launch profile and
+quarantines the experimental disk; ordinary Start is disabled until the separate
+read-only health-check task is implemented. The dynamic UI and native handoff
+remain unavailable.
+
+Host checks and repository hygiene passed, and the Android debug build compiled
+on 2026-09-08. No guest was booted, modified, or installed during this work.

@@ -7,6 +7,7 @@ import android.provider.OpenableColumns;
 
 import org.json.JSONArray;
 import org.json.JSONException;
+import org.json.JSONObject;
 
 import java.io.File;
 import java.io.FileOutputStream;
@@ -24,6 +25,9 @@ final class MachineStore {
     private static final String KEY = "profiles";
     private static final String ACTIVE_SESSION = "active_session";
     private static final String CLEAN_SHUTDOWN_MACHINE = "clean_shutdown_machine";
+    private static final String CLEAN_SHUTDOWN_MACHINES = "clean_shutdown_machines";
+    private static final String DYNAMIC_ATTEMPT_FILE = "dynamic-attempt.json";
+    static final int DYNAMIC_EXPERIMENTAL_CYCLES = LaunchConfig.DYNAMIC_EXPERIMENTAL_CYCLES;
     private static final long COPY_SAFETY_MARGIN_BYTES = 256L * 1024L * 1024L;
     static final int SAFE_EXPERIMENTAL_CYCLES = 12000;
     static final int[] EXPERIMENTAL_CYCLE_CANDIDATES = {10000, 12000, 14000, 20000, 30000};
@@ -46,6 +50,128 @@ final class MachineStore {
         removeInterruptedImports(new File(filesRoot, "machines"));
         new File(filesRoot, "system").mkdirs();
         new File(filesRoot, "saves").mkdirs();
+    }
+
+    /**
+     * Records an experimental preference only. It deliberately does not write a
+     * dynamic launch file or hand any media to native code.
+     */
+    synchronized MachineProfile selectDynamicProfile(MachineProfile selected) throws IOException {
+        MachineProfile current = requireCurrent(selected);
+        if (!current.isExperimental() || hasInterruptedSession() ||
+                !hasCleanGuestShutdown(current.id)) {
+            throw new IOException("Dynamic trials require a cleanly shut down experimental copy");
+        }
+        validateWritableOwnership(current);
+        MachineProfile updated = copyWithExecution(current, MachineProfile.EXECUTION_DYNAMIC,
+                current.configurationGeneration + 1);
+        replaceProfile(updated);
+        return updated;
+    }
+
+    synchronized MachineProfile selectNormalProfile(MachineProfile selected) throws IOException {
+        MachineProfile current = requireCurrent(selected);
+        if (hasInterruptedSession()) throw new IOException("Stop the current machine session first");
+        MachineProfile updated = copyWithExecution(current, MachineProfile.EXECUTION_NORMAL,
+                current.configurationGeneration + 1);
+        writeProfileLaunchConfig(updated, isWindowsInstaller(updated) && bootsInstaller(updated));
+        try {
+            replaceProfile(updated);
+        } catch (IOException error) {
+            writeProfileLaunchConfig(current, isWindowsInstaller(current) && bootsInstaller(current));
+            throw error;
+        }
+        return updated;
+    }
+
+    /**
+     * Performs every durable pre-native transition for a named diagnostic trial.
+     * The caller may hand the returned launch file to a dedicated child process
+     * only after this method returns successfully.
+     */
+    synchronized DynamicAttempt prepareDynamicStart(MachineProfile selected) throws IOException {
+        MachineProfile current = requireCurrent(selected);
+        if (!current.isExperimental() || !current.isDynamicSelected() || hasInterruptedSession() ||
+                !hasCleanGuestShutdown(current.id)) {
+            throw new IOException("Dynamic trial is not eligible to start");
+        }
+        validateWritableOwnership(current);
+        File journal = dynamicAttemptFile(current);
+        if (journal.exists()) throw new IOException("This experimental machine needs recovery first");
+        DynamicAttempt prepared;
+        try {
+            prepared = new DynamicAttempt(current.id, UUID.randomUUID().toString(),
+                    current.configurationGeneration, DynamicAttempt.PREPARED,
+                    copyWithExecution(current, MachineProfile.EXECUTION_NORMAL,
+                            current.configurationGeneration).toJson());
+        } catch (JSONException error) {
+            throw new IOException("Cannot save dynamic fallback", error);
+        }
+        prepared.writeAtomically(journal);
+        try {
+            writeDynamicLaunchConfig(current);
+            DynamicAttempt executing = prepared.withState(DynamicAttempt.EXECUTING);
+            executing.writeAtomically(journal);
+            return executing;
+        } catch (IOException | RuntimeException error) {
+            // A launch publication failure has never handed media to native code.
+            writeProfileLaunchConfig(current, isWindowsInstaller(current) && bootsInstaller(current));
+            journal.delete();
+            if (error instanceof IOException) throw (IOException) error;
+            throw new IOException("Cannot prepare dynamic trial", error);
+        }
+    }
+
+    /** Restores the normal launch description after any unfinished dynamic handoff. */
+    synchronized boolean recoverDynamicAttempts() {
+        boolean recovered = false;
+        for (MachineProfile profile : load()) {
+            File journal = dynamicAttemptFile(profile);
+            if (!journal.exists()) continue;
+            try {
+                DynamicAttempt attempt = DynamicAttempt.read(journal);
+                if (!profile.id.equals(attempt.machineId) ||
+                        profile.configurationGeneration != attempt.generation) {
+                    attempt.withState(DynamicAttempt.BLOCKED).writeAtomically(journal);
+                    continue;
+                }
+                MachineProfile fallback = MachineProfile.fromJson(attempt.normalFallback);
+                if (!fallback.id.equals(profile.id) || fallback.isDynamicSelected()) {
+                    attempt.withState(DynamicAttempt.BLOCKED).writeAtomically(journal);
+                    continue;
+                }
+                writeProfileLaunchConfig(fallback,
+                        isWindowsInstaller(fallback) && bootsInstaller(fallback));
+                replaceProfile(fallback);
+                if (DynamicAttempt.PREPARED.equals(attempt.state)) {
+                    if (!journal.delete()) throw new IOException("Cannot clear prepared trial record");
+                } else {
+                    attempt.withState(DynamicAttempt.NEEDS_CHECK).writeAtomically(journal);
+                }
+                recovered = true;
+            } catch (IOException | JSONException error) {
+                // Keep an unreadable or failed record in place: this machine remains blocked.
+            }
+        }
+        return recovered;
+    }
+
+    synchronized boolean requiresDynamicMediaCheck(MachineProfile selected) {
+        return selected != null && dynamicAttemptFile(selected).exists();
+    }
+
+    /** Freshly validates an ordinary start; callers must not trust stale UI state. */
+    synchronized MachineProfile prepareNormalStart(MachineProfile selected) throws IOException {
+        MachineProfile current = requireCurrent(selected);
+        if (current.isDynamicSelected()) {
+            throw new IOException("Dynamic trials require the diagnostic runner");
+        }
+        if (hasInterruptedSession()) throw new IOException("Recover the previous session first");
+        if (requiresDynamicMediaCheck(current)) {
+            throw new IOException("This experimental disk needs a health check first");
+        }
+        validateWritableOwnership(current);
+        return current;
     }
 
     List<MachineProfile> load() {
@@ -84,7 +210,8 @@ final class MachineStore {
                                 profile.mediaSha256, launch.getAbsolutePath(), profile.memoryMb,
                                 profile.cpuCore, profile.soundEnabled, profile.createdAt,
                                 profile.lastBootedAt, profile.mediaAssets, profile.role,
-                                profile.fixedCycles, profile.lastKnownSafeCycles);
+                                profile.fixedCycles, profile.lastKnownSafeCycles,
+                                profile.selectedExecution, profile.configurationGeneration);
                         migrated = true;
                     }
                     profiles.add(profile);
@@ -323,7 +450,8 @@ final class MachineStore {
                         profile.launchPath, profile.memoryMb, profile.cpuCore,
                         profile.soundEnabled, profile.createdAt, System.currentTimeMillis(),
                         profile.mediaAssets, profile.role, profile.fixedCycles,
-                        profile.lastKnownSafeCycles));
+                        profile.lastKnownSafeCycles, profile.selectedExecution,
+                        profile.configurationGeneration));
                 break;
             }
         }
@@ -331,8 +459,12 @@ final class MachineStore {
     }
 
     void markSessionStarted(String machineId) {
-        context.getSharedPreferences(preferencesName, Context.MODE_PRIVATE).edit()
-                .putString(ACTIVE_SESSION, machineId)
+        android.content.SharedPreferences preferences = context.getSharedPreferences(preferencesName,
+                Context.MODE_PRIVATE);
+        java.util.HashSet<String> clean = cleanShutdownMachines(preferences);
+        clean.remove(machineId);
+        preferences.edit().putString(ACTIVE_SESSION, machineId)
+                .putStringSet(CLEAN_SHUTDOWN_MACHINES, clean)
                 .remove(CLEAN_SHUTDOWN_MACHINE).commit();
     }
 
@@ -351,13 +483,17 @@ final class MachineStore {
     }
 
     void markGuestShutdown(String machineId) {
-        context.getSharedPreferences(preferencesName, Context.MODE_PRIVATE).edit()
-                .putString(CLEAN_SHUTDOWN_MACHINE, machineId).commit();
+        android.content.SharedPreferences preferences = context.getSharedPreferences(preferencesName,
+                Context.MODE_PRIVATE);
+        java.util.HashSet<String> clean = cleanShutdownMachines(preferences);
+        clean.add(machineId);
+        preferences.edit().putStringSet(CLEAN_SHUTDOWN_MACHINES, clean)
+                .remove(CLEAN_SHUTDOWN_MACHINE).commit();
     }
 
     boolean hasCleanGuestShutdown(String machineId) {
-        return machineId.equals(context.getSharedPreferences(preferencesName, Context.MODE_PRIVATE)
-                .getString(CLEAN_SHUTDOWN_MACHINE, null));
+        return cleanShutdownMachines(context.getSharedPreferences(preferencesName,
+                Context.MODE_PRIVATE)).contains(machineId);
     }
 
     boolean recoverInterruptedExperimental() {
@@ -429,6 +565,8 @@ final class MachineStore {
             List<MachineProfile> profiles = load();
             profiles.add(copy);
             if (!save(profiles)) throw new IOException("Cannot save experimental machine");
+            // The verified copy was made while its source was cleanly stopped.
+            markGuestShutdown(copy.id);
             return copy;
         } catch (IOException error) {
             deleteTree(directory);
@@ -438,14 +576,16 @@ final class MachineStore {
 
     MachineProfile updatePerformanceProfile(MachineProfile selected, int fixedCycles)
             throws IOException {
-        if (!selected.isExperimental() || !isExperimentalCycleCandidate(fixedCycles)) {
+        if (!selected.isExperimental() || selected.isDynamicSelected() ||
+                !isExperimentalCycleCandidate(fixedCycles)) {
             throw new IOException("This performance profile is unavailable");
         }
         MachineProfile updated = new MachineProfile(selected.id, selected.name, selected.family,
                 selected.mediaName, selected.mediaPath, selected.runtimePath, selected.mediaSha256,
                 selected.launchPath, selected.memoryMb, "normal", selected.soundEnabled,
                 selected.createdAt, selected.lastBootedAt, selected.mediaAssets, selected.role,
-                fixedCycles, selected.lastKnownSafeCycles);
+                fixedCycles, selected.lastKnownSafeCycles, selected.selectedExecution,
+                selected.configurationGeneration + 1);
         boolean bootInstaller = isWindowsInstaller(selected) && bootsInstaller(selected);
         writeProfileLaunchConfig(updated, bootInstaller);
         try {
@@ -486,10 +626,11 @@ final class MachineStore {
             }
             throw new IOException("The machine profile could not be saved");
         }
-        String cleanShutdown = context.getSharedPreferences(preferencesName, Context.MODE_PRIVATE)
-                .getString(CLEAN_SHUTDOWN_MACHINE, null);
-        if (selected.id.equals(cleanShutdown)) {
-            context.getSharedPreferences(preferencesName, Context.MODE_PRIVATE).edit()
+        android.content.SharedPreferences preferences = context.getSharedPreferences(preferencesName,
+                Context.MODE_PRIVATE);
+        java.util.HashSet<String> clean = cleanShutdownMachines(preferences);
+        if (clean.remove(selected.id)) {
+            preferences.edit().putStringSet(CLEAN_SHUTDOWN_MACHINES, clean)
                     .remove(CLEAN_SHUTDOWN_MACHINE).commit();
         }
         deleteTree(staged);
@@ -506,6 +647,9 @@ final class MachineStore {
 
     MachineProfile updateConfiguration(MachineProfile selected, int memoryMb, String cpuCore,
             boolean soundEnabled) throws IOException {
+        if (selected.isDynamicSelected()) {
+            throw new IOException("Normal settings cannot change during a dynamic trial");
+        }
         String extension = extension(selected.mediaName);
         if (isWindowsInstaller(selected)) {
             writeWindowsLaunchConfig(new File(selected.launchPath), new File(selected.runtimePath),
@@ -519,7 +663,8 @@ final class MachineStore {
                 selected.mediaName, selected.mediaPath, selected.runtimePath, selected.mediaSha256, selected.launchPath,
                 memoryMb, cpuCore, soundEnabled, selected.createdAt, selected.lastBootedAt,
                 selected.mediaAssets, selected.role, selected.fixedCycles,
-                selected.lastKnownSafeCycles);
+                selected.lastKnownSafeCycles, selected.selectedExecution,
+                selected.configurationGeneration + 1);
         List<MachineProfile> profiles = load();
         for (int i = 0; i < profiles.size(); i++) {
             if (profiles.get(i).id.equals(selected.id)) {
@@ -591,7 +736,8 @@ final class MachineStore {
                     profile.mediaName, profile.mediaPath, profile.runtimePath, profile.mediaSha256,
                     profile.launchPath, profile.memoryMb, profile.cpuCore, profile.soundEnabled,
                     profile.createdAt, profile.lastBootedAt, assets, profile.role,
-                    profile.fixedCycles, profile.lastKnownSafeCycles));
+                    profile.fixedCycles, profile.lastKnownSafeCycles,
+                    profile.selectedExecution, profile.configurationGeneration + 1));
             if (!save(profiles)) throw new IOException("Cannot save media metadata");
             return;
         }
@@ -645,6 +791,94 @@ final class MachineStore {
         throw new IOException("Machine profile is unavailable");
     }
 
+    private MachineProfile requireCurrent(MachineProfile selected) throws IOException {
+        if (selected == null) throw new IOException("Machine profile is unavailable");
+        for (MachineProfile current : load()) {
+            if (!current.id.equals(selected.id)) continue;
+            if (current.configurationGeneration != selected.configurationGeneration) {
+                throw new IOException("Machine settings changed; reopen Settings");
+            }
+            return current;
+        }
+        throw new IOException("Machine profile is unavailable");
+    }
+
+    private static MachineProfile copyWithExecution(MachineProfile profile, String execution,
+            long generation) {
+        return new MachineProfile(profile.id, profile.name, profile.family, profile.mediaName,
+                profile.mediaPath, profile.runtimePath, profile.mediaSha256, profile.launchPath,
+                profile.memoryMb, profile.cpuCore, profile.soundEnabled, profile.createdAt,
+                profile.lastBootedAt, profile.mediaAssets, profile.role, profile.fixedCycles,
+                profile.lastKnownSafeCycles, execution, generation);
+    }
+
+    private File dynamicAttemptFile(MachineProfile profile) {
+        return new File(machineDirectory(profile), DYNAMIC_ATTEMPT_FILE);
+    }
+
+    private File machineDirectory(MachineProfile profile) {
+        return new File(profile.runtimePath).getParentFile();
+    }
+
+    private void validateWritableOwnership(MachineProfile profile) throws IOException {
+        File root = new File(filesRoot, "machines").getCanonicalFile();
+        File directory = machineDirectory(profile).getCanonicalFile();
+        if (!directory.isDirectory() || !root.equals(directory.getParentFile())) {
+            throw new IOException("Machine storage ownership is invalid");
+        }
+        validatePrivateWritableFile(profile.runtimePath, directory);
+        for (MediaAsset asset : profile.mediaAssets) {
+            if (!asset.runtimePath.equals(asset.sourcePath)) {
+                validatePrivateWritableFile(asset.runtimePath, directory);
+            }
+        }
+        for (MachineProfile other : load()) {
+            if (other.id.equals(profile.id)) continue;
+            rejectWritableAlias(profile.runtimePath, other.runtimePath);
+            for (MediaAsset otherAsset : other.mediaAssets) {
+                if (!otherAsset.runtimePath.equals(otherAsset.sourcePath)) {
+                    rejectWritableAlias(profile.runtimePath, otherAsset.runtimePath);
+                }
+            }
+            for (MediaAsset asset : profile.mediaAssets) {
+                if (asset.runtimePath.equals(asset.sourcePath)) continue;
+                rejectWritableAlias(asset.runtimePath, other.runtimePath);
+                for (MediaAsset otherAsset : other.mediaAssets) {
+                    if (!otherAsset.runtimePath.equals(otherAsset.sourcePath)) {
+                        rejectWritableAlias(asset.runtimePath, otherAsset.runtimePath);
+                    }
+                }
+            }
+        }
+    }
+
+    private static void validatePrivateWritableFile(String path, File directory) throws IOException {
+        File file = new File(path);
+        File canonical = file.getCanonicalFile();
+        if (!file.isFile() || !canonical.getPath().startsWith(directory.getPath() + File.separator)) {
+            throw new IOException("Writable media is outside machine storage");
+        }
+    }
+
+    private static void rejectWritableAlias(String first, String second) throws IOException {
+        if (new File(first).getCanonicalFile().equals(new File(second).getCanonicalFile())) {
+            throw new IOException("Writable media is shared with another machine");
+        }
+    }
+
+    private void writeDynamicLaunchConfig(MachineProfile profile) throws IOException {
+        if (isWindowsInstaller(profile)) {
+            writeWindowsLaunchConfig(new File(profile.launchPath), new File(profile.runtimePath),
+                    new File(profile.mediaPath), windowsBootFloppy(profile), bootsInstaller(profile),
+                    profile.memoryMb, "dynamic", DYNAMIC_EXPERIMENTAL_CYCLES,
+                    profile.soundEnabled);
+        } else {
+            writeLaunchConfig(new File(profile.launchPath), new File(profile.runtimePath),
+                    extension(new File(profile.runtimePath).getName()), profile.memoryMb, "dynamic",
+                    DYNAMIC_EXPERIMENTAL_CYCLES, profile.soundEnabled);
+        }
+    }
+
     private boolean save(List<MachineProfile> profiles) {
         JSONArray array = new JSONArray();
         for (MachineProfile profile : profiles) {
@@ -652,6 +886,16 @@ final class MachineStore {
         }
         return context.getSharedPreferences(preferencesName, Context.MODE_PRIVATE).edit()
                 .putString(KEY, array.toString()).commit();
+    }
+
+    private static java.util.HashSet<String> cleanShutdownMachines(
+            android.content.SharedPreferences preferences) {
+        java.util.HashSet<String> result = new java.util.HashSet<>();
+        java.util.Set<String> recorded = preferences.getStringSet(CLEAN_SHUTDOWN_MACHINES, null);
+        if (recorded != null) result.addAll(recorded);
+        String legacy = preferences.getString(CLEAN_SHUTDOWN_MACHINE, null);
+        if (legacy != null) result.add(legacy);
+        return result;
     }
 
     private long querySize(Uri uri) {
