@@ -146,6 +146,9 @@ final class DebugSelfTest {
                 rejectedStaleAttempt = true;
             }
             require(rejectedStaleAttempt, "dynamic child rejects a stale attempt identity");
+            DynamicAttempt running = isolated.markDynamicRunning(attempt);
+            require(running.state.equals(DynamicAttempt.RUNNING), "dynamic liveness is journaled");
+            isolated.quarantineDynamicAttempt(running);
             require(isolated.recoverDynamicAttempts(), "unfinished dynamic handoff is recovered");
             MachineProfile dynamicRecovered = isolated.load().get(1);
             require(!dynamicRecovered.isDynamicSelected() &&

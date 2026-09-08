@@ -157,8 +157,9 @@ final class MachineStore {
                 writeProfileLaunchConfig(fallback,
                         isWindowsInstaller(fallback) && bootsInstaller(fallback));
                 replaceProfile(fallback);
-                if (DynamicAttempt.PREPARED.equals(attempt.state)) {
-                    if (!journal.delete()) throw new IOException("Cannot clear prepared trial record");
+                if (DynamicAttempt.PREPARED.equals(attempt.state) ||
+                        DynamicAttempt.CLOSED_CLEAN.equals(attempt.state)) {
+                    if (!journal.delete()) throw new IOException("Cannot clear completed trial record");
                 } else if (DynamicAttempt.EXECUTING.equals(attempt.state) ||
                         DynamicAttempt.RUNNING.equals(attempt.state)) {
                     attempt.withState(DynamicAttempt.NEEDS_CHECK).writeAtomically(journal);
@@ -202,6 +203,37 @@ final class MachineStore {
             return profile;
         }
         throw new IOException("Dynamic machine is unavailable");
+    }
+
+    synchronized DynamicAttempt markDynamicRunning(DynamicAttempt expected) throws IOException {
+        DynamicAttempt current = requireCurrentDynamicAttempt(expected, DynamicAttempt.EXECUTING);
+        DynamicAttempt running = current.withState(DynamicAttempt.RUNNING);
+        running.writeAtomically(dynamicAttemptFile(requireProfile(expected.machineId, expected.generation)));
+        return running;
+    }
+
+    /** Records verified guest shutdown only after native unload/flush has returned. */
+    synchronized void closeDynamicAttemptCleanly(DynamicAttempt expected) throws IOException {
+        DynamicAttempt current = requireCurrentDynamicAttempt(expected, DynamicAttempt.RUNNING);
+        MachineProfile profile = requireProfile(expected.machineId, expected.generation);
+        File journal = dynamicAttemptFile(profile);
+        current.withState(DynamicAttempt.CLOSED_CLEAN).writeAtomically(journal);
+        MachineProfile fallback = normalFallbackProfile(profile, current.normalFallback);
+        writeProfileLaunchConfig(fallback, isWindowsInstaller(fallback) && bootsInstaller(fallback));
+        replaceProfile(fallback);
+        markGuestShutdown(fallback.id);
+        if (!journal.delete()) throw new IOException("Cannot clear clean dynamic trial record");
+    }
+
+    synchronized void quarantineDynamicAttempt(DynamicAttempt expected) throws IOException {
+        DynamicAttempt current = requireCurrentDynamicAttempt(expected, null);
+        if (DynamicAttempt.NEEDS_CHECK.equals(current.state)) return;
+        if (!DynamicAttempt.EXECUTING.equals(current.state) &&
+                !DynamicAttempt.RUNNING.equals(current.state)) {
+            throw new IOException("Dynamic attempt cannot be quarantined from " + current.state);
+        }
+        current.withState(DynamicAttempt.NEEDS_CHECK).writeAtomically(
+                dynamicAttemptFile(requireProfile(expected.machineId, expected.generation)));
     }
 
     /** Freshly validates an ordinary start; callers must not trust stale UI state. */
@@ -845,6 +877,27 @@ final class MachineStore {
             return current;
         }
         throw new IOException("Machine profile is unavailable");
+    }
+
+    private MachineProfile requireProfile(String machineId, long generation) throws IOException {
+        for (MachineProfile profile : load()) {
+            if (profile.id.equals(machineId) && profile.configurationGeneration == generation) {
+                return profile;
+            }
+        }
+        throw new IOException("Dynamic machine settings changed");
+    }
+
+    private DynamicAttempt requireCurrentDynamicAttempt(DynamicAttempt expected, String state)
+            throws IOException {
+        MachineProfile profile = requireProfile(expected.machineId, expected.generation);
+        DynamicAttempt current = DynamicAttempt.read(dynamicAttemptFile(profile));
+        if (!expected.attemptId.equals(current.attemptId) ||
+                expected.generation != current.generation ||
+                (state != null && !state.equals(current.state))) {
+            throw new IOException("Dynamic attempt is stale or no longer active");
+        }
+        return current;
     }
 
     private static MachineProfile copyWithExecution(MachineProfile profile, String execution,
