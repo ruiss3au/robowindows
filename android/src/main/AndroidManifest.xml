@@ -8,6 +8,10 @@
         android:label="RoboWindows"
         android:supportsRtl="true"
         android:theme="@style/Theme.RoboWindows">
+        <service
+            android:name=".DynamicTrialService"
+            android:exported="false"
+            android:process=":dynrec" />
         <activity
             android:name=".MainActivity"
             android:configChanges="keyboard|keyboardHidden|navigation|orientation|screenLayout|screenSize|smallestScreenSize|uiMode"

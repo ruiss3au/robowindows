@@ -30,7 +30,9 @@ fallback. Keep migration tests for stable profiles and per-machine clean state.
 
 1. **Recovery state** — implement and fault-test the execution contract, media
    ownership, full fallback, persistence failures, and per-machine clean state.
-   Add process isolation and verify it with disposable fixtures before dynrec.
+   Add a non-exported `:dynrec` service which accepts only a validated dynamic
+   launch description, then verify surface, input, audio-focus and teardown
+   bridging with disposable fixtures before exposing dynrec.
 2. **Diagnostic reproduction** — produce a symbolized debug build, confirm the
    experimental disk and clean shutdown, reproduce once, and preserve only a
    redacted tombstone and configuration evidence.

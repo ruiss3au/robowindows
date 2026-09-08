@@ -10,10 +10,15 @@ bindings. Paths resolve through validated app-private metadata, never journal te
 Existing profiles migrate without changing their effective configuration.
 
 Keep a separate durable per-attempt journal containing machine ID, unique attempt
-ID, config generation, fallback snapshot and state. Atomic replacement must
-include flush/durability checks; any failure prevents native start. Generated
-launch files are derived artifacts, never an independent authority. Recovery
-regenerates and verifies them from the authoritative normal record.
+ID, config generation, normal execution-settings snapshot and state. It MUST NOT
+contain filesystem paths, media names, media hashes, guest contents, or copied
+profile JSON. The authoritative record retains the media bindings; matching the
+machine ID and configuration generation proves that recovery can regenerate the
+complete normal launch from those bindings plus the journal's normal settings.
+Atomic replacement must include flush/durability checks; any failure prevents
+native start. Generated launch files are derived artifacts, never an independent
+authority. Recovery regenerates and verifies them from the authoritative normal
+record.
 
 Selecting Dynamic requires the most recent session of that machine to have
 reported guest shutdown and completed native unload/flush. Store this per machine:

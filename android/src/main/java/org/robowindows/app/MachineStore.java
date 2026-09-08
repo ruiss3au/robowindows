@@ -102,8 +102,7 @@ final class MachineStore {
         try {
             prepared = new DynamicAttempt(current.id, UUID.randomUUID().toString(),
                     current.configurationGeneration, DynamicAttempt.PREPARED,
-                    copyWithExecution(current, MachineProfile.EXECUTION_NORMAL,
-                            current.configurationGeneration).toJson());
+                    normalFallbackSettings(current));
         } catch (JSONException error) {
             throw new IOException("Cannot save dynamic fallback", error);
         }
@@ -115,8 +114,27 @@ final class MachineStore {
             return executing;
         } catch (IOException | RuntimeException error) {
             // A launch publication failure has never handed media to native code.
-            writeProfileLaunchConfig(current, isWindowsInstaller(current) && bootsInstaller(current));
-            journal.delete();
+            IOException rollbackFailure = null;
+            try {
+                writeProfileLaunchConfig(current,
+                        isWindowsInstaller(current) && bootsInstaller(current));
+            } catch (IOException restoreError) {
+                rollbackFailure = restoreError;
+            }
+            if (!journal.delete()) {
+                try {
+                    prepared.withState(DynamicAttempt.BLOCKED).writeAtomically(journal);
+                } catch (IOException markerError) {
+                    if (rollbackFailure == null) rollbackFailure = markerError;
+                }
+                if (rollbackFailure == null) {
+                    rollbackFailure = new IOException("Cannot clear failed dynamic trial record");
+                }
+            }
+            if (rollbackFailure != null) {
+                if (error instanceof IOException) rollbackFailure.addSuppressed(error);
+                throw rollbackFailure;
+            }
             if (error instanceof IOException) throw (IOException) error;
             throw new IOException("Cannot prepare dynamic trial", error);
         }
@@ -135,11 +153,7 @@ final class MachineStore {
                     attempt.withState(DynamicAttempt.BLOCKED).writeAtomically(journal);
                     continue;
                 }
-                MachineProfile fallback = MachineProfile.fromJson(attempt.normalFallback);
-                if (!fallback.id.equals(profile.id) || fallback.isDynamicSelected()) {
-                    attempt.withState(DynamicAttempt.BLOCKED).writeAtomically(journal);
-                    continue;
-                }
+                MachineProfile fallback = normalFallbackProfile(profile, attempt.normalFallback);
                 writeProfileLaunchConfig(fallback,
                         isWindowsInstaller(fallback) && bootsInstaller(fallback));
                 replaceProfile(fallback);
@@ -149,7 +163,7 @@ final class MachineStore {
                     attempt.withState(DynamicAttempt.NEEDS_CHECK).writeAtomically(journal);
                 }
                 recovered = true;
-            } catch (IOException | JSONException error) {
+            } catch (IOException error) {
                 // Keep an unreadable or failed record in place: this machine remains blocked.
             }
         }
@@ -158,6 +172,31 @@ final class MachineStore {
 
     synchronized boolean requiresDynamicMediaCheck(MachineProfile selected) {
         return selected != null && dynamicAttemptFile(selected).exists();
+    }
+
+    /** Rechecks the exact durable handoff before the child may load native code. */
+    synchronized MachineProfile validateDynamicChildHandoff(String machineId, String attemptId,
+            long generation) throws IOException {
+        if (machineId == null || attemptId == null) {
+            throw new IOException("Dynamic attempt identity is missing");
+        }
+        for (MachineProfile profile : load()) {
+            if (!machineId.equals(profile.id)) continue;
+            if (!profile.isExperimental() || !profile.isDynamicSelected() ||
+                    profile.configurationGeneration != generation) {
+                throw new IOException("Dynamic attempt no longer matches this machine");
+            }
+            DynamicAttempt attempt = DynamicAttempt.read(dynamicAttemptFile(profile));
+            if (!attemptId.equals(attempt.attemptId) || attempt.generation != generation ||
+                    !machineId.equals(attempt.machineId) ||
+                    (!DynamicAttempt.EXECUTING.equals(attempt.state) &&
+                    !DynamicAttempt.RUNNING.equals(attempt.state))) {
+                throw new IOException("Dynamic attempt is not authorized for native handoff");
+            }
+            validateWritableOwnership(profile);
+            return profile;
+        }
+        throw new IOException("Dynamic machine is unavailable");
     }
 
     /** Freshly validates an ordinary start; callers must not trust stale UI state. */
@@ -810,6 +849,38 @@ final class MachineStore {
                 profile.memoryMb, profile.cpuCore, profile.soundEnabled, profile.createdAt,
                 profile.lastBootedAt, profile.mediaAssets, profile.role, profile.fixedCycles,
                 profile.lastKnownSafeCycles, execution, generation);
+    }
+
+    /**
+     * The recovery marker deliberately carries no media metadata or paths. The
+     * generation binds these execution settings to the authoritative profile,
+     * which remains the only place that owns media bindings.
+     */
+    private static JSONObject normalFallbackSettings(MachineProfile profile) throws JSONException {
+        JSONObject settings = new JSONObject();
+        settings.put("execution", MachineProfile.EXECUTION_NORMAL);
+        settings.put("memoryMb", profile.memoryMb);
+        settings.put("cpuCore", profile.cpuCore);
+        settings.put("soundEnabled", profile.soundEnabled);
+        settings.put("fixedCycles", profile.fixedCycles);
+        return settings;
+    }
+
+    private static MachineProfile normalFallbackProfile(MachineProfile profile, JSONObject settings)
+            throws IOException {
+        try {
+            if (!MachineProfile.EXECUTION_NORMAL.equals(settings.getString("execution")) ||
+                    settings.getInt("memoryMb") != profile.memoryMb ||
+                    !profile.cpuCore.equals(settings.getString("cpuCore")) ||
+                    settings.getBoolean("soundEnabled") != profile.soundEnabled ||
+                    settings.getInt("fixedCycles") != profile.fixedCycles) {
+                throw new IOException("Dynamic fallback does not match the machine record");
+            }
+        } catch (JSONException error) {
+            throw new IOException("Dynamic fallback settings are invalid", error);
+        }
+        return copyWithExecution(profile, MachineProfile.EXECUTION_NORMAL,
+                profile.configurationGeneration);
     }
 
     private File dynamicAttemptFile(MachineProfile profile) {

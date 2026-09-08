@@ -44,7 +44,12 @@ UI hidden until the safety stages pass; release visibility also requires SC-001â
 T001/T002/T012 have begun with a schema-v7 authoritative selection/generation,
 per-machine clean-shutdown provenance, atomic `prepared`/`executing` journals,
 fresh normal-start ownership checks, and conservative startup recovery. The
-host probe covers selection, journal ordering, normal fallback regeneration and
-quarantine. This is not completion: fault injection, all state transitions,
+host probe covers selection, journal ordering, path-free normal-settings fallback
+regeneration and quarantine. This is not completion: fault injection, all state transitions,
 read-only health checking, separate-process execution and every device gate
 remain open. Dynamic UI and native handoff remain disabled.
+
+T013 has begun with the process boundary: a non-exported `:dynrec` service will
+accept only an already-validated dynamic launch file and proxy native lifecycle
+and input operations. Binding it to the session UI, child-death acknowledgement,
+and disposable-fixture validation remain open.

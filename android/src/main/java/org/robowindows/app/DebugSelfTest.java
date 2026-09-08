@@ -7,6 +7,7 @@ import android.util.Log;
 import org.json.JSONObject;
 
 import java.io.File;
+import java.io.IOException;
 import java.io.FileOutputStream;
 import java.io.FileInputStream;
 import java.io.RandomAccessFile;
@@ -124,10 +125,27 @@ final class DebugSelfTest {
             require(dynamic.isDynamicSelected() && dynamic.configurationGeneration >
                     recovered.configurationGeneration, "dynamic selection is persisted only");
             DynamicAttempt attempt = isolated.prepareDynamicStart(dynamic);
+            String journalText = readText(new File(new File(dynamic.runtimePath).getParentFile(),
+                    "dynamic-attempt.json"));
             require(attempt.state.equals(DynamicAttempt.EXECUTING) &&
                     readText(new File(dynamic.launchPath)).contains("core=dynamic") &&
                     readText(new File(dynamic.launchPath)).contains("cycles=fixed 20000"),
                     "dynamic handoff is journaled before native execution");
+            require(!journalText.contains(dynamic.runtimePath) &&
+                    !journalText.contains(dynamic.mediaPath) &&
+                    !journalText.contains(dynamic.launchPath) &&
+                    !journalText.contains(dynamic.mediaName),
+                    "dynamic journal contains no private media paths or names");
+            require(isolated.validateDynamicChildHandoff(dynamic.id, attempt.attemptId,
+                    attempt.generation).id.equals(dynamic.id),
+                    "dynamic child handoff binds to the durable attempt");
+            boolean rejectedStaleAttempt = false;
+            try {
+                isolated.validateDynamicChildHandoff(dynamic.id, "stale-attempt", attempt.generation);
+            } catch (IOException expected) {
+                rejectedStaleAttempt = true;
+            }
+            require(rejectedStaleAttempt, "dynamic child rejects a stale attempt identity");
             require(isolated.recoverDynamicAttempts(), "unfinished dynamic handoff is recovered");
             MachineProfile dynamicRecovered = isolated.load().get(1);
             require(!dynamicRecovered.isDynamicSelected() &&
