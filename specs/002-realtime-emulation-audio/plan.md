@@ -122,6 +122,25 @@ disposable device gates pass before a new matched pair.
 
 ### Phase 3: Calibrate a conservative real-time profile
 
+Before the next benchmark, isolate informational libretro callbacks from AV
+timing dispatch in a host-testable helper (FR-026). A recorded startup advertised
+an implausibly large FPS with zero sample rate; the existing grouped switch
+incorrectly reads option and memory-map payloads as AV timing. This is a proven
+host bug, not yet the cause of the post-slice underrun burst.
+
+Add a separate bounded `RoboWindowsTiming` schema-1 line alongside schema 3 for
+experimental sessions (FR-027). Measure process CPU because the pinned emulator
+has its own worker thread; frontend-thread CPU alone would misclassify guest
+work as a wait. Keep process CPU and elapsed time separate, since parallel
+threads can consume more CPU time than elapsed time. Extend capture/report
+tooling to retain this optional diagnostic record, rejecting partial or malformed
+extensions while continuing to read historical captures without it.
+
+Rollback of the diagnostic slice removes its collection/reporting only. The
+type-safe callback correction is independently testable and should be retained.
+Require host tests, pinned-source verification, Android build and disposable
+Normal/DynRec gate before another guest run. GPU presentation remains deferred.
+
 1. Benchmark `normal`/`auto` with explicit fixed cycle candidates on boot, idle, window
    movement, and sound workloads.
 2. Select the highest cycle target that maintains independent guest time and production at

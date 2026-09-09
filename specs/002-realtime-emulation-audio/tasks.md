@@ -262,6 +262,12 @@ recoverable; it is not required for completion of the conservative MVP.
 - [ ] T063 If T062 passes, resume the three-run medians and existing long gates.
   If long calls are DynRec-only, stop trials and investigate its measured hot
   path; if both cores stall similarly, continue in the shared host path.
+- [x] T064 Isolate AV timing callback dispatch and reject invalid cadence with
+  host regressions for unrelated payload types, null/invalid timing and valid
+  refresh changes (FR-026).
+- [x] T065 Add experimental-only bounded call/callback/process-CPU timing,
+  reset and parser tests, then host/pinned/build checks and the disposable
+  Normal/DynRec device gate before the next measured trial (FR-027).
 
 T062 remains open. The corrected scheduler passed the complete Normal workload,
 but the matched DynRec start failed before the benchmark when Windows Explorer
@@ -278,6 +284,16 @@ DynRec fault/retry control completed 86/86 PageFaultCore calls with a 31 us
 maximum. T062 and three-run collection remain blocked; the next work is a
 source-owned reproduction of the Windows-only call amplification, not another
 benchmark repetition or shared-scheduler change.
+
+Feature 008 T042–T044 subsequently reproduced and corrected PageFaultCore call
+amplification and passed guarded Windows/AoE2 startup and shutdown. The next
+matched pair completed, but T062 still failed with 12 DynRec underruns/1,862
+missing frames versus zero under Normal. All underruns fell in one 1,004-ms
+interval with 112.503 ms maximum debt and 42.228 ms maximum call duration;
+PageFaultCore counters were unchanged across that burst. This does not isolate
+CPU work from host scheduling or callback costs. T064 fixes the independently
+proven AV callback type confusion; T065 supplies the missing attribution before
+another execution-policy change. See [timing investigation](timing-investigation.md).
 
 - [ ] T051 Re-run host tests and `git diff --check`, then build/install the debug APK using
   `scripts/build-android.sh`

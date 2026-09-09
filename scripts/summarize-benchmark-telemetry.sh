@@ -7,6 +7,8 @@ if [[ $# -ne 2 || ! -f $2 ]]; then
 fi
 profile=$1
 log_file=$2
+# Validate the optional extension before emitting any accepted summary.
+timing_summary="$(bash "$(dirname "$0")/summarize-runtime-timing.sh" "$log_file")"
 case "$profile" in
   dynrec-fixed-20k) core=DynRec; policy=fixed; cycles=20000 ;;
   normal-fixed-12k) core=Normal; policy=fixed; cycles=12000 ;;
@@ -88,3 +90,4 @@ END {
   printf "observed_current_decoders=%s\nlifecycle_valid=1\n", current
 }
 ' "$log_file"
+printf '%s\n' "$timing_summary"

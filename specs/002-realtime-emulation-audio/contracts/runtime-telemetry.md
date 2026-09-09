@@ -77,6 +77,25 @@ termination: null | user_stop | orderly_shutdown | native_failure | unknown
 
 ## Privacy and volume
 
+Experimental sessions additionally emit one `RoboWindowsTiming` schema-1 line
+immediately after each schema-3 interval. All fields are nonnegative integers:
+`interval_ms`, `calls`, `wall_total_us`, `process_cpu_total_us`,
+`process_cpu_max_us`, `cpu_clock_errors`, `host_gap_max_us`, `wake_late_max_us`,
+`video_total_us`, `video_max_us`, `audio_total_us`, `audio_max_us`.
+
+Call wall/CPU durations bracket `retro_run()`. CPU time covers all process threads
+only during those call windows; it may exceed wall time and is not decoder CPU
+time. Invalid CPU-clock pairs increment `cpu_clock_errors` and add no CPU duration.
+Host gap is previous call end to next call start, including intended sleep and
+host maintenance. Wake lateness is next call start beyond the previous fixed
+deadline, including retained debt; it is not pure OS scheduler latency.
+Video/audio durations cover synchronous frontend callbacks, not the separate
+AAudio consumer. These aggregates reset on lifecycle timing resets; consecutive
+report intervals retain gap continuity. Reset intervals may contain fewer
+diagnostic calls than schema-3 run calls. Historical captures without the
+extension remain readable as `timing_diagnostics=unavailable`; partial, malformed,
+or mismatched extensions are rejected. Diagnostic records contain no guest data.
+
 Records MUST NOT contain PCM, framebuffer data, guest-visible text, media filenames or
 paths, disk contents, registration data, or Android input contents. Normal reporting is at
 most once per second plus lifecycle and terminal events. Release builds disable interval

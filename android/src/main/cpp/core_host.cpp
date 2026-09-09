@@ -18,12 +18,14 @@
 #include <thread>
 
 #include "libretro.h"
+#include "av_environment.h"
 #include "audio_output.h"
 #include "audio_ring.h"
 #include "frame_mailbox.h"
 #include "frame_presenter.h"
 #include "realtime_scheduler.h"
 #include "runtime_telemetry.h"
+#include "run_diagnostics.h"
 #include "session_state.h"
 
 extern "C" const char* robowindows_cpu_decoder_name(void);
@@ -122,6 +124,7 @@ std::atomic<bool> timing_reset_requested{false};
 bool has_audio_producer_time = false;
 std::chrono::steady_clock::time_point last_audio_producer_time;
 RuntimeTelemetry telemetry;
+RunDiagnostics run_diagnostics;
 FrameMailbox frame_mailbox;
 FramePresenter frame_presenter(frame_mailbox, telemetry);
 std::chrono::steady_clock::time_point telemetry_report_time;
@@ -136,6 +139,7 @@ int64_t steady_now_ns() {
 
 void reset_timing_state_on_core_thread() {
     realtime_scheduler.reset(steady_now_ns());
+    run_diagnostics.reset();
     has_audio_producer_time = false;
 }
 
@@ -180,6 +184,26 @@ void report_telemetry_if_due() {
             static_cast<unsigned long long>(snapshot.frames_presented),
             static_cast<unsigned long long>(snapshot.frames_coalesced),
             static_cast<unsigned long long>(snapshot.surface_post_failures));
+    if (runtime_timing_policy == RuntimeTimingPolicy::Balanced100Ms) {
+        const auto timing = run_diagnostics.take_snapshot();
+        __android_log_print(ANDROID_LOG_INFO, "RoboWindowsTiming",
+                "schema=1 interval_ms=%llu calls=%llu wall_total_us=%llu "
+                "process_cpu_total_us=%llu process_cpu_max_us=%llu cpu_clock_errors=%llu "
+                "host_gap_max_us=%llu wake_late_max_us=%llu video_total_us=%llu "
+                "video_max_us=%llu audio_total_us=%llu audio_max_us=%llu",
+                static_cast<unsigned long long>(snapshot.interval_ms),
+                static_cast<unsigned long long>(timing.calls),
+                static_cast<unsigned long long>(timing.wall_total_us),
+                static_cast<unsigned long long>(timing.process_cpu_total_us),
+                static_cast<unsigned long long>(timing.process_cpu_max_us),
+                static_cast<unsigned long long>(timing.cpu_clock_errors),
+                static_cast<unsigned long long>(timing.host_gap_max_us),
+                static_cast<unsigned long long>(timing.wake_late_max_us),
+                static_cast<unsigned long long>(timing.video_total_us),
+                static_cast<unsigned long long>(timing.video_max_us),
+                static_cast<unsigned long long>(timing.audio_total_us),
+                static_cast<unsigned long long>(timing.audio_max_us));
+    }
     telemetry_report_time = now;
 }
 
@@ -293,6 +317,15 @@ const char* option_value(const char* key) {
 }
 
 bool environment(unsigned command, void* data) {
+    const AvEnvironmentResult av = handle_av_environment(command, data);
+    if (av.handled) {
+        if (av.fps > 0) {
+            requested_run_fps.store(av.fps, std::memory_order_relaxed);
+            __android_log_print(ANDROID_LOG_INFO, "RoboWindowsCore",
+                    "guest timing update fps=%.6f audio=%.0f", av.fps, av.sample_rate);
+        }
+        return av.accepted;
+    }
     switch (command) {
         case RETRO_ENVIRONMENT_GET_LOG_INTERFACE:
             static_cast<retro_log_callback*>(data)->log = log_line;
@@ -337,26 +370,6 @@ bool environment(unsigned command, void* data) {
             // submit 800 frames per run and therefore about 56 kHz into a 48 kHz stream.
             return false;
         }
-        case RETRO_ENVIRONMENT_SET_SUPPORT_NO_GAME:
-        case RETRO_ENVIRONMENT_SET_CORE_OPTIONS_V2:
-        case RETRO_ENVIRONMENT_SET_CORE_OPTIONS:
-        case RETRO_ENVIRONMENT_SET_VARIABLES:
-        case RETRO_ENVIRONMENT_SET_CORE_OPTIONS_DISPLAY:
-        case RETRO_ENVIRONMENT_SET_INPUT_DESCRIPTORS:
-        case RETRO_ENVIRONMENT_SET_SUPPORT_ACHIEVEMENTS:
-        case RETRO_ENVIRONMENT_SET_MEMORY_MAPS:
-        case RETRO_ENVIRONMENT_SET_SYSTEM_AV_INFO: {
-            const auto* av = static_cast<const retro_system_av_info*>(data);
-            if (av && av->timing.fps > 1.0) {
-                requested_run_fps.store(av->timing.fps, std::memory_order_relaxed);
-                __android_log_print(ANDROID_LOG_INFO, "RoboWindowsCore",
-                        "guest timing update fps=%.6f audio=%.0f",
-                        av->timing.fps, av->timing.sample_rate);
-            }
-            return true;
-        }
-        case RETRO_ENVIRONMENT_SET_GEOMETRY:
-            return true;
         case RETRO_ENVIRONMENT_SET_DISK_CONTROL_EXT_INTERFACE:
             disk_control = *static_cast<retro_disk_control_ext_callback*>(data);
             has_disk_control = true;
@@ -377,6 +390,8 @@ bool environment(unsigned command, void* data) {
 }
 
 void video_refresh(const void* data, unsigned width, unsigned height, size_t pitch) {
+    CallbackTimingScope timing(runtime_timing_policy == RuntimeTimingPolicy::Balanced100Ms ?
+            &run_diagnostics : nullptr, true);
     if (!data || !video_enabled || width == 0 || height == 0) return;
     telemetry.add_guest_frames_submitted();
     uint64_t frame_number = ++submitted_frames;
@@ -423,6 +438,8 @@ void audio_error_callback(AAudioStream*, void*, aaudio_result_t) {
 }
 
 size_t audio_batch(const int16_t* samples, size_t frames) {
+    CallbackTimingScope timing(runtime_timing_policy == RuntimeTimingPolicy::Balanced100Ms ?
+            &run_diagnostics : nullptr, false);
     if (!samples) return frames;
     const auto producer_time = std::chrono::steady_clock::now();
     if (has_audio_producer_time) {
@@ -679,6 +696,7 @@ void run_core() {
     double fps = av.timing.fps > 1.0 ? av.timing.fps : 60.0;
     requested_run_fps.store(fps, std::memory_order_relaxed);
     realtime_scheduler.configure(fps, audio_sample_rate, steady_now_ns());
+    run_diagnostics.reset();
     timing_reset_requested = false;
     has_audio_producer_time = false;
     while (running && !shutdown_requested) {
@@ -712,13 +730,19 @@ void run_core() {
         if (std::abs(updated_fps - fps) > 0.001) {
             fps = updated_fps;
             realtime_scheduler.configure(fps, audio_sample_rate, steady_now_ns());
+            run_diagnostics.reset();
             has_audio_producer_time = false;
             __android_log_print(ANDROID_LOG_INFO, "RoboWindowsCore",
                     "frontend cadence updated fps=%.6f", fps);
         }
         const auto run_start = std::chrono::steady_clock::now();
+        const bool diagnose = runtime_timing_policy == RuntimeTimingPolicy::Balanced100Ms;
+        if (diagnose) run_diagnostics.begin(std::chrono::duration_cast<std::chrono::nanoseconds>(
+                run_start.time_since_epoch()).count());
+        const int64_t cpu_start = diagnose ? RunDiagnostics::process_cpu_ns() : -1;
         retro_run();
         const auto run_end = std::chrono::steady_clock::now();
+        const int64_t cpu_end = diagnose ? RunDiagnostics::process_cpu_ns() : -1;
         const auto run_duration_us = std::chrono::duration_cast<std::chrono::microseconds>(
                 run_end - run_start).count();
         telemetry.observe_retro_run(static_cast<uint64_t>(std::max<int64_t>(0, run_duration_us)),
@@ -731,6 +755,12 @@ void run_core() {
         const SchedulerDecision decision = realtime_scheduler.complete_run(
                 std::chrono::duration_cast<std::chrono::nanoseconds>(
                         run_end.time_since_epoch()).count());
+        if (diagnose) run_diagnostics.complete(
+                std::chrono::duration_cast<std::chrono::nanoseconds>(
+                        run_start.time_since_epoch()).count(),
+                std::chrono::duration_cast<std::chrono::nanoseconds>(
+                        run_end.time_since_epoch()).count(),
+                cpu_start, cpu_end, decision.deadline_ns);
         telemetry.observe_scheduler_lateness(decision.lateness_us);
         if (decision.catch_up) telemetry.add_scheduler_catchup_calls();
         if (decision.resynchronized) telemetry.add_scheduler_deadline_resyncs();

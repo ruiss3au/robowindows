@@ -93,7 +93,7 @@ since="$("${RW_ADB_TARGET[@]}" shell "date '+%m-%d %H:%M:%S.000'" | tr -d '\r')"
 echo "Capture started. Launch RWBENCH.EXE now; it runs for 30 seconds."
 set +e
 timeout "${seconds}s" "${RW_ADB_TARGET[@]}" logcat -v threadtime -T "$since" \
-  RoboWindowsTelemetry:I RoboWindowsCore:I RoboWindowsDynrec:I '*:S' \
+  RoboWindowsTelemetry:I RoboWindowsTiming:I RoboWindowsCore:I RoboWindowsDynrec:I '*:S' \
   >"$output_dir/telemetry.log"
 logcat_status=$?
 set -e

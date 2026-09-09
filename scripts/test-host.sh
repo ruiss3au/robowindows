@@ -44,6 +44,7 @@ java -cp "$classes_dir" org.robowindows.app.DynamicProgressWatchdogTest
 
 "$repo_dir/tests/scripts/test-win98-benchmark.sh"
 "$repo_dir/tests/scripts/test-benchmark-telemetry.sh"
+bash "$repo_dir/tests/scripts/test-runtime-timing.sh"
 
 javac -d "$classes_dir" \
   "$repo_dir/android/src/main/java/org/robowindows/app/DynamicReadiness.java" \
@@ -85,6 +86,17 @@ g++ -std=c++17 -Wall -Wextra -Werror \
   -I"$repo_dir/android/src/main/cpp" \
   "$repo_dir/tests/native/session_state_test.cpp" -o "$classes_dir/session_state_test"
 "$classes_dir/session_state_test"
+
+g++ -std=c++17 -Wall -Wextra -Werror \
+  -I"$repo_dir/android/src/main/cpp" \
+  -I"$repo_dir/third_party/dosbox-pure/libretro-common/include" \
+  "$repo_dir/tests/native/av_environment_test.cpp" -o "$classes_dir/av_environment_test"
+"$classes_dir/av_environment_test"
+
+g++ -std=c++17 -Wall -Wextra -Werror \
+  -I"$repo_dir/android/src/main/cpp" \
+  "$repo_dir/tests/native/run_diagnostics_test.cpp" -o "$classes_dir/run_diagnostics_test"
+"$classes_dir/run_diagnostics_test"
 
 g++ -std=c++17 -Wall -Wextra -Werror -pthread \
   -I"$repo_dir/android/src/main/cpp" \

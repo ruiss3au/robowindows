@@ -194,6 +194,18 @@ failure to a measured subsystem without relying only on subjective listening.
   gap, maximum scheduler lateness, catch-up calls, deadline resynchronizations, and
   current/minimum/maximum audio queue depth. Any resynchronization invalidates the
   affected quality capture.
+- **FR-026**: Only `SET_SYSTEM_AV_INFO` may interpret its payload as libretro AV
+  timing. Informational callbacks must never read that structure. Null, non-finite,
+  or implausible timing (FPS outside (1, 1000] or sample rate outside (0, 384000])
+  must be rejected without changing cadence. Valid advertised refresh changes
+  must still reach the scheduler.
+- **FR-027**: Experimental timing diagnosis must report bounded per-interval
+  emulator-call wall time and process CPU time, gaps between calls, lateness on
+  entering the next call, and video/audio callback durations. Process CPU time
+  includes all runner threads and must not be labeled DynRec execution time.
+  Failed CPU-clock reads must be counted. Measurements must reset at lifecycle
+  timing resets and must not change scheduling, PCM, the CPU engine, or the
+  presentation cap. No per-call or guest-content logs are permitted.
 
 ### Key Entities
 
