@@ -2,10 +2,11 @@
 
 #include <cstring>
 #include <limits>
+#include "presentation_policy.h"
 
 FramePublishResult FrameMailbox::publish(const void* pixels, unsigned width, unsigned height,
         size_t pitch) {
-    if (!pixels || width == 0 || height == 0 || pitch == 0) return {};
+    if (!pixels || !presentation::valid_frame(width, height, pitch)) return {};
     if (height > std::numeric_limits<size_t>::max() / pitch) return {};
     const size_t byte_count = pitch * static_cast<size_t>(height);
 
@@ -103,6 +104,16 @@ void FrameMailbox::release(const PublishedFrame& frame) {
     if (slot.state == SlotState::Reading && slot.sequence == frame.sequence) {
         slot.state = SlotState::Free;
     }
+}
+
+bool FrameMailbox::wait_acquire_latest_for(PublishedFrame& frame, std::chrono::milliseconds timeout) {
+    std::unique_lock<std::mutex> lock(mutex_);
+    ready_.wait_for(lock, timeout, [this] {
+        if (stopped_) return true;
+        for (const auto& slot : slots_) if (slot.state == SlotState::Published) return true;
+        return false;
+    });
+    return !stopped_ && acquire_latest_locked(frame);
 }
 
 void FrameMailbox::stop() {

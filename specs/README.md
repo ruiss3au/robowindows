@@ -24,6 +24,7 @@ being validated, and what remains an experiment.
 | [006](006-visible-build-identity/spec.md) | Visible build identity | Implemented |
 | [007](007-experimental-machine-copies/spec.md) | Experimental machine copies and fixed-cycle trials | Implemented; device acceptance in progress |
 | [008](008-arm64-dynamic-recompilation/spec.md) | Clone-only ARM64 dynamic recompilation | Planned |
+| [011](011-gpu-presentation/spec.md) | Experimental GPU presentation | Implemented; Windows smoke pending |
 
 Each feature directory contains its observable requirements (`spec.md`),
 implementation and rollback decisions (`plan.md`), executable work (`tasks.md`),

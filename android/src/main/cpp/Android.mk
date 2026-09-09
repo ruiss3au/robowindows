@@ -10,9 +10,9 @@ LOCAL_PATH := $(ROBOWINDOWS_LOCAL_PATH)
 include $(CLEAR_VARS)
 LOCAL_MODULE := robowindows_host
 LOCAL_SRC_FILES := native_host.cpp core_host.cpp runtime_telemetry.cpp frame_mailbox.cpp \
-    frame_presenter.cpp audio_ring.cpp audio_output.cpp realtime_scheduler.cpp
+    frame_presenter.cpp gpu_presenter.cpp graphics_probe.cpp audio_ring.cpp audio_output.cpp realtime_scheduler.cpp
 LOCAL_C_INCLUDES := $(LOCAL_PATH)/../../../../third_party/dosbox-pure/libretro-common/include
 LOCAL_CPPFLAGS := -std=c++17 -Wall -Wextra -Werror
-LOCAL_LDLIBS := -llog -landroid -laaudio
+LOCAL_LDLIBS := -llog -landroid -laaudio -lEGL -lGLESv2
 LOCAL_SHARED_LIBRARIES := retro
 include $(BUILD_SHARED_LIBRARY)

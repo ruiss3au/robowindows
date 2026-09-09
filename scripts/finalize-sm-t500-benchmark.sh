@@ -66,6 +66,14 @@ grep -q '^audio_dropped_frames=0$' "$capture_dir/telemetry-summary.txt" || short
 grep -q '^scheduler_deadline_resyncs=0$' "$capture_dir/telemetry-summary.txt" || short_quality=fail
 grep -q '^audio_stream_errors=0$' "$capture_dir/telemetry-summary.txt" || short_quality=fail
 grep -q '^surface_post_failures=0$' "$capture_dir/telemetry-summary.txt" || short_quality=fail
+if grep -q '^telemetry_schema=4$' "$capture_dir/telemetry-summary.txt"; then
+  for field in graphics_errors graphics_fallbacks presenter_clock_errors presentation_fallback_observed; do
+    grep -q "^${field}=0$" "$capture_dir/telemetry-summary.txt" || short_quality=fail
+  done
+  if grep -q '^presentation_requested=1$' "$capture_dir/telemetry-summary.txt"; then
+    awk -v fps="$presented_fps" 'BEGIN { exit !(fps >= 28) }' || short_quality=fail
+  fi
+fi
 
 sed '/^guest_result=/,$d' "$capture_dir/report.txt" >"$capture_dir/final-report.txt"
 {

@@ -1,6 +1,7 @@
 #pragma once
 
 #include <condition_variable>
+#include <chrono>
 #include <cstddef>
 #include <cstdint>
 #include <mutex>
@@ -28,6 +29,7 @@ public:
     FramePublishResult publish(const void* pixels, unsigned width, unsigned height, size_t pitch);
     bool acquire_latest(PublishedFrame& frame);
     bool wait_acquire_latest(PublishedFrame& frame);
+    bool wait_acquire_latest_for(PublishedFrame& frame, std::chrono::milliseconds timeout);
     void release(const PublishedFrame& frame);
     void stop();
     void reset();

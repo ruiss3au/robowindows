@@ -79,6 +79,7 @@ public final class MainActivity extends Activity {
     private DynamicTrialController dynamicTrial;
     private CpuFixtureController cpuFixtureController;
     private boolean recoverySession;
+    private boolean presentationFallbackNotified;
     private boolean recoveryGuestShutdownObserved;
     private MachineProfile pendingUtilityProfile;
     private boolean transientDebugSession;
@@ -191,6 +192,20 @@ public final class MainActivity extends Activity {
             }
             if (getIntent().getBooleanExtra("robowindows.testPersistence", false)) {
                 DebugSelfTest.run(this);
+            }
+            if (getIntent().getBooleanExtra("robowindows.testGraphics", false)) {
+                getIntent().removeExtra("robowindows.testGraphics");
+                GraphicsProbe.show(this);
+                return;
+            }
+            if (getIntent().getBooleanExtra("robowindows.testPresentationWorkload", false)) {
+                getIntent().removeExtra("robowindows.testPresentationWorkload");
+                if (machineStore.hasInterruptedSession() || !CpuFixtureGate.passed(this)) return;
+                Intent fixture = new Intent(this, PresentationFixtureActivity.class);
+                fixture.putExtra("core", getIntent().getStringExtra("core"));
+                fixture.putExtra("presentation", getIntent().getIntExtra("presentation", -1));
+                startActivity(fixture);
+                return;
             }
             if (getIntent().getBooleanExtra("robowindows.runCpuDiagnostic", false)) {
                 getIntent().removeExtra("robowindows.runCpuDiagnostic");
@@ -886,14 +901,18 @@ public final class MainActivity extends Activity {
             return;
         }
         final MachineProfile sessionProfile = profile;
+        final int presentationPolicy = PresentationPolicy.forLaunch(sessionProfile.presentationMode,
+                BuildConfig.DEBUG, sessionProfile.isExperimental(), recoveryBoot);
         properties = null;
         recoverySession = recoveryBoot;
+        presentationFallbackNotified = false;
         recoveryGuestShutdownObserved = false;
         long generation = ++sessionGeneration;
         currentSessionProfile = sessionProfile;
         FrameLayout page = new FrameLayout(this);
         page.setBackgroundColor(BG);
-        GuestDisplayView guest = new GuestDisplayView(this, this::deviceHandle);
+        GuestDisplayView guest = new GuestDisplayView(this, this::deviceHandle,
+                presentationPolicy == PresentationPolicy.SOFTWARE);
         sessionGuest = guest;
         LinearLayout controls = new LinearLayout(this);
         controls.setGravity(Gravity.CENTER_VERTICAL);
@@ -943,7 +962,7 @@ public final class MainActivity extends Activity {
         requestGuestAudioFocus();
         sessionActive = NativeHost.startSession(sessionProfile.launchPath,
                 getFilesDir().getAbsolutePath(), RuntimeTimingPolicy.forExperimentalMachine(
-                        sessionProfile.isExperimental()));
+                        sessionProfile.isExperimental()), presentationPolicy);
         if (!sessionActive) {
             showHome();
             Toast.makeText(this, "This machine could not start.", Toast.LENGTH_LONG).show();
@@ -958,6 +977,7 @@ public final class MainActivity extends Activity {
     }
 
     private void showDynamicDiagnostic(MachineProfile profile, DynamicCyclePolicy dynamicPolicy) {
+        presentationFallbackNotified = false;
         properties = null;
         ++sessionGeneration;
         final MachineProfile sessionProfile = profile;
@@ -967,7 +987,10 @@ public final class MainActivity extends Activity {
         TextView decoderResidency = text("Decoder residency: waiting…", 13, MUTED);
         DynamicTrialController controller = new DynamicTrialController(this,
                 (status, error, residency) -> {
-            if (residency != null) decoderResidency.setText(residency);
+            if (residency != null) decoderResidency.setText(residency +
+                    (dynamicTrial != null && dynamicTrial.presentationStatus() == -1 ?
+                            " · GPU unavailable: Software · 15 FPS" : ""));
+            if (dynamicTrial != null) reportPresentationFallback(dynamicTrial.presentationStatus());
             if (error != null) {
                 Toast.makeText(this, error, Toast.LENGTH_LONG).show();
                 showHome();
@@ -1131,6 +1154,7 @@ public final class MainActivity extends Activity {
 
     private void monitorSession(MachineProfile profile, long generation) {
         if (!isCurrentSession(profile, generation)) return;
+        reportPresentationFallback(NativeHost.sessionPresentation());
         int status = NativeHost.sessionStatus();
         if (status == NativeHost.SESSION_GUEST_SHUTDOWN) {
             if (recoverySession) recoveryGuestShutdownObserved = true;
@@ -1147,6 +1171,13 @@ public final class MainActivity extends Activity {
             return;
         }
         handler.postDelayed(() -> monitorSession(profile, generation), 250);
+    }
+
+    private void reportPresentationFallback(int status) {
+        if (status != -1 || presentationFallbackNotified) return;
+        presentationFallbackNotified = true;
+        Toast.makeText(this, "GPU unavailable. Using Software · 15 FPS for this session. " +
+                "Windows is still running.", Toast.LENGTH_LONG).show();
     }
 
     private boolean isCurrentSession(MachineProfile profile, long generation) {

@@ -118,5 +118,20 @@ comparison="$($repo_dir/scripts/compare-sm-t500-benchmarks.sh \
 grep -q '^cpu_throughput_dynrec_median=102$' <<<"$comparison"
 grep -q '^cpu_throughput_normal_median=105$' <<<"$comparison"
 grep -q '^promotion_eligible=0$' <<<"$comparison"
+printf 'telemetry_schema=4\npresentation_requested=1\n' >>"$reports/1.txt"
+if "$repo_dir/scripts/compare-sm-t500-benchmarks.sh" "$reports/1.txt" "$reports/2.txt" "$reports/3.txt" \
+    "$reports/4.txt" "$reports/5.txt" "$reports/6.txt" >/dev/null 2>&1; then
+  echo "Mixed presentation policies accepted" >&2; exit 1
+fi
 rm -rf -- "$reports"
 echo "Benchmark telemetry checks passed"
+
+sed 's/schema=3/schema=4/; s/$/ presentation_requested=1 presentation_active=1 presentation_interval_max_us=34000 upload_draw_us=5000 swap_us=20000 presenter_cpu_us=6000 graphics_errors=0 graphics_fallbacks=0 presenter_clock_errors=0/' "$valid" >"$invalid"
+summary=$("$repo_dir/scripts/summarize-benchmark-telemetry.sh" dynrec-fixed-20k "$invalid")
+grep -q '^telemetry_schema=4$' <<<"$summary"
+grep -q '^presentation_requested=1$' <<<"$summary"
+sed -i 's/ graphics_errors=0//' "$invalid"
+if "$repo_dir/scripts/summarize-benchmark-telemetry.sh" dynrec-fixed-20k "$invalid" >/dev/null 2>&1; then
+  echo "Incomplete graphics telemetry accepted" >&2; exit 1
+fi
+echo "Schema-4 graphics telemetry checks passed"

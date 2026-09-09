@@ -10,7 +10,7 @@ adb_bin=$RW_ADB
 export ANDROID_SERIAL=$RW_DEVICE_SERIAL
 package="org.robowindows.app.debug"
 if [[ -n $("$adb_bin" shell pm path "$package" 2>/dev/null) ]]; then
-  for process in "$package:dynrec" "$package:cpu_normal" "$package:cpu_dynamic"; do
+  for process in "$package:dynrec" "$package:cpu_normal" "$package:cpu_dynamic" "$package:presentation_fixture"; do
     [[ -z $("$adb_bin" shell pidof "$process" || true) ]] || {
       echo "Stop the guest or CPU fixture before installing" >&2; exit 1;
     }
@@ -94,7 +94,7 @@ grep -q 'persistence and input bridge probes passed' <<<"$logs"
 grep -q 'first guest frame 640x400' <<<"$logs"
 grep -q 'audio stream open requested_rate=48000 actual_rate=48000' <<<"$logs"
 # nosound=true has no producer frames; an opened stream is not an audio quality pass.
-grep -q 'schema=3 .*audio_state=prebuffering .*audio_produced=0' <<<"$logs"
+grep -Eq 'schema=[34] .*audio_state=prebuffering .*audio_produced=0' <<<"$logs"
 grep -q 'guest paused' <<<"$logs"
 grep -q 'guest resumed' <<<"$logs"
 grep -q 'media change queued' <<<"$logs"
@@ -102,8 +102,8 @@ grep -q 'media change completed' <<<"$logs"
 grep -q 'guest stopped cleanly' <<<"$logs"
 grep -q 'guest restart completed' <<<"$logs"
 if [[ "${REQUIRE_SURFACE:-0}" == "1" ]]; then
-  grep -Eq 'schema=3 .*presented=[1-9][0-9]* .*post_failures=0' <<<"$logs"
-elif grep -Eq 'schema=3 .*presented=[1-9][0-9]* .*post_failures=0' <<<"$logs"; then
+  grep -Eq 'schema=[34] .*presented=[1-9][0-9]* .*post_failures=0' <<<"$logs"
+elif grep -Eq 'schema=[34] .*presented=[1-9][0-9]* .*post_failures=0' <<<"$logs"; then
   echo "Guest frame was rendered to the Android surface"
 else
   echo "Guest surface was unavailable; rerun unlocked with REQUIRE_SURFACE=1" >&2

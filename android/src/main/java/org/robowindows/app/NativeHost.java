@@ -26,7 +26,13 @@ final class NativeHost {
     static native void cancelInput();
     static native String inputStats();
     static native String lastInputEvent();
-    static native boolean startSession(String contentPath, String filesPath, int timingPolicy);
+    static boolean startSession(String contentPath, String filesPath, int timingPolicy) {
+        return startSession(contentPath, filesPath, timingPolicy, PresentationPolicy.SOFTWARE);
+    }
+    static native boolean startSession(String contentPath, String filesPath, int timingPolicy, int presentationPolicy);
+    /** GPU=1, Software=0, session GPU fallback=-1. */
+    static native int sessionPresentation();
+    static native String runGraphicsProbe(Surface surface);
     static native int sessionStatus();
     static native String sessionLiveness();
     static native String sessionDecoder();

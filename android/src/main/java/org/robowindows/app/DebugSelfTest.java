@@ -56,6 +56,15 @@ final class DebugSelfTest {
             MachineProfile migrated = MachineProfile.fromJson(legacy);
             require(migrated.runtimePath.equals(migrated.mediaPath), "legacy runtime migration");
             require(migrated.mediaAssets.isEmpty(), "legacy media migration");
+            require(migrated.presentationMode == PresentationPolicy.SOFTWARE, "legacy display default");
+            JSONObject gpuJson = profile.toJson();
+            gpuJson.put("presentationMode", PresentationPolicy.GPU);
+            require(MachineProfile.fromJson(gpuJson).presentationMode == PresentationPolicy.GPU,
+                    "GPU preference round trip");
+            gpuJson.put("presentationMode", 99);
+            boolean invalidGpu = false;
+            try { MachineProfile.fromJson(gpuJson); } catch (org.json.JSONException expected) { invalidGpu = true; }
+            require(invalidGpu, "unknown display policy rejected");
 
             deleteTree(testRoot);
             require(testRoot.mkdirs(), "test store root");
@@ -291,13 +300,15 @@ final class DebugSelfTest {
         draft.normalCycles = 20000;
         draft.sound = !original.soundEnabled;
         draft.dynamic = true;
+        draft.presentationMode = PresentationPolicy.GPU;
         draft.name = "  win98 dynrec exp  ";
         MachineProfile p = store.saveSettings(original, draft, true);
         require(p.name.equals("win98 dynrec exp") && p.id.equals(original.id) &&
                 p.runtimePath.equals(original.runtimePath) && p.mediaPath.equals(original.mediaPath) &&
                 p.launchPath.equals(original.launchPath) && p.mediaSha256.equals(original.mediaSha256) &&
                 store.hasCleanGuestShutdown(p.id) &&
-                p.isDynamicSelected() && p.fixedCycles == 20000 && p.soundEnabled == draft.sound &&
+                p.isDynamicSelected() && p.presentationMode == PresentationPolicy.GPU &&
+                p.fixedCycles == 20000 && p.soundEnabled == draft.sound &&
                 p.configurationGeneration == original.configurationGeneration + 1 &&
                 !store.requiresDynamicMediaCheck(p) && readText(new File(p.launchPath)).contains("core=normal"),
                 "batch Apply persists preference and Normal fallback without starting");
@@ -323,6 +334,11 @@ final class DebugSelfTest {
         boolean rejectedStable = false;
         try { store.saveSettings(stable, invalidStable, true); } catch (IOException expected) { rejectedStable = true; }
         require(rejectedStable, "stable machine cannot select DynRec");
+        invalidStable.dynamic = false;
+        invalidStable.presentationMode = PresentationPolicy.GPU;
+        rejectedStable = false;
+        try { store.saveSettings(stable, invalidStable, true); } catch (IOException expected) { rejectedStable = true; }
+        require(rejectedStable, "stable machine cannot select GPU");
         boolean rejectedGate = false;
         try { store.saveSettings(p, draft, false); } catch (IOException expected) { rejectedGate = true; }
         require(rejectedGate, "settings enforce CPU capability");
@@ -341,7 +357,7 @@ final class DebugSelfTest {
             try { faulty.saveSettings(p, normal, true); } catch (IOException expected) { failed = true; }
             require(failed && store.load().get(1).configurationGeneration == p.configurationGeneration &&
                     store.load().get(1).name.equals(p.name) &&
-                    store.load().get(1).isDynamicSelected() &&
+                    store.load().get(1).isDynamicSelected() && store.load().get(1).presentationMode == PresentationPolicy.GPU &&
                     readText(new File(p.launchPath)).contains("core=normal"), "batch save rollback " + point);
         }
         for (String point : new String[]{"clean-preference", "clean-provenance", "clean-journal-clear"}) {
@@ -355,7 +371,7 @@ final class DebugSelfTest {
             require(failed && store.requiresDynamicMediaCheck(p), "interrupted clean completion retains journal");
             store.recoverDynamicAttempts();
             p = store.load().get(1);
-            require(p.isDynamicSelected() && store.hasCleanGuestShutdown(p.id) &&
+            require(p.isDynamicSelected() && p.presentationMode == PresentationPolicy.GPU && store.hasCleanGuestShutdown(p.id) &&
                     !store.requiresDynamicMediaCheck(p), "closed-clean replay retains DynRec " + point);
             require(!store.recoverDynamicAttempts(), "clean replay is idempotent");
         }
@@ -365,9 +381,11 @@ final class DebugSelfTest {
         require(p.isDynamicSelected() && p.fixedCycles == 20000 && p.soundEnabled == draft.sound,
                 "clean DynRec retains selection and complete Normal settings");
         normal = new SettingsDraft(p.name, p.memoryMb, p.fixedCycles, p.soundEnabled, true, p.cpuCore);
+        normal.presentationMode = p.presentationMode;
         normal.dynamic = false;
         p = store.saveSettings(p, normal, true);
-        require(!store.prepareNormalStart(p).isDynamicSelected(), "Normal selected start uses Normal");
+        require(!store.prepareNormalStart(p).isDynamicSelected() && p.presentationMode == PresentationPolicy.GPU,
+                "Normal selection preserves GPU");
         MachineProfile second = store.createExperimentalCopy(stable);
         SettingsDraft secondDraft = new SettingsDraft(second.name, second.memoryMb, second.fixedCycles,
                 second.soundEnabled, false, second.cpuCore);

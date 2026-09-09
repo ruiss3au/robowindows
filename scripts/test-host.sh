@@ -45,6 +45,7 @@ java -cp "$classes_dir" org.robowindows.app.DynamicProgressWatchdogTest
 "$repo_dir/tests/scripts/test-win98-benchmark.sh"
 "$repo_dir/tests/scripts/test-benchmark-telemetry.sh"
 bash "$repo_dir/tests/scripts/test-runtime-timing.sh"
+bash "$repo_dir/tests/scripts/test-presentation.sh"
 
 javac -d "$classes_dir" \
   "$repo_dir/android/src/main/java/org/robowindows/app/DynamicReadiness.java" \
@@ -53,6 +54,7 @@ java -cp "$classes_dir" org.robowindows.app.DynamicReadinessTest
 
 javac -d "$classes_dir" \
   "$repo_dir/android/src/main/java/org/robowindows/app/SettingsDraft.java" \
+  "$repo_dir/android/src/main/java/org/robowindows/app/PresentationPolicy.java" \
   "$repo_dir/android/src/main/java/org/robowindows/app/DisposableCoreConfig.java" \
   "$repo_dir/tests/java/org/robowindows/app/SettingsDraftTest.java"
 java -cp "$classes_dir" org.robowindows.app.SettingsDraftTest
@@ -152,3 +154,9 @@ if rg -n 'PUREMENU|DBP_StartOSD|dosbox_pure_osd' "$repo_dir/android/src/main"; t
 fi
 
 echo "Host checks passed"
+
+g++ -std=c++17 -Wall -Wextra -Werror \
+  -I"$repo_dir/android/src/main/cpp" \
+  "$repo_dir/tests/native/presentation_policy_test.cpp" -o "$classes_dir/presentation_policy_test"
+"$classes_dir/presentation_policy_test"
+echo "Presentation policy checks passed"

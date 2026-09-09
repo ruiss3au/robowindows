@@ -5,6 +5,17 @@ public final class SettingsDraftTest {
     public static void main(String[] args) {
         SettingsDraft d = new SettingsDraft("Windows", 64, 12000, true, false, "normal");
         check(!d.dirty());
+        check(d.presentationMode == PresentationPolicy.SOFTWARE);
+        d.presentationMode = PresentationPolicy.GPU; check(d.dirty());
+        d.dynamic = true; check(d.presentationMode == PresentationPolicy.GPU);
+        d.dynamic = false; d.presentationMode = PresentationPolicy.SOFTWARE; check(!d.dirty());
+        check(PresentationPolicy.forLaunch(1, true, true, false) == 1);
+        check(PresentationPolicy.forLaunch(1, false, true, false) == 0);
+        check(PresentationPolicy.forLaunch(1, true, false, false) == 0);
+        check(PresentationPolicy.forLaunch(1, true, true, true) == 0);
+        check(!PresentationPolicy.allowed(-1) && !PresentationPolicy.allowed(2));
+        try { PresentationPolicy.forLaunch(9, true, true, false); throw new AssertionError(); }
+        catch (IllegalArgumentException expected) { /* rejected */ }
         d.name = "New name"; check(d.dirty());
         d.name = "Windows"; check(!d.dirty());
         check(SettingsDraft.validatedName("  win98 dynrec exp  ").equals("win98 dynrec exp"));

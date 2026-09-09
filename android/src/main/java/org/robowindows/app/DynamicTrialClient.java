@@ -27,6 +27,8 @@ final class DynamicTrialClient {
     private Messenger service;
     private Runnable whenConnected;
     private boolean bound;
+    private int presentationStatus;
+    int presentationStatus() { return presentationStatus; }
 
     DynamicTrialClient(Context context, Listener listener) {
         this.context = context.getApplicationContext();
@@ -34,6 +36,7 @@ final class DynamicTrialClient {
         replies = new Messenger(new Handler(Looper.getMainLooper(), message -> {
             if (message.what == DynamicTrialProtocol.STATUS) {
                 Bundle data = message.getData();
+                presentationStatus = data.getInt(DynamicTrialProtocol.PRESENTATION_STATUS, 0);
                 listener.onDynamicStatus(data.getInt(DynamicTrialProtocol.STATUS_VALUE,
                         NativeHost.SESSION_STOPPED), data.getString(DynamicTrialProtocol.ERROR),
                         data.getString(DynamicTrialProtocol.LIVENESS));
@@ -61,6 +64,8 @@ final class DynamicTrialClient {
         data.putString(DynamicTrialProtocol.DYNAMIC_CYCLE_POLICY, attempt.dynamicCyclePolicy);
         data.putInt(DynamicTrialProtocol.RUNTIME_TIMING_POLICY,
                 RuntimeTimingPolicy.forExperimentalMachine(profile.isExperimental()));
+        data.putInt(DynamicTrialProtocol.PRESENTATION_POLICY, PresentationPolicy.forLaunch(
+                profile.presentationMode, BuildConfig.DEBUG, profile.isExperimental(), false));
         data.putString(DynamicTrialProtocol.LAUNCH_PATH, profile.launchPath);
         data.putString(DynamicTrialProtocol.FILES_PATH, context.getFilesDir().getPath());
         data.putParcelable(DynamicTrialProtocol.SURFACE_VALUE, surface);

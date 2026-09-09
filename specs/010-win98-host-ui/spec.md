@@ -10,6 +10,7 @@
   identify role, selected execution, cycles and recovery state. Selection alone
   never starts a machine. Build identity remains visible in the library.
 - **FR-003:** Machine properties have General, CPU, Media and Maintenance tabs
+  (Feature 011 adds Display)
   and OK/Cancel/Apply. Draft changes never mutate storage until saved. Dirty
   navigation and immediate maintenance/media actions require explicit resolution.
 - **FR-004:** Eligible debug experimental copies offer Normal and DynRec

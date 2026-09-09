@@ -9,7 +9,7 @@ import java.util.Collections;
 import java.util.List;
 
 final class MachineProfile {
-    static final int SCHEMA_VERSION = 7;
+    static final int SCHEMA_VERSION = 8;
     static final String ROLE_STABLE = "stable";
     static final String ROLE_EXPERIMENTAL = "experimental";
     static final String EXECUTION_NORMAL = "normal";
@@ -30,6 +30,7 @@ final class MachineProfile {
     final int fixedCycles;
     final int lastKnownSafeCycles;
     final String selectedExecution;
+    final int presentationMode;
     final long configurationGeneration;
     final long createdAt;
     final long lastBootedAt;
@@ -65,6 +66,21 @@ final class MachineProfile {
             boolean soundEnabled, long createdAt, long lastBootedAt, List<MediaAsset> mediaAssets,
             String role, int fixedCycles, int lastKnownSafeCycles, String selectedExecution,
             long configurationGeneration) {
+        this(id, name, family, mediaName, mediaPath, runtimePath, mediaSha256, launchPath,
+                memoryMb, cpuCore, soundEnabled, createdAt, lastBootedAt, mediaAssets, role,
+                fixedCycles, lastKnownSafeCycles, selectedExecution, configurationGeneration,
+                PresentationPolicy.SOFTWARE);
+    }
+
+    MachineProfile(String id, String name, String family, String mediaName, String mediaPath,
+            String runtimePath, String mediaSha256, String launchPath, int memoryMb, String cpuCore,
+            boolean soundEnabled, long createdAt, long lastBootedAt, List<MediaAsset> mediaAssets,
+            String role, int fixedCycles, int lastKnownSafeCycles, String selectedExecution,
+            long configurationGeneration, int presentationMode) {
+        if (!PresentationPolicy.allowed(presentationMode)) {
+            throw new IllegalArgumentException("Unknown presentation mode");
+        }
+        this.presentationMode = presentationMode;
         this.id = id;
         this.name = name;
         this.family = family;
@@ -105,6 +121,7 @@ final class MachineProfile {
         json.put("fixedCycles", fixedCycles);
         json.put("lastKnownSafeCycles", lastKnownSafeCycles);
         json.put("selectedExecution", selectedExecution);
+        json.put("presentationMode", presentationMode);
         json.put("configurationGeneration", configurationGeneration);
         json.put("createdAt", createdAt);
         json.put("lastBootedAt", lastBootedAt);
@@ -120,6 +137,8 @@ final class MachineProfile {
             throw new JSONException("Unsupported machine schema");
         }
         String mediaPath = json.getString("mediaPath");
+        int presentationMode = version >= 8 ? json.getInt("presentationMode") : PresentationPolicy.SOFTWARE;
+        if (!PresentationPolicy.allowed(presentationMode)) throw new JSONException("Unknown presentation mode");
         String runtimePath = json.optString("runtimePath", mediaPath);
         String launchPath = json.optString("launchPath",
                 new java.io.File(mediaPath).getParent() + "/launch.conf");
@@ -139,7 +158,7 @@ final class MachineProfile {
                 json.optString("role", ROLE_STABLE), json.optInt("fixedCycles", 0),
                 json.optInt("lastKnownSafeCycles", 0),
                 json.optString("selectedExecution", EXECUTION_NORMAL),
-                json.optLong("configurationGeneration", 0));
+                json.optLong("configurationGeneration", 0), presentationMode);
     }
 
     boolean isExperimental() {

@@ -139,7 +139,9 @@ extensions while continuing to read historical captures without it.
 Rollback of the diagnostic slice removes its collection/reporting only. The
 type-safe callback correction is independently testable and should be retained.
 Require host tests, pinned-source verification, Android build and disposable
-Normal/DynRec gate before another guest run. GPU presentation remains deferred.
+Normal/DynRec gate before another guest run. Feature 011 subsequently authorizes
+GPU presentation as an independent experimental-copy-only feature; this does not
+complete the outstanding real-time or DynRec quality gates.
 
 1. Benchmark `normal`/`auto` with explicit fixed cycle candidates on boot, idle, window
    movement, and sound workloads.

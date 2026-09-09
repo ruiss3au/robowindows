@@ -36,7 +36,22 @@ index($0, "RoboWindowsTelemetry:") {
   required="schema interval_ms state audio_state decoder current timing pacing run retro_max_us retro_over producer_gap_max_us scheduler_late_max_us catchup resync audio_produced audio_consumed queue_current queue_min queue_max underruns missing dropped saturated stream_errors submitted published presented coalesced post_failures"
   split(required, names, " ")
   for (i in names) if (!(names[i] in value)) { fail("Missing telemetry field: " names[i]); next }
-  if (value["schema"] != "3") { fail("Unsupported telemetry schema"); next }
+  if (value["schema"] != "3" && value["schema"] != "4") { fail("Unsupported telemetry schema"); next }
+  if (schema && schema != value["schema"]) { fail("Mixed telemetry schemas"); next }
+  schema=value["schema"]
+  if (schema == 4) {
+    split("presentation_requested presentation_active presentation_interval_max_us upload_draw_us swap_us presenter_cpu_us graphics_errors graphics_fallbacks presenter_clock_errors", graphics_names, " ")
+    for (i in graphics_names) if (!number(value[graphics_names[i]])) fail("Invalid graphics telemetry field: " graphics_names[i])
+    if (value["presentation_requested"] !~ /^[01]$/ || value["presentation_active"] !~ /^[01]$/) fail("Unknown presentation policy")
+    if (intervals && requested != value["presentation_requested"]) fail("Changed requested presentation policy")
+    requested=value["presentation_requested"]
+    active=value["presentation_active"]
+    if (requested != active) fallback_observed=1
+    graphics_errors+=value["graphics_errors"]; graphics_fallbacks+=value["graphics_fallbacks"]
+    presenter_cpu+=value["presenter_cpu_us"]; upload_draw+=value["upload_draw_us"]; swap+=value["swap_us"]
+    presenter_clock_errors+=value["presenter_clock_errors"]
+    if (value["presentation_interval_max_us"] > presentation_max) presentation_max=value["presentation_interval_max_us"]
+  }
   if (value["state"] != "foreground") { fail("Invalid lifecycle interval: " value["state"]); next }
   if (value["decoder"] != expected_core) { fail("Observed decoder does not match profile"); next }
   if (value["timing"] != "balanced_100ms") { fail("Unexpected runtime timing policy"); next }
@@ -77,7 +92,11 @@ END {
   if (bad) exit 1
   if (intervals < 25) { print "Too few foreground telemetry intervals" > "/dev/stderr"; exit 1 }
   if (ms < 25000 || ms > 60000) { print "Telemetry duration is outside benchmark bounds" > "/dev/stderr"; exit 1 }
-  printf "telemetry_schema=3\nintervals=%u\nhost_elapsed_ms=%u\nruntime_timing_policy=balanced_100ms\n", intervals, ms
+  printf "telemetry_schema=%u\nintervals=%u\nhost_elapsed_ms=%u\nruntime_timing_policy=balanced_100ms\n", schema, intervals, ms
+  if (schema == 4) {
+    printf "presentation_requested=%u\npresentation_active=%u\npresentation_fallback_observed=%u\n", requested, active, fallback_observed
+    printf "presentation_interval_max_us=%u\nupload_draw_us=%u\nswap_us=%u\npresenter_cpu_us=%u\ngraphics_errors=%u\ngraphics_fallbacks=%u\npresenter_clock_errors=%u\n", presentation_max, upload_draw, swap, presenter_cpu, graphics_errors, graphics_fallbacks, presenter_clock_errors
+  }
   printf "emulator_calls_per_s=%.2f\n", runs * 1000 / ms
   printf "retro_run_max_us=%u\nretro_run_over_budget_calls=%u\naudio_producer_gap_max_us=%u\nscheduler_lateness_max_us=%u\nscheduler_catchup_calls=%u\nscheduler_deadline_resyncs=%u\n", retro_max_us, retro_over, producer_gap_max_us, scheduler_late_max_us, catchup, resync
   printf "submitted_fps=%.2f\npublished_fps=%.2f\npresented_fps=%.2f\npresented_fps_peak=%.2f\n", submitted * 1000 / ms, published * 1000 / ms, presented * 1000 / ms, peak_fps

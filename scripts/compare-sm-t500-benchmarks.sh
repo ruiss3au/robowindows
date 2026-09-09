@@ -32,9 +32,22 @@ for index in 1 2 3 4 5 6; do
 done
 
 build_hash=$(field installed_apk_sha256 "$1")
+presentation_mode() {
+  if grep -q '^telemetry_schema=4$' "$1"; then
+    field presentation_requested "$1"
+  else
+    printf '0\n'
+  fi
+}
+presentation=$(presentation_mode "$1")
+[[ $presentation == 0 || $presentation == 1 ]] || { echo "Unknown presentation mode" >&2; exit 1; }
 for index in 2 3 4 5 6; do
   [[ $(field installed_apk_sha256 "${!index}") == "$build_hash" ]] || {
     echo "Benchmark reports use different app builds" >&2
+    exit 1
+  }
+  [[ $(presentation_mode "${!index}") == "$presentation" ]] || {
+    echo "Benchmark reports use different presentation policies" >&2
     exit 1
   }
 done
@@ -44,6 +57,7 @@ median_three() {
 }
 
 printf 'comparison_schema=1\napp_sha256=%s\ndynrec_profile=dynrec-fixed-20k\nnormal_profile=normal-fixed-20k\nruns_per_profile=3\n' "$build_hash"
+printf 'presentation_policy=%s\n' "$presentation"
 for metric in cpu_throughput memory_throughput gdi_throughput gdi_fps presented_fps; do
   dynrec=$(median_three "$(field "$metric" "$1")" "$(field "$metric" "$2")" "$(field "$metric" "$3")")
   normal=$(median_three "$(field "$metric" "$4")" "$(field "$metric" "$5")" "$(field "$metric" "$6")")

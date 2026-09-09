@@ -23,6 +23,7 @@
 #include "audio_ring.h"
 #include "frame_mailbox.h"
 #include "frame_presenter.h"
+#include "graphics_probe.h"
 #include "realtime_scheduler.h"
 #include "runtime_telemetry.h"
 #include "run_diagnostics.h"
@@ -149,13 +150,17 @@ void report_telemetry_if_due() {
             now - telemetry_report_time).count();
     if (elapsed < 1000) return;
     RuntimeTelemetrySnapshot snapshot = telemetry.take_snapshot(static_cast<uint64_t>(elapsed));
+    const auto graphics = frame_presenter.take_snapshot();
     __android_log_print(ANDROID_LOG_INFO, "RoboWindowsTelemetry",
-            "schema=3 interval_ms=%llu state=%s audio_state=%s decoder=%s current=%s "
+            "schema=4 interval_ms=%llu state=%s audio_state=%s decoder=%s current=%s "
             "timing=%s pacing=%s run=%llu retro_max_us=%llu retro_over=%llu "
             "producer_gap_max_us=%llu scheduler_late_max_us=%llu catchup=%llu resync=%llu "
             "audio_produced=%llu audio_consumed=%llu queue_current=%llu queue_min=%llu queue_max=%llu underruns=%llu "
             "missing=%llu dropped=%llu saturated=%llu stream_errors=%llu submitted=%llu published=%llu "
-            "presented=%llu coalesced=%llu post_failures=%llu",
+            "presented=%llu coalesced=%llu post_failures=%llu "
+            "presentation_requested=%d presentation_active=%d presentation_interval_max_us=%llu "
+            "upload_draw_us=%llu swap_us=%llu presenter_cpu_us=%llu graphics_errors=%llu "
+            "graphics_fallbacks=%llu presenter_clock_errors=%llu",
             static_cast<unsigned long long>(snapshot.interval_ms),
             runtime_state_name(snapshot.runtime_state),
             audio_phase_name(audio_output_state.phase()),
@@ -183,7 +188,15 @@ void report_telemetry_if_due() {
             static_cast<unsigned long long>(snapshot.frames_published),
             static_cast<unsigned long long>(snapshot.frames_presented),
             static_cast<unsigned long long>(snapshot.frames_coalesced),
-            static_cast<unsigned long long>(snapshot.surface_post_failures));
+            static_cast<unsigned long long>(snapshot.surface_post_failures),
+            frame_presenter.requested(), frame_presenter.status() == presentation::Gpu ? 1 : 0,
+            static_cast<unsigned long long>(graphics.interval_max_us),
+            static_cast<unsigned long long>(graphics.upload_draw_us),
+            static_cast<unsigned long long>(graphics.swap_us),
+            static_cast<unsigned long long>(graphics.thread_cpu_us),
+            static_cast<unsigned long long>(graphics.graphics_errors),
+            static_cast<unsigned long long>(graphics.fallbacks),
+            static_cast<unsigned long long>(graphics.cpu_clock_errors));
     if (runtime_timing_policy == RuntimeTimingPolicy::Balanced100Ms) {
         const auto timing = run_diagnostics.take_snapshot();
         __android_log_print(ANDROID_LOG_INFO, "RoboWindowsTiming",
@@ -812,10 +825,12 @@ void CoreInputCancel() {
 
 extern "C" JNIEXPORT jboolean JNICALL
 Java_org_robowindows_app_NativeHost_startSession(JNIEnv* env, jclass, jstring content,
-        jstring files, jint timing_policy_id) {
+        jstring files, jint timing_policy_id, jint presentation_policy_id) {
     std::lock_guard<std::mutex> lock(lifecycle_mutex);
     if (running) return JNI_FALSE;
     if (!valid_runtime_timing_policy(timing_policy_id)) return JNI_FALSE;
+    if (!presentation::allowed(presentation_policy_id) ||
+            (presentation_policy_id == presentation::Gpu && timing_policy_id != 1)) return JNI_FALSE;
     if (core_thread.joinable()) core_thread.join();
     const char* content_chars = env->GetStringUTFChars(content, nullptr);
     const char* files_chars = env->GetStringUTFChars(files, nullptr);
@@ -869,9 +884,26 @@ Java_org_robowindows_app_NativeHost_startSession(JNIEnv* env, jclass, jstring co
     video_enabled = content_path.size() >= 5 &&
             content_path.compare(content_path.size() - 5, 5, ".conf") == 0;
     frame_mailbox.reset();
-    frame_presenter.start();
+    frame_presenter.start(presentation_policy_id);
     core_thread = std::thread(run_core);
     return JNI_TRUE;
+}
+
+extern "C" JNIEXPORT jint JNICALL
+Java_org_robowindows_app_NativeHost_sessionPresentation(JNIEnv*, jclass) {
+    return frame_presenter.status();
+}
+
+extern "C" JNIEXPORT jstring JNICALL
+Java_org_robowindows_app_NativeHost_runGraphicsProbe(JNIEnv* env, jclass, jobject surface) {
+    std::lock_guard<std::mutex> lock(lifecycle_mutex);
+    if (running || !surface) return env->NewStringUTF("FAIL active session or missing surface");
+    if (core_thread.joinable()) core_thread.join();
+    ANativeWindow* window = ANativeWindow_fromSurface(env, surface);
+    if (!window) return env->NewStringUTF("FAIL missing window");
+    const auto result = run_graphics_probe(window);
+    ANativeWindow_release(window);
+    return env->NewStringUTF(result.c_str());
 }
 
 extern "C" JNIEXPORT void JNICALL

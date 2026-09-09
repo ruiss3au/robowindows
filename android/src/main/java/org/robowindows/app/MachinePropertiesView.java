@@ -30,7 +30,7 @@ final class MachinePropertiesView extends LinearLayout {
     private SettingsDraft draft;
     private int tab;
     private String status = "Changes take effect only when you choose Apply or OK.";
-    private static final String[] TABS = {"General", "CPU", "Media", "Maintenance"};
+    private static final String[] TABS = {"General", "CPU", "Display", "Media", "Maintenance"};
 
     MachinePropertiesView(Context context, MachineStore store, MachineProfile profile, Actions actions) {
         super(context);
@@ -46,7 +46,7 @@ final class MachinePropertiesView extends LinearLayout {
     private void reset(MachineProfile p) {
         profile = p;
         draft = new SettingsDraft(p.name, p.memoryMb, p.fixedCycles, p.soundEnabled,
-                p.isDynamicSelected(), p.cpuCore);
+                p.isDynamicSelected(), p.cpuCore, p.presentationMode);
     }
     private TextView text(String s) {
         TextView v = new TextView(getContext());
@@ -137,6 +137,16 @@ final class MachinePropertiesView extends LinearLayout {
                 }
             }
         } else if (tab == 2) {
+            option(body, "Software · 15 FPS", draft.presentationMode == PresentationPolicy.SOFTWARE,
+                    editable, () -> { draft.presentationMode = PresentationPolicy.SOFTWARE; render(); });
+            if (BuildConfig.DEBUG && profile.isExperimental()) {
+                option(body, "GPU · 30 FPS (experimental)", draft.presentationMode == PresentationPolicy.GPU,
+                        editable, () -> { draft.presentationMode = PresentationPolicy.GPU; render(); });
+            }
+            body.addView(text("GPU presentation scales the display, not the guest's 3D graphics. " +
+                    "Available on diagnostic experimental copies only. Changes apply next session; " +
+                    "graphics failures fall back to Software without restarting Windows."));
+        } else if (tab == 3) {
             body.addView(text("Imported media: " + profile.mediaName));
             if (store.isWindowsInstaller(profile)) {
                 boolean installer = store.bootsInstaller(profile);

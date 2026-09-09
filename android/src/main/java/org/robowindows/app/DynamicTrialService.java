@@ -145,9 +145,14 @@ public final class DynamicTrialService extends Service {
                 data.getLong(DynamicTrialProtocol.GENERATION), dynamicPolicy.id);
         File launch = validatedDynamicLaunch(profile, data.getString(DynamicTrialProtocol.LAUNCH_PATH),
                 data.getString(DynamicTrialProtocol.FILES_PATH), dynamicPolicy);
+        int presentation = data.getInt(DynamicTrialProtocol.PRESENTATION_POLICY, -1);
+        if (!PresentationPolicy.allowed(presentation) || presentation != PresentationPolicy.forLaunch(
+                profile.presentationMode, BuildConfig.DEBUG, profile.isExperimental(), false)) {
+            throw new IOException("Dynamic runner rejects the presentation policy");
+        }
         Surface surface = data.getParcelable(DynamicTrialProtocol.SURFACE_VALUE);
         NativeHost.setSurface(surface);
-        if (!NativeHost.startSession(launch.getPath(), getFilesDir().getPath(), timingPolicy)) {
+        if (!NativeHost.startSession(launch.getPath(), getFilesDir().getPath(), timingPolicy, presentation)) {
             throw new IOException("Dynamic native start failed");
         }
         started = true;
@@ -209,6 +214,7 @@ public final class DynamicTrialService extends Service {
         data.putInt(DynamicTrialProtocol.STATUS_VALUE,
                 started ? NativeHost.sessionStatus() : NativeHost.SESSION_STOPPED);
         if (started) data.putString(DynamicTrialProtocol.LIVENESS, NativeHost.sessionLiveness());
+        if (started) data.putInt(DynamicTrialProtocol.PRESENTATION_STATUS, NativeHost.sessionPresentation());
         if (error != null) data.putString(DynamicTrialProtocol.ERROR, error);
         reply.setData(data);
         try {

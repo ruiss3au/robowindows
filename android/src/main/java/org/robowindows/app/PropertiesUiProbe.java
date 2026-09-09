@@ -24,10 +24,12 @@ final class PropertiesUiProbe {
         };
         MachinePropertiesView sheet = new MachinePropertiesView(context, store, initial, actions);
         edit(sheet).setText("Discard this draft");
+        click(sheet, "Display"); click(sheet, "Software · 15 FPS");
         click(sheet, "CPU"); click(sheet, "General");
         require(edit(sheet).getText().toString().equals("Discard this draft"), "name survives tabs");
         click(sheet, "Cancel");
-        require(closes[0] == 1 && current(store, initial.id).name.equals(initial.name), "Cancel leaves storage unchanged");
+        require(closes[0] == 1 && current(store, initial.id).name.equals(initial.name) &&
+                current(store, initial.id).presentationMode == initial.presentationMode, "Cancel leaves storage unchanged");
 
         sheet = new MachinePropertiesView(context, store, initial, actions);
         edit(sheet).setText("  Renamed Windows  ");
@@ -51,7 +53,7 @@ final class PropertiesUiProbe {
             int height = ClassicUi.dp(themed, scale == 2f ? 600 : 360);
             MachineProfile p = current(store, initial.id);
             sheet = new MachinePropertiesView(themed, store, p, actions);
-            for (String tab : new String[]{"General", "CPU", "Media", "Maintenance"}) {
+            for (String tab : new String[]{"General", "CPU", "Display", "Media", "Maintenance"}) {
                 click(sheet, tab);
                 sheet.measure(View.MeasureSpec.makeMeasureSpec(width, View.MeasureSpec.EXACTLY),
                         View.MeasureSpec.makeMeasureSpec(height, View.MeasureSpec.EXACTLY));

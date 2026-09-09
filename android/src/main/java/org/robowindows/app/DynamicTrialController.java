@@ -32,6 +32,7 @@ final class DynamicTrialController implements DynamicTrialClient.Listener {
     private DynamicProgressWatchdog progressWatchdog;
     private final Handler handler = new Handler(Looper.getMainLooper());
     private final Runnable livenessPoll = this::pollLiveness;
+    int presentationStatus() { return client.presentationStatus(); }
 
     DynamicTrialController(Context context, Listener listener) {
         this.context = context.getApplicationContext();

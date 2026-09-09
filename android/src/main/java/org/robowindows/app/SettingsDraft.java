@@ -3,6 +3,8 @@ package org.robowindows.app;
 /** Unpublished properties. No Android, disk, or runtime side effects. */
 final class SettingsDraft {
     String name;
+    int presentationMode;
+    private final int savedPresentation;
     private final String savedName;
     int memoryMb;
     int normalCycles;
@@ -14,6 +16,12 @@ final class SettingsDraft {
     private final boolean savedSound, savedDynamic;
 
     SettingsDraft(String name, int memory, int cycles, boolean sound, boolean dynamic, String core) {
+        this(name, memory, cycles, sound, dynamic, core, PresentationPolicy.SOFTWARE);
+    }
+
+    SettingsDraft(String name, int memory, int cycles, boolean sound, boolean dynamic, String core,
+            int presentationMode) {
+        this.presentationMode = savedPresentation = presentationMode;
         this.name = savedName = name;
         memoryMb = savedMemory = memory;
         normalCycles = savedCycles = cycles;
@@ -23,7 +31,7 @@ final class SettingsDraft {
     }
 
     boolean dirty() {
-        return !java.util.Objects.equals(name, savedName) || memoryMb != savedMemory || normalCycles != savedCycles ||
+        return presentationMode != savedPresentation || !java.util.Objects.equals(name, savedName) || memoryMb != savedMemory || normalCycles != savedCycles ||
                 sound != savedSound || dynamic != savedDynamic || !normalCore.equals(savedCore);
     }
 

@@ -21,6 +21,12 @@
             android:exported="false"
             android:process=":cpu_dynamic" />
         <activity
+            android:name=".PresentationFixtureActivity"
+            android:exported="false"
+            android:process=":presentation_fixture"
+            android:screenOrientation="sensorLandscape"
+            android:configChanges="keyboard|keyboardHidden|navigation|orientation|screenLayout|screenSize|smallestScreenSize|uiMode" />
+        <activity
             android:name=".MainActivity"
             android:launchMode="singleTop"
             android:configChanges="keyboard|keyboardHidden|navigation|orientation|screenLayout|screenSize|smallestScreenSize|uiMode"

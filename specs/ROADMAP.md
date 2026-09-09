@@ -5,6 +5,14 @@ specification, plan, tasks, and validation record when work begins.
 
 ## Now
 
+- Feature 011 GPU presentation is implemented as an independent experimental-copy-only
+  feature, with Software/GPU selection independent of Normal/DynRec. Disposable
+  graphics/lifecycle and all four short timer/tone checks passed: GPU approximately
+  29.8 presented FPS versus Software 15.1, zero settled audio/scheduling/graphics
+  errors, and guest timing within 0.5%. Real Windows GPU smoke remains pending.
+  Short targeted validation replaces the previous dependency on full DynRec
+  qualification; it does not promote DynRec or establish thermal stability.
+
 - Feature 010 is delivered and its scoped host-UI acceptance is complete:
   classic touch-friendly screens, staged properties with editable machine names,
   Normal/DynRec selector, Tests panel, translucent session controls and modern
@@ -43,14 +51,9 @@ specification, plan, tasks, and validation record when work begins.
 
 ## Later
 
-- **GPU presentation and higher FPS — after DynRec quality gates pass.** Move
-  host framebuffer scaling and color conversion from the CPU to the GPU using
-  OpenGL ES, then target 30 presented FPS on experimental copies. The current
-  presenter deliberately limits output to about 15 FPS; raising that limit must
-  preserve audio continuity, guest timing, input, and sustained thermal behavior.
-  This improves host presentation; it does not promise 30 unique game frames per
-  second. Defer this feature until the DynRec correctness, audio, stability, and
-  performance gates above are satisfied.
+- Qualify GPU presentation for sustained use before expanding beyond experimental
+  copies. Feature 011 targets 30 presented FPS, not 30 unique game frames or guest
+  3D acceleration. Sustained thermal behavior is outside its initial short checks.
 - Complete release-readiness work.
 
 ## Never

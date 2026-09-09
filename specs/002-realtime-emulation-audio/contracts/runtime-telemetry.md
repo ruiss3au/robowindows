@@ -13,6 +13,16 @@ T010–T011 and is not implied by the benchmark collector.
 
 ## Snapshot
 
+Feature 011 emits schema 4: schema 3 fields plus `presentation_requested` and
+`presentation_active` (0 Software, 1 GPU), `presentation_interval_max_us`,
+`upload_draw_us`, `swap_us`, `presenter_cpu_us`, `graphics_errors`,
+`graphics_fallbacks`, `presenter_clock_errors` (nonnegative interval aggregates).
+The presenter CPU clock covers rendering/posting, not sleeping. Upload/draw is
+CPU-side wall duration, not GPU execution time. Successful posts are not unique
+game frames. A requested/active mismatch, error or fallback invalidates a GPU
+performance result even if audio and FPS look healthy. Historical schema-3
+captures remain readable; mixed schemas or incomplete graphics fields are rejected.
+
 ```text
 schema_version: 3
 session_id: opaque identifier

@@ -20,6 +20,10 @@ final class GuestDisplayView extends SurfaceView implements SurfaceHolder.Callba
     private final boolean drawWaitingFrame;
 
     GuestDisplayView(Context context, IntUnaryOperator deviceHandle) {
+        this(context, deviceHandle, true);
+    }
+
+    GuestDisplayView(Context context, IntUnaryOperator deviceHandle, boolean drawWaitingFrame) {
         this(context, deviceHandle, new SessionBridge() {
             @Override public void setSurface(Surface surface) { NativeHost.setSurface(surface); }
             @Override public void pushMouse(MotionEvent event, int handle, boolean captured) {
@@ -31,7 +35,7 @@ final class GuestDisplayView extends SurfaceView implements SurfaceHolder.Callba
                         event.getAxisValue(MotionEvent.AXIS_HSCROLL), event.getSource(), handle,
                         event.getEventTime() * 1_000_000L, captured);
             }
-        });
+        }, drawWaitingFrame);
     }
 
     GuestDisplayView(Context context, IntUnaryOperator deviceHandle, SessionBridge bridge) {

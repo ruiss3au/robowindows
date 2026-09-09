@@ -377,6 +377,11 @@ final class MachineStore {
         try { name = SettingsDraft.validatedName(draft.name); }
         catch (IllegalArgumentException error) { throw new IOException(error.getMessage()); }
         ensureSettingsReady(p);
+        if (!PresentationPolicy.allowed(draft.presentationMode) ||
+                (draft.presentationMode != p.presentationMode && draft.presentationMode == PresentationPolicy.GPU &&
+                        (!BuildConfig.DEBUG || !p.isExperimental()))) {
+            throw new IOException("GPU presentation requires a diagnostic experimental copy");
+        }
         if (draft.dynamic) {
             String reason = dynamicUnavailable(p, cpuPassed);
             if (reason != null) throw new IOException(reason);
@@ -394,7 +399,7 @@ final class MachineStore {
                 draft.normalCore, draft.sound, p.createdAt, p.lastBootedAt, p.mediaAssets,
                 p.role, draft.normalCycles, p.lastKnownSafeCycles,
                 draft.dynamic ? MachineProfile.EXECUTION_DYNAMIC : MachineProfile.EXECUTION_NORMAL,
-                p.configurationGeneration + 1);
+                p.configurationGeneration + 1, draft.presentationMode);
         File marker = new File(machineDirectory(p), SETTINGS_PENDING_FILE);
         try (FileOutputStream out = new FileOutputStream(marker)) {
             out.write(1); out.flush(); out.getFD().sync();
@@ -496,7 +501,7 @@ final class MachineStore {
                                 profile.cpuCore, profile.soundEnabled, profile.createdAt,
                                 profile.lastBootedAt, profile.mediaAssets, profile.role,
                                 profile.fixedCycles, profile.lastKnownSafeCycles,
-                                profile.selectedExecution, profile.configurationGeneration);
+                                profile.selectedExecution, profile.configurationGeneration, profile.presentationMode);
                         migrated = true;
                     }
                     profiles.add(profile);
@@ -736,7 +741,7 @@ final class MachineStore {
                         profile.soundEnabled, profile.createdAt, System.currentTimeMillis(),
                         profile.mediaAssets, profile.role, profile.fixedCycles,
                         profile.lastKnownSafeCycles, profile.selectedExecution,
-                        profile.configurationGeneration));
+                        profile.configurationGeneration, profile.presentationMode));
                 break;
             }
         }
@@ -870,7 +875,7 @@ final class MachineStore {
                 selected.launchPath, selected.memoryMb, "normal", selected.soundEnabled,
                 selected.createdAt, selected.lastBootedAt, selected.mediaAssets, selected.role,
                 fixedCycles, selected.lastKnownSafeCycles, selected.selectedExecution,
-                selected.configurationGeneration + 1);
+                selected.configurationGeneration + 1, selected.presentationMode);
         boolean bootInstaller = isWindowsInstaller(selected) && bootsInstaller(selected);
         writeProfileLaunchConfig(updated, bootInstaller);
         try {
@@ -949,7 +954,7 @@ final class MachineStore {
                 memoryMb, cpuCore, soundEnabled, selected.createdAt, selected.lastBootedAt,
                 selected.mediaAssets, selected.role, selected.fixedCycles,
                 selected.lastKnownSafeCycles, selected.selectedExecution,
-                selected.configurationGeneration + 1);
+                selected.configurationGeneration + 1, selected.presentationMode);
         List<MachineProfile> profiles = load();
         for (int i = 0; i < profiles.size(); i++) {
             if (profiles.get(i).id.equals(selected.id)) {
@@ -1037,7 +1042,7 @@ final class MachineStore {
                     profile.launchPath, profile.memoryMb, profile.cpuCore, profile.soundEnabled,
                     profile.createdAt, profile.lastBootedAt, assets, profile.role,
                     profile.fixedCycles, profile.lastKnownSafeCycles,
-                    profile.selectedExecution, profile.configurationGeneration + 1));
+                    profile.selectedExecution, profile.configurationGeneration + 1, profile.presentationMode));
             if (!save(profiles)) throw new IOException("Cannot save media metadata");
             return;
         }
@@ -1137,7 +1142,7 @@ final class MachineStore {
                 profile.mediaPath, profile.runtimePath, profile.mediaSha256, profile.launchPath,
                 profile.memoryMb, profile.cpuCore, profile.soundEnabled, profile.createdAt,
                 profile.lastBootedAt, profile.mediaAssets, profile.role, profile.fixedCycles,
-                profile.lastKnownSafeCycles, execution, generation);
+                profile.lastKnownSafeCycles, execution, generation, profile.presentationMode);
     }
 
     private void writeAttempt(DynamicAttempt attempt, File journal, String persistencePoint)
