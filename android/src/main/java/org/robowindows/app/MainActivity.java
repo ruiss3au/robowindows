@@ -891,7 +891,6 @@ public final class MainActivity extends Activity {
         LinearLayout controls = new LinearLayout(this);
         controls.setGravity(Gravity.CENTER_VERTICAL);
         controls.setPadding(dp(12), dp(8), dp(12), dp(8));
-        controls.setBackground(background(Color.argb(250, 192, 192, 192), 0));
         sessionControls = controls;
         controls.addView(button("Exit", v -> confirmSessionAction(false)), new LinearLayout.LayoutParams(dp(110), dp(44)));
         TextView title = text(recoveryBoot ? "Disk check · " + sessionProfile.name :
@@ -925,6 +924,7 @@ public final class MainActivity extends Activity {
         LinearLayout.LayoutParams mediaParams = new LinearLayout.LayoutParams(dp(170), dp(44));
         mediaParams.leftMargin = dp(10);
         controls.addView(button("Change media", v -> pickSessionMedia()), mediaParams);
+        ClassicUi.sessionOverlay(controls);
         page.addView(guest, new FrameLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         FrameLayout.LayoutParams controlsParams = new FrameLayout.LayoutParams(
@@ -992,7 +992,6 @@ public final class MainActivity extends Activity {
         LinearLayout controls = new LinearLayout(this);
         controls.setGravity(Gravity.CENTER_VERTICAL);
         controls.setPadding(dp(12), dp(8), dp(12), dp(8));
-        controls.setBackground(background(Color.argb(250, 192, 192, 192), 0));
         sessionControls = controls;
         controls.addView(button("Stop trial", v -> confirmSessionAction(false)),
                 new LinearLayout.LayoutParams(dp(130), dp(44)));
@@ -1004,6 +1003,7 @@ public final class MainActivity extends Activity {
         diagnosticLabels.addView(decoderResidency);
         controls.addView(diagnosticLabels, new LinearLayout.LayoutParams(0,
                 ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+        ClassicUi.sessionOverlay(controls);
         page.addView(guest, new FrameLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         page.addView(controls, new FrameLayout.LayoutParams(
@@ -1011,7 +1011,6 @@ public final class MainActivity extends Activity {
         LinearLayout readiness = new LinearLayout(this);
         readiness.setGravity(Gravity.CENTER_VERTICAL);
         readiness.setPadding(dp(12), dp(8), dp(12), dp(8));
-        readiness.setBackground(background(Color.argb(250, 192, 192, 192), 0));
         TextView readinessLabel = text("Confirm only after Windows responds", 14, MUTED);
         readiness.addView(readinessLabel, new LinearLayout.LayoutParams(0,
                 ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
@@ -1031,6 +1030,7 @@ public final class MainActivity extends Activity {
         LinearLayout.LayoutParams mouseParams = new LinearLayout.LayoutParams(dp(130), dp(44));
         mouseParams.leftMargin = dp(10);
         readiness.addView(mouseReady, mouseParams);
+        ClassicUi.sessionOverlay(readiness);
         page.addView(readiness, new FrameLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.BOTTOM));
         setContentView(page);
@@ -1060,8 +1060,7 @@ public final class MainActivity extends Activity {
             if ((controller.readinessMask() & evidence) != 0) return;
             controller.confirmReadiness(evidence);
             button.setText("✓ " + button.getText());
-            button.setTextColor(PRIMARY);
-            button.setBackground(background(SURFACE_HIGH, 12));
+            button.setSelected(true);
             if (DynamicReadiness.complete(controller.readinessMask())) {
                 Toast.makeText(this, "Desktop, keyboard, and captured mouse are confirmed.",
                         Toast.LENGTH_LONG).show();

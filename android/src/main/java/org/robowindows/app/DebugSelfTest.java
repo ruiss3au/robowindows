@@ -24,6 +24,7 @@ final class DebugSelfTest {
         File interrupted = new File(directory, "orphan.part");
         File testRoot = new File(context.getCacheDir(), "debug-machine-store");
         try {
+            checkSessionOverlay(context);
             if (!directory.mkdirs() && !directory.isDirectory()) throw new Exception("mkdir");
             try (FileOutputStream output = new FileOutputStream(interrupted)) {
                 output.write(1);
@@ -361,6 +362,51 @@ final class DebugSelfTest {
                 stableConfig.equals(readText(new File(stable.launchPath))), "settings preserve stable fixture");
         Log.i(TAG, "classic settings and persistent clean-mode probes passed");
         return p;
+    }
+
+    private static void checkSessionOverlay(Context context) {
+        android.widget.LinearLayout bar = new android.widget.LinearLayout(context);
+        android.widget.LinearLayout labels = new android.widget.LinearLayout(context);
+        android.widget.TextView label = new android.widget.TextView(context);
+        labels.addView(label);
+        bar.addView(labels);
+        android.widget.Button button = ClassicUi.button(context, "Desktop", null);
+        bar.addView(button);
+        ClassicUi.sessionOverlay(bar);
+        int panel = ((android.graphics.drawable.ColorDrawable) bar.getBackground()).getColor();
+        require(android.graphics.Color.alpha(panel) == 80, "session panel translucent");
+        require(label.getCurrentTextColor() == ClassicUi.WHITE && bar.getAlpha() == 1f &&
+                button.getAlpha() == 1f, "overlay labels do not inherit faded view alpha");
+        require(button.getMinimumHeight() >= ClassicUi.dp(context, 48), "overlay touch target");
+        android.graphics.drawable.Drawable drawable = button.getBackground();
+        android.graphics.Bitmap bitmap = android.graphics.Bitmap.createBitmap(
+                128, 128, android.graphics.Bitmap.Config.ARGB_8888);
+        android.graphics.Canvas canvas = new android.graphics.Canvas(bitmap);
+        drawable.setBounds(0, 0, 128, 128);
+        int[][] states = {
+                {android.R.attr.state_enabled},
+                {android.R.attr.state_enabled, android.R.attr.state_pressed},
+                {android.R.attr.state_enabled, android.R.attr.state_selected},
+                {android.R.attr.state_enabled, android.R.attr.state_focused},
+                {}
+        };
+        for (int[] state : states) {
+            drawable.setState(state);
+            bitmap.eraseColor(android.graphics.Color.TRANSPARENT);
+            drawable.draw(canvas);
+            require(android.graphics.Color.alpha(bitmap.getPixel(64, 64)) == 144 &&
+                    drawable.getOpacity() == android.graphics.PixelFormat.TRANSLUCENT,
+                    "overlay button remains translucent across states");
+        }
+        android.graphics.drawable.Drawable ordinary = ClassicUi.bevel(context, false);
+        ordinary.setBounds(0, 0, 128, 128);
+        bitmap.eraseColor(android.graphics.Color.TRANSPARENT);
+        ordinary.draw(canvas);
+        require(android.graphics.Color.alpha(bitmap.getPixel(64, 64)) == 255 &&
+                ordinary.getOpacity() == android.graphics.PixelFormat.OPAQUE,
+                "non-session classic panels remain opaque");
+        bitmap.recycle();
+        Log.i(TAG, "session overlay alpha and state probes passed");
     }
 
     private static void require(boolean value, String message) {

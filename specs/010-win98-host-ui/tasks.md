@@ -9,3 +9,5 @@
 - [x] T006 Verify stopped-state installation and disposable device checks.
 - [ ] T007 Verify UI and one Normal/DynRec copy smoke run with clean shutdown;
   record evidence without treating omitted acceptance gates as passed.
+- [ ] T008 Correct opaque session overlays (FR-009), check drawable states and
+  build; install after clean shutdown and verify translucency on the tablet.

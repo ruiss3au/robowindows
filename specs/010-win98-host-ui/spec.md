@@ -27,6 +27,10 @@
 - **FR-008:** Stop/Exit and Restart require user confirmation without forwarding
   dialog input to the guest. Normal overlay auto-hide, DynRec persistent stop and
   readiness controls, guest geometry and input capture contracts are preserved.
+- **FR-009:** Controls drawn over guest video use translucent panel and button
+  backgrounds, including confirmed readiness buttons. Labels and keyboard focus
+  remain readable; library/properties/dialog panels remain opaque. Do not resize
+  the guest or hide the persistent DynRec stop/readiness controls to achieve this.
 
 Acceptance includes dirty Cancel, save failure, repeated mode changes, two-copy
 target selection, clean preference persistence, crash recovery, disabled-state

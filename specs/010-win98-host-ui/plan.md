@@ -39,3 +39,11 @@ handoff; disposable CPU fixture services retain their separate existing path.
 The same legacy script also asserted removed audio/presenter log messages.
 Update it to schema-3 presentation counters and stream-open evidence. Its silent
 fixture deliberately stays prebuffering; it is not an audio-continuity test.
+
+The first real DynRec UI smoke exposed nearly opaque top and bottom overlays
+covering Windows. Apply a shared session-only translucent treatment to Normal
+controls and both DynRec bars, including button states. Keep text opaque, preserve
+touch targets and guest geometry, and retain opaque classic styling elsewhere.
+Add drawable alpha/state regression probes. Build without interrupting the active
+guest; install and visually verify only after confirmed clean Windows shutdown.
+Rollback affects overlay styling only, never machine state or emulator timing.

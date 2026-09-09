@@ -29,6 +29,29 @@ final class ClassicUi {
         return new Bevel(dp(c, 1), inset);
     }
 
+    /** Guest video remains visible; do not fade the whole view (including text). */
+    static void sessionOverlay(ViewGroup panel) {
+        panel.setBackgroundColor(0x50303030);
+        styleOverlayChildren(panel);
+    }
+
+    private static void styleOverlayChildren(ViewGroup group) {
+        for (int i = 0; i < group.getChildCount(); i++) {
+            View child = group.getChildAt(i);
+            if (child instanceof Button) {
+                Drawable background = bevel(child.getContext(), false);
+                background.setAlpha(144);
+                child.setBackground(background);
+            } else if (child instanceof TextView) {
+                TextView label = (TextView) child;
+                label.setTextColor(WHITE);
+                label.setShadowLayer(dp(child.getContext(), 1), 0, 0, INK);
+            } else if (child instanceof ViewGroup) {
+                styleOverlayChildren((ViewGroup) child);
+            }
+        }
+    }
+
     static Button button(Context c, String label, View.OnClickListener action) {
         Button b = new Button(c);
         b.setText(label);
@@ -82,31 +105,38 @@ final class ClassicUi {
         private final Paint paint = new Paint();
         private final int line;
         private final boolean inset;
+        private int alpha = 255;
         Bevel(int line, boolean inset) { this.line = Math.max(1, line); this.inset = inset; }
         @Override public boolean isStateful() { return true; }
         @Override protected boolean onStateChange(int[] state) { invalidateSelf(); return true; }
         private boolean has(int value) { for (int s : getState()) if (s == value) return true; return false; }
+        private void color(int color) {
+            paint.setColor(color);
+            paint.setAlpha(alpha);
+        }
         @Override public void draw(Canvas c) {
             Rect r = getBounds();
             boolean down = inset || has(android.R.attr.state_pressed) || has(android.R.attr.state_selected);
-            paint.setColor(down ? 0xffd6d6d6 : GRAY); c.drawRect(r, paint);
+            color(down ? 0xffd6d6d6 : GRAY); c.drawRect(r, paint);
             for (int i = 0; i < 2; i++) {
                 int d = i * line;
-                paint.setColor(down ? (i == 0 ? SHADOW : INK) : (i == 0 ? WHITE : 0xffdfdfdf));
+                color(down ? (i == 0 ? SHADOW : INK) : (i == 0 ? WHITE : 0xffdfdfdf));
                 c.drawRect(r.left+d, r.top+d, r.right-d, r.top+d+line, paint);
                 c.drawRect(r.left+d, r.top+d, r.left+d+line, r.bottom-d, paint);
-                paint.setColor(down ? WHITE : (i == 0 ? INK : SHADOW));
+                color(down ? WHITE : (i == 0 ? INK : SHADOW));
                 c.drawRect(r.left+d, r.bottom-d-line, r.right-d, r.bottom-d, paint);
                 c.drawRect(r.right-d-line, r.top+d, r.right-d, r.bottom-d, paint);
             }
             if (has(android.R.attr.state_focused)) {
+                // Focus is a narrow opaque outline, not an opaque button fill.
                 paint.setColor(NAVY); paint.setStyle(Paint.Style.STROKE); paint.setStrokeWidth(line);
                 c.drawRect(r.left+4*line, r.top+4*line, r.right-4*line, r.bottom-4*line, paint);
                 paint.setStyle(Paint.Style.FILL);
             }
         }
-        @Override public void setAlpha(int alpha) { paint.setAlpha(alpha); }
+        @Override public void setAlpha(int alpha) { this.alpha = Math.max(0, Math.min(255, alpha)); invalidateSelf(); }
+        @Override public int getAlpha() { return alpha; }
         @Override public void setColorFilter(ColorFilter filter) { paint.setColorFilter(filter); }
-        @Override public int getOpacity() { return PixelFormat.OPAQUE; }
+        @Override public int getOpacity() { return alpha == 255 ? PixelFormat.OPAQUE : PixelFormat.TRANSLUCENT; }
     }
 }
