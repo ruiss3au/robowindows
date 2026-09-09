@@ -98,3 +98,29 @@ are pending a clean guest shutdown; no running guest was stopped or reinstalled
 over. T007/T008 remain open, including clean DynRec selection persistence.
 Built correction APK SHA-256:
 `7064e74d883d45451a94c5cd1dc94d7e26ece361e1827a3fd89e0e7659ce3ff6`.
+
+Before installing that correction, the user confirmed shutting Windows down.
+Postflight on the DynRec process verified BIOS APM power-down, guest-requested
+shutdown and clean stop. There was no active-session preference, attempt journal
+or isolated child remaining. The library retained `DynRec (experimental) · 20k`
+and `Start DynRec` for the stopped copy, confirming real clean-shutdown selection
+persistence. Stable `incoming` still showed Normal and stopped. This supersedes
+the pending shutdown/persistence observations above, but does not establish
+unreported keyboard/mouse readiness or complete T007.
+
+The correction APK was then installed through
+`REQUIRE_SURFACE=1 scripts/test-sm-t500-core.sh` after its stopped-state preflight.
+The script passed, including the new session-overlay alpha/state pixel probes,
+unchanged opaque non-session styling, storage/input probes, disposable Normal
+surface presentation and clean unload. The real guest disks were not used by
+this test. This supersedes the pending installation/probe observation above;
+the actual guest-overlay visual check remains separate.
+
+The stopped copy was reopened through its retained `Start DynRec` action. The
+initial inspected telemetry identified configured/current DynRec; ignored local
+screenshots then verified both bars over the Windows desktop: top-row desktop
+icons and the bottom Windows taskbar/Start button remain visible through the
+panels, and taskbar content remains visible through the readiness buttons.
+Stop/readiness controls and guest geometry are retained. T008 is complete;
+the user still needs to confirm usability and shut down this visual-check
+session. This is not a new performance or audio acceptance result.
