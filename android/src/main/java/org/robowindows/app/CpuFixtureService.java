@@ -81,16 +81,25 @@ abstract class CpuFixtureService extends Service {
         try {
             String decoder = NativeHost.sessionDecoder();
             liveness = NativeHost.sessionLiveness();
+            DynamicLiveness proof = DynamicLiveness.parse(liveness);
             android.util.Log.i("RoboWindowsCpuFixture",
                     "timing mode=" + mode() + " suite=" +
                     (suite == null ? "legacy" : Integer.toHexString(suite.id)) + " " +
-                    DynamicLiveness.parse(liveness).residencySummary());
+                    proof.residencySummary());
             if (started) NativeHost.stopSession();
             started = false;
             String expectedDecoder = "dynamic".equals(mode()) ? "DynRec" : "Normal";
             if (!expectedDecoder.equals(decoder)) {
                 throw new IOException("CPU fixture selected " + decoder +
                         " instead of " + expectedDecoder);
+            }
+            if (suite == ExpandedCpuSuite.PAGEFAULT_PROGRESS) {
+                if (!proof.pageFaultPipelineSettled()) {
+                    throw new IOException("Page-fault progress diagnostics did not settle");
+                }
+                if ("dynamic".equals(mode()) && proof.pageFaultCoreEntries == 0) {
+                    throw new IOException("Page-fault progress produced no PageFaultCore evidence");
+                }
             }
             record = CpuFixtureFiles.readResult(run);
         } catch (IOException | RuntimeException failure) {

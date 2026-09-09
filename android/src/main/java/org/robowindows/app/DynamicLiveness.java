@@ -158,6 +158,11 @@ final class DynamicLiveness {
         return "DynRec".equals(decoder);
     }
 
+    boolean pageFaultPipelineSettled() {
+        return pageFaultEnqueued == pageFaultCompleted && pageFaultDepth == 0 &&
+                pageFaultCoreEntries == pageFaultCoreReturns && pageFaultWipes == 0;
+    }
+
     String residencySummary() {
         return "Configured " + decoder + " · Now " + currentDecoder + " · DynRec " +
                 dynRecSamples + " · PF " + pageFaultSamples + " · Normal " + normalSamples +

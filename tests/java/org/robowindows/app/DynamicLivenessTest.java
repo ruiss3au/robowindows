@@ -25,6 +25,13 @@ public final class DynamicLivenessTest {
                 proof.pageFaultCoreTotalUs == 34567 && proof.pageFaultCoreMaxUs == 12000 &&
                 proof.pageFaultCoreSlow10Ms == 2,
                 "page-fault core timing parsed");
+        require(!proof.pageFaultPipelineSettled(), "active page-fault pipeline rejected");
+        require(DynamicLiveness.parse(
+                "pfenq=20 pfret=20 pfdepth=0 pfwipe=0 pfcent=524400 pfcret=524400")
+                .pageFaultPipelineSettled(), "balanced page-fault pipeline accepted");
+        require(!DynamicLiveness.parse(
+                "pfenq=20 pfret=20 pfdepth=0 pfwipe=1 pfcent=524400 pfcret=524400")
+                .pageFaultPipelineSettled(), "page-fault queue wipe rejected");
         require(proof.exceptionPageFaultPrepared == 5 &&
                 proof.exceptionPageFaultDelivered == 4 &&
                 proof.exceptionPageFaultGateEntered == 3 &&

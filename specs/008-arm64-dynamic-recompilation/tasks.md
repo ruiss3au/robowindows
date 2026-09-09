@@ -125,11 +125,11 @@
   liveness parser tests, and run the disposable Normal/DynRec CPU gate before
   deciding whether another guarded Windows trial is justified (FR-042;
   scenario 27).
-- [ ] T042 Reproduce the Windows-only PageFaultCore call amplification in a
+- [x] T042 Reproduce the Windows-only PageFaultCore call amplification in a
   source-owned disposable workload with a deliberately long handler and nested
   fault progression. Compare reference, Normal and DynRec results plus bounded
   aggregates before changing the one-cycle PageFaultCore loop, queue recovery,
-  exception delivery, or DynRec execution (FR-033–038, FR-042).
+  exception delivery, or DynRec execution (FR-033–038, FR-042–043; scenario 28).
 
 T030–T034 implement FR-038 and are deferred to GPT Sol. See
 [coverage](expanded-cpu-coverage.md) and [handoff](sol-handoff.md).

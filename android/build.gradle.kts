@@ -141,7 +141,7 @@ tasks.named("preBuild").configure {
 
 object ExpandedCpuSuiteResourceNames {
     fun outputs(directory: Provider<Directory>) = listOf(
-        "strings", "fault_retry", "integer_flags", "stack_control",
+        "strings", "fault_retry", "pagefault_progress", "integer_flags", "stack_control",
         "paging_smc", "x87", "mixed_seeds"
     ).map { directory.map { dir -> dir.file("robowindows_x86_gate_$it.bin") } }
 }

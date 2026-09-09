@@ -10,6 +10,7 @@ an exhaustive x86 compatibility claim.
 | --- | --- | --- |
 | P0 | Strings | MOVS/STOS/LODS/CMPS/SCAS, byte/word/dword; applicable REP/REPE/REPNE; both directions; zero/one/multiple counts; 16/32-bit addressing and wrapping |
 | P0 | Fault/retry | Non-present source/destination and write protection; first/middle/last iteration; aligned and split-page operands; saved instruction/error, partial registers, completed memory and guards |
+| P0 | Page-fault progress | Deliberately long single handler, sixteen sequential handlers, and a four-level nested chain with bounded work at every level; exact entry/return order, completion and retry, plus separately sampled bounded host aggregates |
 | P1 | Integer/flags | ADD/ADC/SUB/SBB, logical operations, INC/DEC, shifts/rotates, multiply/divide, sign/zero extension; boundary operands, carry/overflow, divide traps |
 | P1 | Stack/control flow | PUSH/POP, near/far CALL/RET and branches, conditional branches/LOOP, interrupt/IRET; size overrides, stack boundaries, cycle-limited resumption and block linking |
 | P1 | Paging/SMC | Preserve INVLPG and nested-fault regressions; read-only/user/supervisor mappings, repeated invalidation, same/cross-page code modification and block re-entry |
@@ -30,7 +31,7 @@ Audit uncorrected sibling string helpers first; do not copy the STOSD fix blindl
 ## Oracle and protocol
 
 Protocol v4 assigns stable suite identifiers: `0x0101` strings, `0x0102`
-fault/retry, `0x0201` integer/flags, `0x0202` stack/control flow, `0x0203`
+fault/retry, `0x0103` page-fault progress, `0x0201` integer/flags, `0x0202` stack/control flow, `0x0203`
 paging/SMC, `0x0301` x87, and `0x0302` mixed fixed-seed programs. Each suite
 uses its own source-built image and fresh isolated process. A result is a
 52-byte little-endian record containing an eight-byte magic, protocol version,

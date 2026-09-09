@@ -263,6 +263,18 @@ MUST NOT include fault addresses, error codes, registers, memory, guest text,
 paths, or per-call records. This instrumentation MUST NOT change page-fault
 queue thresholds, exception flow, DynRec translation, caching, or linking.
 
+**FR-043 — Page-fault progress fixture:** Before changing PageFaultCore's
+one-cycle execution loop or page-fault recovery behavior, the expanded
+source-owned gate MUST add a stable suite that executes a deliberately long
+single fault handler, repeated sequential fault handlers, and a four-level
+nested fault chain with bounded work at every level. Each case MUST validate
+handler entry/return counts, nesting order, completion and the retried access.
+Reference, Normal and DynRec result records MUST match exactly. The device run
+MUST retain the FR-042 aggregates so PageFaultCore call amplification can be
+measured without guest addresses, contents, or per-call logs. A timeout,
+unbalanced queue, incomplete record, or wrong nesting result blocks any
+PageFaultCore or watchdog correction and another Windows DynRec trial.
+
 ## Success criteria
 
 - **SC-001 — isolation:** attempted starts with stable roles, aliased disks or
@@ -388,6 +400,13 @@ trial runs, then its bounded status distinguishes page-fault decoder entries,
 completed returns, cumulative/maximum duration and calls of at least 10 ms. A
 malformed or negative aggregate is rejected or clamped without exposing any
 guest-derived value, and legacy liveness records remain parseable.
+
+28. Given the page-fault progress suite, when its single, sequential and nested
+handler workloads run, then all bounded work completes and the original accesses
+retry in reference, Normal and DynRec with identical records. The target log
+reports balanced completed PageFaultCore calls and a zero final queue depth; its
+aggregate call count may characterize the current one-cycle amplification but
+is not encoded as a device-speed-dependent guest assertion.
 
 ## Out of Scope
 

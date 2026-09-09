@@ -29,6 +29,9 @@
 .equ PAGE_DIRECTORY, 0x1000
 .equ PAGE_TABLE, 0x2000
 .equ FAULT_PAGE, 0x30000
+.equ PROGRESS_PAGE_2, FAULT_PAGE + 0x2000
+.equ PROGRESS_PAGE_3, FAULT_PAGE + 0x4000
+.equ PROGRESS_PAGE_4, FAULT_PAGE + 0x6000
 
 .if CASE_COUNT == 32
 .equ EXPECTED_LO, 0xffffffff
@@ -109,6 +112,8 @@ pm32:
     call suite_strings
 .elseif SUITE_ID == 0x0102
     call suite_fault_retry
+.elseif SUITE_ID == 0x0103
+    call suite_pagefault_progress
 .elseif SUITE_ID == 0x0203
     call suite_paging_smc
 .else
@@ -127,7 +132,11 @@ setup_idt:
     mov eax, offset invalid_handler
     mov edi, IDT + 6 * 8
     call install_gate
+.if SUITE_ID == 0x0103
+    mov eax, offset progress_page_fault_handler
+.else
     mov eax, offset page_fault_handler
+.endif
     mov edi, IDT + 14 * 8
     call install_gate
     mov eax, offset interrupt_handler
@@ -1144,6 +1153,126 @@ fault_scasd_last:
     PASS_CASE 8
     ret
 .endif
+.if SUITE_ID == 0x0103
+/*
+ * PageFaultCore progress characterization. The result asserts only x86-visible
+ * behavior; device-dependent host call and duration aggregates remain in the
+ * bounded liveness record.
+ */
+suite_pagefault_progress:
+    call enable_identity_paging
+
+    /* 1: one deliberately long handler, followed by successful retry. */
+    BEGIN_CASE 1
+    mov dword ptr [FAULT_PAGE], 0x13579bdf
+    mov dword ptr [progress_mode], 1
+    mov dword ptr [progress_delay_iterations], 262144
+    call reset_progress_counts
+    mov dword ptr [progress_expected_eip], offset progress_single_fault
+    mov eax, FAULT_PAGE
+    xor edx, edx
+    call map_page_flags
+    mov dword ptr [progress_saved_esp], esp
+    mov esp, FAULT_PAGE
+    jmp progress_single_fault
+progress_single_fault:
+    pop ebx
+    mov esp, dword ptr [progress_saved_esp]
+    REQUIRE_EQ ebx, 0x13579bdf
+    mov eax, 1
+    call require_progress_counts
+    PASS_CASE 1
+
+    /* 2: repeated sequential handlers must each finish before the next fault. */
+    BEGIN_CASE 2
+    mov dword ptr [progress_mode], 2
+    mov dword ptr [progress_delay_iterations], 8192
+    call reset_progress_counts
+    mov dword ptr [progress_expected_eip], offset progress_sequential_fault
+    mov esi, 16
+progress_sequential_loop:
+    mov eax, FAULT_PAGE
+    xor edx, edx
+    call map_page_flags
+    mov esp, FAULT_PAGE
+    jmp progress_sequential_fault
+progress_sequential_fault:
+    pop ebx
+    mov esp, dword ptr [progress_saved_esp]
+    cmp ebx, 0x13579bdf
+    jne finish_pm
+    dec esi
+    jnz progress_sequential_loop
+    mov eax, 16
+    call require_progress_counts
+    PASS_CASE 2
+
+    /* 3: four handlers enter in order and return in reverse order. */
+    BEGIN_CASE 3
+    mov dword ptr [FAULT_PAGE], 0x10203040
+    mov dword ptr [PROGRESS_PAGE_2], 0x21314151
+    mov dword ptr [PROGRESS_PAGE_3], 0x32425262
+    mov dword ptr [PROGRESS_PAGE_4], 0x43536373
+    mov dword ptr [progress_mode], 3
+    mov dword ptr [progress_delay_iterations], 32768
+    call reset_progress_counts
+    mov eax, FAULT_PAGE
+    xor edx, edx
+    call map_page_flags
+    mov eax, PROGRESS_PAGE_2
+    call map_page_flags
+    mov eax, PROGRESS_PAGE_3
+    call map_page_flags
+    mov eax, PROGRESS_PAGE_4
+    call map_page_flags
+    mov esp, FAULT_PAGE
+    jmp progress_nested_fault_1
+progress_nested_fault_1:
+    pop ebx
+    mov esp, dword ptr [progress_saved_esp]
+    REQUIRE_EQ ebx, 0x10203040
+    mov eax, 4
+    call require_progress_counts
+    PASS_CASE 3
+    ret
+
+reset_progress_counts:
+    mov dword ptr [progress_entries], 0
+    mov dword ptr [progress_returns], 0
+    mov dword ptr [progress_work], 0
+    mov dword ptr [progress_bad], 0
+    ret
+
+/* EAX is the exact expected entry, return and bounded-work count. */
+require_progress_counts:
+    cmp dword ptr [progress_entries], eax
+    jne finish_pm
+    cmp dword ptr [progress_returns], eax
+    jne finish_pm
+    cmp dword ptr [progress_work], eax
+    jne finish_pm
+    cmp dword ptr [progress_bad], 0
+    jne finish_pm
+    ret
+
+/* Deliberate guest work: bounded, deterministic, and free of host timing. */
+progress_delay:
+    push eax
+    push ecx
+    xor eax, eax
+    mov ecx, dword ptr [progress_delay_iterations]
+progress_delay_loop:
+    inc eax
+    loop progress_delay_loop
+    cmp eax, dword ptr [progress_delay_iterations]
+    je progress_delay_complete
+    mov dword ptr [progress_bad], 1
+progress_delay_complete:
+    inc dword ptr [progress_work]
+    pop ecx
+    pop eax
+    ret
+.endif
 .if SUITE_ID == 0x0203
 suite_paging_smc:
     call enable_identity_paging
@@ -1464,6 +1593,126 @@ page_fault_return:
     add esp, 4
     iretd
 
+.if SUITE_ID == 0x0103
+progress_page_fault_handler:
+    pushad
+    mov eax, cr2
+    cmp dword ptr [esp + 32], 0
+    jne progress_fault_bad
+    cmp dword ptr [progress_mode], 3
+    je progress_nested_dispatch
+    cmp eax, FAULT_PAGE
+    jne progress_fault_bad
+    mov ebx, dword ptr [progress_expected_eip]
+    cmp dword ptr [esp + 36], ebx
+    jne progress_fault_bad
+    cmp dword ptr [progress_entries], 0
+    jl progress_fault_bad
+    inc dword ptr [progress_entries]
+    call progress_delay
+    mov edx, 3
+    call map_page_flags
+    inc dword ptr [progress_returns]
+    jmp progress_fault_return
+
+progress_nested_dispatch:
+    mov ebx, dword ptr [progress_entries]
+    cmp ebx, 0
+    je progress_fault_level_1
+    cmp ebx, 1
+    je progress_fault_level_2
+    cmp ebx, 2
+    je progress_fault_level_3
+    cmp ebx, 3
+    je progress_fault_level_4
+    jmp progress_fault_bad
+
+progress_fault_level_1:
+    cmp eax, FAULT_PAGE
+    jne progress_fault_bad
+    cmp dword ptr [esp + 36], offset progress_nested_fault_1
+    jne progress_fault_bad
+    inc dword ptr [progress_entries]
+    call progress_delay
+    mov ebp, esp
+    mov esp, PROGRESS_PAGE_2
+progress_nested_fault_2:
+    pop ebx
+    mov esp, ebp
+    cmp ebx, 0x21314151
+    jne progress_fault_bad
+    cmp dword ptr [progress_returns], 3
+    jne progress_fault_bad
+    mov eax, FAULT_PAGE
+    jmp progress_fault_complete
+
+progress_fault_level_2:
+    cmp eax, PROGRESS_PAGE_2
+    jne progress_fault_bad
+    cmp dword ptr [esp + 36], offset progress_nested_fault_2
+    jne progress_fault_bad
+    inc dword ptr [progress_entries]
+    call progress_delay
+    mov ebp, esp
+    mov esp, PROGRESS_PAGE_3
+progress_nested_fault_3:
+    pop ebx
+    mov esp, ebp
+    cmp ebx, 0x32425262
+    jne progress_fault_bad
+    cmp dword ptr [progress_returns], 2
+    jne progress_fault_bad
+    mov eax, PROGRESS_PAGE_2
+    jmp progress_fault_complete
+
+progress_fault_level_3:
+    cmp eax, PROGRESS_PAGE_3
+    jne progress_fault_bad
+    cmp dword ptr [esp + 36], offset progress_nested_fault_3
+    jne progress_fault_bad
+    inc dword ptr [progress_entries]
+    call progress_delay
+    mov ebp, esp
+    mov esp, PROGRESS_PAGE_4
+progress_nested_fault_4:
+    pop ebx
+    mov esp, ebp
+    cmp ebx, 0x43536373
+    jne progress_fault_bad
+    cmp dword ptr [progress_returns], 1
+    jne progress_fault_bad
+    mov eax, PROGRESS_PAGE_3
+    jmp progress_fault_complete
+
+progress_fault_level_4:
+    cmp eax, PROGRESS_PAGE_4
+    jne progress_fault_bad
+    cmp dword ptr [esp + 36], offset progress_nested_fault_4
+    jne progress_fault_bad
+    inc dword ptr [progress_entries]
+    call progress_delay
+    cmp dword ptr [progress_returns], 0
+    jne progress_fault_bad
+    mov eax, PROGRESS_PAGE_4
+
+progress_fault_complete:
+    mov edx, 3
+    call map_page_flags
+    inc dword ptr [progress_returns]
+    jmp progress_fault_return
+
+/* Map only the faulting page so a bad fixture unwinds and records failure. */
+progress_fault_bad:
+    mov dword ptr [progress_bad], 1
+    mov eax, cr2
+    mov edx, 3
+    call map_page_flags
+progress_fault_return:
+    popad
+    add esp, 4
+    iretd
+.endif
+
 finish_pm:
     cli
     mov eax, cr0
@@ -1540,6 +1789,16 @@ fault_expected_edi: .long 0
 fault_expected_eax: .long 0
 fault_assertion_base: .word 2090
 fault_map_flags: .long 3
+.if SUITE_ID == 0x0103
+progress_mode: .long 0
+progress_delay_iterations: .long 0
+progress_expected_eip: .long 0
+progress_saved_esp: .long 0
+progress_entries: .long 0
+progress_returns: .long 0
+progress_work: .long 0
+progress_bad: .long 0
+.endif
 ring0_esp: .long 0
 x87_six: .long 6
 x87_seven: .long 7

@@ -40,7 +40,12 @@ Patch `0003-dynrec-stosd-precise-page-fault.patch` limits its change to the
 after publishing completed REP progress, and leaves sibling string helpers for
 the expanded-suite audit rather than assuming the same correction applies.
 
-Protocol-v4 images split the expanded gate into seven stable suites. The 32
+Protocol-v4 images split the expanded gate into eight stable suites. The
+page-fault progress suite adds a deliberately long handler, sixteen sequential
+handlers, and a four-level nested chain with bounded work at every level. Its
+three result bits assert only exact guest entry/return order, completion, and
+retry behavior; device-dependent PageFaultCore call and duration aggregates are
+reported separately and are never encoded as guest expectations. The 32
 mixed cases use the literal seeds and `MIXED_CASE` rule in
 `robowindows_x86_gate.S`; each performs reversible arithmetic, a call/return,
 a bounded REP copy, a handled invalid-opcode fault, and self-modifying-code

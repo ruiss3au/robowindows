@@ -113,6 +113,7 @@ final class CpuFixtureFiles {
         switch (suite) {
             case STRINGS: return R.raw.robowindows_x86_gate_strings;
             case FAULT_RETRY: return R.raw.robowindows_x86_gate_fault_retry;
+            case PAGEFAULT_PROGRESS: return R.raw.robowindows_x86_gate_pagefault_progress;
             case INTEGER_FLAGS: return R.raw.robowindows_x86_gate_integer_flags;
             case STACK_CONTROL: return R.raw.robowindows_x86_gate_stack_control;
             case PAGING_SMC: return R.raw.robowindows_x86_gate_paging_smc;

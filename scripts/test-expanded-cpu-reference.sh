@@ -18,7 +18,7 @@ mkdir -p -- "$images" "$records" "$classes"
 "$repo_dir/scripts/build-expanded-cpu-fixtures.sh" "$images" >/dev/null
 
 pids=()
-names=(strings fault_retry integer_flags stack_control paging_smc x87 mixed_seeds)
+names=(strings fault_retry pagefault_progress integer_flags stack_control paging_smc x87 mixed_seeds)
 for name in "${names[@]}"; do
   cp -- "$images/robowindows_x86_gate_${name}.bin" "$work_dir/${name}.run.bin"
   timeout 2 qemu-system-i386 -display none -serial none -monitor none \
@@ -41,6 +41,7 @@ javac -d "$classes" \
   "$repo_dir/tests/java/org/robowindows/app/ExpandedCpuReferenceCheck.java"
 java -cp "$classes" org.robowindows.app.ExpandedCpuReferenceCheck \
   "$records/strings.record" "$records/fault_retry.record" \
+  "$records/pagefault_progress.record" \
   "$records/integer_flags.record" "$records/stack_control.record" \
   "$records/paging_smc.record" "$records/x87.record" \
   "$records/mixed_seeds.record"

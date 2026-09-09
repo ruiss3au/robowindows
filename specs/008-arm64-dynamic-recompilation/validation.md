@@ -802,3 +802,41 @@ desktop, and the user shut Windows down through BIOS APM. The core logged
 inspection showed both cards at `Start`, only the main app process, zero dynamic
 attempt journals and zero active-session markers. Stable `incoming` was never
 opened.
+
+## Source-owned PageFaultCore progress reproduction — 2026-09-09
+
+Protocol v4 now includes stable suite `0x0103`, with three cases: one
+deliberately long handler, sixteen sequential handlers, and a four-level nested
+handler chain with bounded work at every level. Each faulting stack read begins
+a separate translated block and uses a mapped guard page for exception state.
+The 52-byte result asserts only exact guest entry/return order, completed work
+and successful instruction retry. Device-dependent call counts and durations
+remain outside the guest oracle in the bounded liveness record. The source-built
+stage is 2,058 bytes with SHA-256
+`1070a9af59e747cec03a12f7225f5e71892d07eb8375ccdb37f6622354bec043`;
+the disposable image SHA-256 is
+`745f2005c5649cfa9d53fd84f919a8251c91f4ef5f8ef277c30580e28e8387bc`.
+
+The pinned QEMU 7.2.22 oracle accepted all three cases, and the complete host
+gate accepted all eight protocol-v4 suites. On the SM-T500, Normal produced the
+same complete `0x0103` result with 21 delivered and entered guest page faults,
+zero PageFaultCore calls and no queue activity. DynRec produced the identical
+result with 21 enqueues and 21 completed returns, final depth zero, high-water
+four and zero wipes. Those 21 guest faults required 1,049,545 PageFaultCore
+entries and the same number of completed returns. Cumulative PageFaultCore time
+was 444,155 microseconds, the maximum call was 210,125 microseconds, and three
+calls lasted at least 10 milliseconds.
+
+The complete legacy-plus-eight-suite Normal/DynRec gate then passed. Postflight
+inspection found no dynamic guest or CPU-fixture child, no active-session marker
+and no dynamic-attempt journal. The installed APK and host artifact both had
+SHA-256 `d6b18109ab06aff1e3a1b4c6b2c056397d9a23dd020d19a2895cf17fae6a8cce`.
+No machine disk was opened and stable `incoming` remained untouched.
+
+This source-owned reproduction satisfies T042 and isolates the amplification to
+the existing fixed one-cycle PageFaultCore loop: a bounded handler workload can
+consume more than a million host decoder calls while preserving exact guest
+correctness and fully balanced nested fault state. It does not justify a queue
+wipe or another Windows trial. The next execution change must be evaluated
+against this suite and retain the same reference/Normal/DynRec record, zero
+wipes, bounded nesting and complete return balance.

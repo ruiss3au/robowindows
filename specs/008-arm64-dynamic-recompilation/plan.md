@@ -94,6 +94,10 @@ fallback. Keep migration tests for stable profiles and per-machine clean state.
    duration and fixed 10 ms slow-call aggregates. Carry them through the same
    bounded liveness record; do not collect per-call or guest-derived data and do
    not alter execution behavior until a reproducible regression identifies it.
+   Reproduce call amplification in a stable expanded-gate suite with long,
+   sequential and four-level nested fault handlers. Keep device timing out of
+   the guest result; use exact functional records for correctness and the
+   bounded host aggregate only to characterize the execution policy.
 7. **Minimal correction** — isolate a proven fix under `patches/`; do not change
    guest media, UI ownership, input, audio resources, or stable profiles.
 8. **Experimental UI** — offer one named `Dynamic (experimental)` option only

@@ -7,6 +7,7 @@ import java.util.Map;
 enum ExpandedCpuSuite {
     STRINGS(0x0101, "strings", 30),
     FAULT_RETRY(0x0102, "fault/retry", 8),
+    PAGEFAULT_PROGRESS(0x0103, "page-fault progress", 3),
     INTEGER_FLAGS(0x0201, "integer/flags", 10),
     STACK_CONTROL(0x0202, "stack/control flow", 8),
     PAGING_SMC(0x0203, "paging/SMC", 8),
