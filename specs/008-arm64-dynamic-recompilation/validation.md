@@ -699,3 +699,28 @@ The host suite passes silent-runner, responsive-but-stalled, continuously
 advancing, pause/resume and restart-counter cases. A device fault-injection run
 is still required before the full hang/teardown portions of T001 and T013 can be
 closed.
+
+## Same-Activity recovery rejection — 2026-09-09
+
+An authorized fixed-20k benchmark experiment had to be ended with `Stop trial`
+after its full-window GDI loop stalled guest progress. The isolated runner ended
+and the experimental copy was correctly marked `Needs disk check`, but pressing
+that action immediately reported `This machine is not eligible for recovery
+boot`. The stable `incoming` machine was not started.
+
+The durable attempt was in `needs-check`; the rejection occurred because the
+same in-memory machine profile still selected Dynamic. Startup-time recovery
+wrongly required a pre-restored Normal selection even though FR-024 requires the
+recovery action itself to enter the recorded Normal fallback. T040 covers this
+same-Activity path. No recovery or disk-health claim is recorded until a fixed
+build boots the copy with `core=normal`, Windows performs its disk check, and the
+guest shuts down normally.
+
+The corrected build's app-private persistence probe passed the same-Activity
+Dynamic-selection recovery case. The real `incoming - copy` then entered a
+Normal recovery boot, reached the Windows desktop with no isolated DynRec process,
+and the user shut Windows down normally. Device inspection found no attempt
+journal or active-session marker; both `incoming` and `incoming - copy` showed
+`Start`. Stable `incoming` was not opened. A future forced-stop fixture still
+needs to exercise the exact real-card action without an intervening Activity
+restart before T040 is marked complete.

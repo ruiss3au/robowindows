@@ -318,15 +318,21 @@ final class MachineStore {
     /** Explicit normal-core recovery boot for a user-approved quarantined copy. */
     synchronized MachineProfile prepareRecoveryStart(MachineProfile selected) throws IOException {
         MachineProfile current = requireCurrent(selected);
-        if (!current.isExperimental() || current.isDynamicSelected() || hasInterruptedSession()) {
+        if (!current.isExperimental() || hasInterruptedSession()) {
             throw new IOException("This machine is not eligible for recovery boot");
         }
         DynamicAttempt attempt = DynamicAttempt.read(dynamicAttemptFile(current));
-        if (!DynamicAttempt.NEEDS_CHECK.equals(attempt.state) || !current.id.equals(attempt.machineId)) {
+        if (!DynamicAttempt.NEEDS_CHECK.equals(attempt.state) ||
+                !current.id.equals(attempt.machineId) ||
+                current.configurationGeneration != attempt.generation) {
             throw new IOException("This machine does not need recovery boot");
         }
         validateWritableOwnership(current);
-        return current;
+        MachineProfile fallback = normalFallbackProfile(current, attempt.normalFallback);
+        writeProfileLaunchConfig(fallback,
+                isWindowsInstaller(fallback) && bootsInstaller(fallback));
+        if (current.isDynamicSelected()) replaceProfile(fallback);
+        return fallback;
     }
 
     /** Clears quarantine only after guest shutdown and normal native unload. */

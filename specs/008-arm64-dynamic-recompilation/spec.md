@@ -126,7 +126,10 @@ or being trapped in a crash loop.
   rejects the build/profile and requires diagnosis before another guest trial.
 - **FR-024**: For a quarantined experimental copy eligible for the debug recovery
   route, pressing `Needs disk check` MUST immediately start a normal-core recovery
-  session. RoboWindows MUST not replace that action with an informational dialog.
+  session, including when `Stop trial` left Dynamic as the saved execution
+  preference in the still-running Activity. Recovery MUST derive and persist the
+  attempt's recorded Normal fallback before native handoff. RoboWindows MUST not
+  replace that action with an informational dialog.
   After a verified clean recovery shutdown, both the card warning and any
   quarantine banner MUST disappear in the same return to the machine list.
 - **FR-025**: Before another Windows dynamic trial, RoboWindows MUST run a
@@ -302,9 +305,11 @@ clean.
    then it uses a fresh emulator process and its original normal configuration.
 10. Given a normally shut-down experimental session, when Normal is selected,
     then the saved normal settings are selected without starting a guest.
-11. Given an eligible quarantined experimental copy, when `Needs disk check` is
-    pressed, then Windows boots with the normal core so its disk check can run;
-    a normal Windows shutdown clears quarantine and every other exit retains it.
+11. Given an eligible quarantined experimental copy, including immediately after
+    `Stop trial` while its saved preference is Dynamic, when `Needs disk check` is
+    pressed, then Windows boots with the attempt's recorded normal fallback so its
+    disk check can run; a normal Windows shutdown clears quarantine and every
+    other exit retains it.
 12. Given an isolated dynamic session, when keyboard, pointer, touch, pause,
     focus, restart, or input-cancel events occur, then only the child runner
     receives them, and loss of that bridge fails the trial visibly.

@@ -195,6 +195,10 @@ final class DebugSelfTest {
             require(DynamicReadiness.complete(running.readinessMask),
                     "explicit dynamic readiness is journaled");
             isolated.quarantineDynamicAttempt(running);
+            MachineProfile immediateRecovery = isolated.prepareRecoveryStart(dynamic);
+            require(!immediateRecovery.isDynamicSelected() &&
+                    readText(new File(immediateRecovery.launchPath)).contains("core=normal"),
+                    "same-activity stop trial restores normal recovery fallback");
             require(isolated.recoverDynamicAttempts(), "unfinished dynamic handoff is recovered");
             MachineProfile dynamicRecovered = isolated.load().get(1);
             require(!dynamicRecovered.isDynamicSelected() &&

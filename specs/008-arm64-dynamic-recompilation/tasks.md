@@ -116,6 +116,10 @@
   progress, excluding pause intervals; quarantine visibly, request orderly
   teardown, and validate both host logic and isolated-process device behavior
   (FR-041; scenario 26).
+- [ ] T040 Reproduce same-Activity `Stop trial` with Dynamic still selected,
+  make `Needs disk check` atomically restore the journaled Normal fallback before
+  native handoff, and device-verify that recovery boots without restarting the
+  app while every non-clean exit remains quarantined (FR-024; scenario 11).
 
 T030–T034 implement FR-038 and are deferred to GPT Sol. See
 [coverage](expanded-cpu-coverage.md) and [handoff](sol-handoff.md).
