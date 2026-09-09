@@ -136,6 +136,11 @@
   require exact `0x0103` parity, balanced depth-four completion, at least 16-fold
   fewer PageFaultCore calls, at least three-fold lower cumulative duration, and
   a maximum inclusive call below 50 ms (FR-044; scenario 29).
+- [x] T044 Run one user-observed fixed-20k startup on `incoming - copy` after
+  T043. Require responsive Windows startup, DynRec residency, settled fault
+  depth with no wipe/double fault/reset, viable schema-3 presentation and audio
+  queues, and an in-guest clean shutdown. Stop and quarantine on any hang or
+  guest failure; do not start the benchmark or open stable `incoming`.
 
 T030–T034 implement FR-038 and are deferred to GPT Sol. See
 [coverage](expanded-cpu-coverage.md) and [handoff](sol-handoff.md).

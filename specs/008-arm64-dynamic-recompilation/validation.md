@@ -880,3 +880,38 @@ SHA-256 `25a0e64ff3872b3ead65d491dfd0559213559ab4e3fb4d198e785592f7abe5ca`.
 No machine disk was opened and stable `incoming` remained untouched. T043 is
 complete; this result permits a separately guarded experimental-copy validation
 but is not itself Windows or audio evidence.
+
+## Post-slice Windows and AoE2 trial — 2026-09-09
+
+With the tablet unlocked and the user observing it, a preflight found no guest
+or CPU-fixture child, active-session marker, or dynamic-attempt journal. The
+installed APK matched the T043 artifact. The debug-only allowlisted `fixed-20k`
+entry point then opened only `incoming - copy` with the balanced-100-ms timing
+policy; no benchmark was started and stable `incoming` remained untouched.
+
+Windows reached a responsive desktop and the user played AoE2. Their direct
+assessment was that sound was excellent while graphics were somewhat laggy.
+DynRec residency continued throughout. The final bounded residency sample
+reported 341 fault enqueues and 341 completed returns, depth zero with a
+high-water of one, no wipe or recovery, and 47,124 balanced PageFaultCore
+entries/returns. PageFaultCore cumulative time was 256,896 microseconds, its
+maximum inclusive call was 222 microseconds, and no call reached 10 ms. No
+double fault or guest reset was observed. This confirms that the earlier
+sustained PageFaultCore residency did not recur under this Windows/AoE2 use.
+
+Schema-3 telemetry presented 15–16 frames per second throughout the observed
+intervals. Settled intervals held the audio queue near its 100-ms target and
+reported zero underruns, missing frames, stream errors, or deadline
+resynchronizations. Startup, resolution changes, and a heavier AoE2 interval
+did produce transient queue depletion, missing frames, and bounded deadline
+resynchronizations before recovery. The user's excellent-audio assessment is
+therefore recorded as subjective evidence, not as a zero-underrun quality-gate
+pass. The reported graphics lag likewise keeps the matched benchmark and
+three-run performance gates open.
+
+The user shut Windows down through the guest. The core logged `Power down by
+BIOS APM requested`, `guest requested shutdown`, and `guest stopped cleanly`.
+Postflight found no isolated child, active-session marker, or dynamic-attempt
+journal. The attempt closed without quarantine. T044 is complete; this single
+guarded trial does not satisfy the ten-cycle, matched three-run, pause/resume,
+or thermal gates and makes no promotion claim.
