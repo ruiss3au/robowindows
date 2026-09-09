@@ -58,6 +58,7 @@ final class DynamicTrialClient {
         data.putString(DynamicTrialProtocol.MACHINE_ID, attempt.machineId);
         data.putString(DynamicTrialProtocol.ATTEMPT_ID, attempt.attemptId);
         data.putLong(DynamicTrialProtocol.GENERATION, attempt.generation);
+        data.putString(DynamicTrialProtocol.DYNAMIC_CYCLE_POLICY, attempt.dynamicCyclePolicy);
         data.putString(DynamicTrialProtocol.LAUNCH_PATH, profile.launchPath);
         data.putString(DynamicTrialProtocol.FILES_PATH, context.getFilesDir().getPath());
         data.putParcelable(DynamicTrialProtocol.SURFACE_VALUE, surface);

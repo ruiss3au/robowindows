@@ -1,0 +1,40 @@
+--- a/src/cpu/paging.cpp
++++ b/src/cpu/paging.cpp
+@@ -1112,12 +1112,13 @@
+ 					}
+ 				}
+ 				// check if actually failing the write-protected check
+-				if (writing && USERWRITE_PROHIBITED) priv_check=3;
++				if (writing && (USERWRITE_PROHIBITED || CPU_HAS_WP_FLAG)) priv_check=3;
+ 			}
+ 			if (priv_check==3) {
+ 				LOG(LOG_PAGING,LOG_NORMAL)("Page access denied: cpl=%i, %x:%x:%x:%x",
+ 					cpu.cpl,entry.block.us,table.block.us,entry.block.wr,table.block.wr);
+-				PAGING_PageFault(lin_addr,(table.block.base<<12)+(lin_page & 0x3ff)*4,0x05 | (writing?0x02:0x00));
++				PAGING_PageFault(lin_addr,(table.block.base<<12)+(lin_page & 0x3ff)*4,
++					0x01 | (writing?0x02:0x00) | (USERWRITE_PROHIBITED?0x04:0x00));
+ 				priv_check=0;
+ 			}
+ 
+@@ -1173,14 +1174,17 @@
+ 			X86PageEntry entry;
+ 			if (!InitPageCheckPresence_CheckOnly(lin_addr,writing,table,entry)) return false;
+ 
+-			if (!USERWRITE_PROHIBITED) return true;
++			if (!USERWRITE_PROHIBITED && !CPU_HAS_WP_FLAG) return true;
+ 
+-			if (InitPage_CheckUseraccess(entry.block.us,table.block.us) ||
+-					(((entry.block.wr==0) || (table.block.wr==0)) && writing)) {
++			if ((USERWRITE_PROHIBITED &&
++					InitPage_CheckUseraccess(entry.block.us,table.block.us)) ||
++					(((entry.block.wr==0) || (table.block.wr==0)) && writing &&
++					 (USERWRITE_PROHIBITED || CPU_HAS_WP_FLAG))) {
+ 				LOG(LOG_PAGING,LOG_NORMAL)("Page access denied: cpl=%i, %x:%x:%x:%x",
+ 					cpu.cpl,entry.block.us,table.block.us,entry.block.wr,table.block.wr);
+ 				paging.cr2=lin_addr;
+-				CPU_PrepareException(EXCEPTION_PF, 0x05 | (writing?0x02:0x00));
++				CPU_PrepareException(EXCEPTION_PF,
++					0x01 | (writing?0x02:0x00) | (USERWRITE_PROHIBITED?0x04:0x00));
+ 				LOG(LOG_PAGING,LOG_NORMAL)("PageFault at %X type [%x] PREPARE",lin_addr,cpu.exception.error);
+ 				//LOG(LOG_PAGING,LOG_NORMAL)("    EAX:%04X ECX:%04X EDX:%04X EBX:%04X",reg_eax,reg_ecx,reg_edx,reg_ebx);
+ 				//LOG(LOG_PAGING,LOG_NORMAL)("    CS:%04X EIP:%08X SS:%04x SP:%08X",SegValue(cs),reg_eip,SegValue(ss),reg_esp);

@@ -7,6 +7,7 @@ trap 'rm -rf -- "$classes_dir"' EXIT
 
 javac -d "$classes_dir" \
   "$repo_dir/android/src/main/java/org/robowindows/app/WindowsInstallMedia.java" \
+  "$repo_dir/android/src/main/java/org/robowindows/app/DynamicCyclePolicy.java" \
   "$repo_dir/android/src/main/java/org/robowindows/app/LaunchConfig.java" \
   "$repo_dir/tests/java/org/robowindows/app/LaunchConfigTest.java"
 java -cp "$classes_dir" org.robowindows.app.LaunchConfigTest
@@ -31,7 +32,35 @@ javac -d "$classes_dir" \
   "$repo_dir/tests/java/org/robowindows/app/DynamicLivenessTest.java"
 java -cp "$classes_dir" org.robowindows.app.DynamicLivenessTest
 
+javac -d "$classes_dir" \
+  "$repo_dir/android/src/main/java/org/robowindows/app/DynamicReadiness.java" \
+  "$repo_dir/tests/java/org/robowindows/app/DynamicReadinessTest.java"
+java -cp "$classes_dir" org.robowindows.app.DynamicReadinessTest
+
+javac -d "$classes_dir" \
+  "$repo_dir/android/src/main/java/org/robowindows/app/CpuFixtureResult.java" \
+  "$repo_dir/tests/java/org/robowindows/app/CpuFixtureResultTest.java"
+java -cp "$classes_dir" org.robowindows.app.CpuFixtureResultTest
+
+javac -d "$classes_dir" \
+  "$repo_dir/android/src/main/java/org/robowindows/app/ExpandedCpuSuite.java" \
+  "$repo_dir/android/src/main/java/org/robowindows/app/ExpandedCpuResult.java" \
+  "$repo_dir/android/src/main/java/org/robowindows/app/ExpandedCpuReport.java" \
+  "$repo_dir/tests/java/org/robowindows/app/ExpandedCpuResultTest.java"
+java -cp "$classes_dir" org.robowindows.app.ExpandedCpuResultTest
+
+"$repo_dir/scripts/test-expanded-cpu-reference.sh"
+
+fixture_image="$classes_dir/robowindows-cpu-v3.bin"
+"$repo_dir/scripts/build-cpu-fixture.sh" "$fixture_image"
+test "$(wc -c <"$fixture_image")" -eq 1474560
+test "$(od -An -tx1 -j510 -N2 "$fixture_image" | tr -d ' ')" = "55aa"
+test "$(od -An -tx1 -j512 -N4 "$fixture_image" | tr -d ' ')" != "00000000"
+test "$(od -An -tx1 -j8704 -N22 "$fixture_image" | tr -d ' \n')" = \
+  "00000000000000000000000000000000000000000000"
+
 "$repo_dir/tests/scripts/check-experimental-fat-test.sh"
+bash "$repo_dir/tests/scripts/check-stosd-helper-test.sh"
 
 g++ -std=c++17 -Wall -Wextra -Werror \
   -I"$repo_dir/android/src/main/cpp" \

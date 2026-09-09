@@ -75,10 +75,42 @@ while read -r name url commit extra; do
     continue
   fi
   patch_file=$repo_root/patches/$name/0001-preserve-conf-on-guest-reboot.patch
+  set -- "$patch_file"
+  if [ "$name" = dosbox-pure ]; then
+    set -- "$@" "$repo_root/patches/$name/0002-dynrec-consume-invlpg-address.patch"
+    set -- "$@" "$repo_root/patches/$name/0003-dynrec-stosd-precise-page-fault.patch"
+    set -- "$@" "$repo_root/patches/$name/0004-dynrec-precise-string-page-faults.patch"
+    set -- "$@" "$repo_root/patches/$name/0005-dynrec-honor-supervisor-write-protect.patch"
+  fi
   if [ -n "$(git -C "$target" status --porcelain --untracked-files=normal)" ]; then
+    expected_patch_files=dosbox_pure_libretro.cpp
+    if [ "$name" = dosbox-pure ]; then
+      expected_patch_files='dosbox_pure_libretro.cpp
+src/cpu/core_dynrec/decoder_opcodes.h
+src/cpu/core_dynrec/operators.h
+src/cpu/cpu.cpp
+src/cpu/paging.cpp
+src/dosbox.cpp'
+    fi
+    audit_dir=$(mktemp -d)
+    forward_ok=1
+    # Reconstruct the expected tree from pristine HEAD and apply each patch in
+    # order. This remains valid when a later patch intentionally overlaps an
+    # earlier one, unlike one combined reverse-check transaction.
+    if ! git -C "$target" archive HEAD $expected_patch_files | tar -x -C "$audit_dir"; then
+      forward_ok=0
+    else
+      for expected_patch in "$@"; do
+        patch -s -d "$audit_dir" -p1 < "$expected_patch" || forward_ok=0
+      done
+      for expected_file in $expected_patch_files; do
+        cmp -s "$audit_dir/$expected_file" "$target/$expected_file" || forward_ok=0
+      done
+    fi
+    rm -rf -- "$audit_dir"
     if [ ! -f "$patch_file" ] ||
-       [ "$(git -C "$target" diff --name-only)" != "dosbox_pure_libretro.cpp" ] ||
-       ! git -C "$target" apply --reverse --check "$patch_file"; then
+       [ "$(git -C "$target" diff --name-only)" != "$expected_patch_files" ] ||
+       [ "$forward_ok" -ne 1 ]; then
       echo "Refusing unexpected dirty source tree: $target" >&2
       failed=1
       continue
@@ -107,7 +139,7 @@ while read -r name url commit extra; do
   current=$(git -C "$target" rev-parse HEAD)
   [ "$current" = "$commit" ] || { echo "Verification failed for $name" >&2; failed=1; continue; }
   if [ -f "$patch_file" ] && [ -z "$(git -C "$target" status --porcelain --untracked-files=normal)" ]; then
-    git -C "$target" apply "$patch_file"
+    git -C "$target" apply "$@"
   fi
   echo "OK $name $current"
 done < "$lock_file"

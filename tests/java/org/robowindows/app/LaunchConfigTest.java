@@ -39,6 +39,28 @@ public final class LaunchConfigTest {
         require(installer.contains(":robowindows_boot\n") &&
                 installer.contains("goto robowindows_boot"),
                 "guest reboot must remain inside the RoboWindows boot loop");
+        String dynamic20 = LaunchConfig.createWindowsInstall("/private/disk.img",
+                "/private/source.iso", "/private/cdboot.img", false, 64, "dynamic",
+                LaunchConfig.DYNAMIC_EXPERIMENTAL_CYCLES, true);
+        String dynamic30 = LaunchConfig.createWindowsInstall("/private/disk.img",
+                "/private/source.iso", "/private/cdboot.img", false, 64, "dynamic",
+                LaunchConfig.DYNAMIC_PERFORMANCE_CYCLES, true);
+        require(dynamic20.contains("core=dynamic\ncycles=fixed 20000"),
+                "20k dynamic candidate missing");
+        require(dynamic30.contains("core=dynamic\ncycles=fixed 30000"),
+                "30k dynamic candidate missing");
+        String dynamicAuto = LaunchConfig.createWindowsDynamic("/private/disk.img",
+                "/private/source.iso", "/private/cdboot.img", false, 64,
+                DynamicCyclePolicy.AUTO_80_LIMIT_30K, true);
+        require(dynamicAuto.contains("core=dynamic\ncycles=auto 80% limit 30000\n"),
+                "bounded automatic dynamic candidate missing");
+        require(!dynamicAuto.contains("cycles=fixed"),
+                "automatic candidate must have exactly one policy");
+        require(LaunchConfig.isDynamicDiagnosticCycles(20000) &&
+                LaunchConfig.isDynamicDiagnosticCycles(30000) &&
+                !LaunchConfig.isDynamicDiagnosticCycles(12000) &&
+                !LaunchConfig.isDynamicDiagnosticCycles(25000),
+                "dynamic candidate allowlist");
         String utility = LaunchConfig.createWindowsUtility("/private/disk.img",
                 "/private/source.iso", "/private/patch9x.img", 64, "auto", true);
         require(utility.contains("boot \"/private/patch9x.img\""),
@@ -79,6 +101,18 @@ public final class LaunchConfigTest {
         try { LaunchConfig.create("/private/disk.img", "img", 63, "auto", true); }
         catch (IllegalArgumentException expected) { rejected = true; }
         require(rejected, "invalid memory must be rejected");
+
+        rejected = false;
+        try {
+            LaunchConfig.createWindowsInstall("/private/disk.img", "/private/source.iso",
+                    "/private/cdboot.img", false, 64, "dynamic", 25000, true);
+        } catch (IllegalArgumentException expected) { rejected = true; }
+        require(rejected, "arbitrary dynamic cycles must be rejected");
+
+        rejected = false;
+        try { DynamicCyclePolicy.fromId("auto-unlimited"); }
+        catch (IllegalArgumentException expected) { rejected = true; }
+        require(rejected, "unlimited automatic policy must be rejected");
     }
 
     private static void createSyntheticElToritoIso(File iso) throws Exception {

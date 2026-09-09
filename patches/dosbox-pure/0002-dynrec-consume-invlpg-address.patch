@@ -1,0 +1,13 @@
+diff --git a/src/cpu/core_dynrec/decoder_opcodes.h b/src/cpu/core_dynrec/decoder_opcodes.h
+--- a/src/cpu/core_dynrec/decoder_opcodes.h
++++ b/src/cpu/core_dynrec/decoder_opcodes.h
+@@ -999,6 +999,9 @@ static bool dyn_grp7(void) {
+ 			case 0x07:	// INVLPG
+ //				if (cpu.pmode && cpu.cpl) EXCEPTION(EXCEPTION_GP);
+ 				if (cpu.pmode && cpu.cpl) IllegalOptionDynrec("invlpg nonpriviledged");
++				// Consume SIB/displacement bytes without reading operand memory.
++				// Otherwise the next decode treats the address as instructions.
++				dyn_fill_ea(FC_ADDR);
+ 				gen_call_function_raw((void*)PAGING_ClearTLB);
+ 				break;
+ 			default: IllegalOptionDynrec("dyn_grp7_1");

@@ -25,6 +25,20 @@
 #include "runtime_telemetry.h"
 #include "session_state.h"
 
+extern "C" const char* robowindows_cpu_decoder_name(void);
+extern "C" void robowindows_pagefault_diagnostics_reset(void);
+extern "C" void robowindows_pagefault_diagnostics_snapshot(
+        unsigned long long* enqueued, unsigned long long* completed,
+        unsigned int* depth, unsigned int* high_water,
+        unsigned long long* wipes, unsigned long long* recoveries);
+extern "C" void robowindows_cpu_exception_diagnostics_reset(void);
+extern "C" void robowindows_cpu_exception_diagnostics_snapshot(
+        unsigned long long* pf_prepared, unsigned long long* pf_delivered,
+        unsigned long long* df_delivered, unsigned long long* pf_gate_entered,
+        unsigned long long* iret_executed);
+extern "C" void robowindows_guest_reset_diagnostics_reset(void);
+extern "C" unsigned long long robowindows_guest_reset_diagnostics_snapshot(void);
+
 namespace {
 std::mutex lifecycle_mutex;
 std::thread core_thread;
@@ -49,6 +63,27 @@ std::atomic<uint64_t> submitted_frames{0};
 std::atomic<uint64_t> liveness_run_calls{0};
 std::atomic<uint64_t> liveness_frames_published{0};
 std::atomic<double> requested_run_fps{60.0};
+enum DecoderKind { DECODER_UNKNOWN = 0, DECODER_NORMAL = 1, DECODER_DYNREC = 2,
+        DECODER_PAGEFAULT = 3, DECODER_HALT = 4, DECODER_SPECIAL = 5 };
+std::atomic<int> configured_decoder{DECODER_UNKNOWN};
+std::atomic<int> runtime_decoder{DECODER_UNKNOWN};
+std::atomic<uint64_t> runtime_dynrec_samples{0};
+std::atomic<uint64_t> runtime_normal_samples{0};
+std::atomic<uint64_t> runtime_pagefault_samples{0};
+std::atomic<uint64_t> runtime_halt_samples{0};
+std::atomic<uint64_t> runtime_special_samples{0};
+std::atomic<uint64_t> pagefault_enqueued{0};
+std::atomic<uint64_t> pagefault_completed{0};
+std::atomic<uint32_t> pagefault_depth{0};
+std::atomic<uint32_t> pagefault_high_water{0};
+std::atomic<uint64_t> pagefault_wipes{0};
+std::atomic<uint64_t> pagefault_recoveries{0};
+std::atomic<uint64_t> exception_pagefault_prepared{0};
+std::atomic<uint64_t> exception_pagefault_delivered{0};
+std::atomic<uint64_t> exception_doublefault_delivered{0};
+std::atomic<uint64_t> exception_pagefault_gate_entered{0};
+std::atomic<uint64_t> exception_iret_executed{0};
+std::atomic<uint64_t> guest_resets{0};
 
 std::mutex input_mutex;
 std::array<bool, RETROK_LAST> keys{};
@@ -107,6 +142,87 @@ void report_telemetry_if_due() {
             static_cast<unsigned long long>(snapshot.frames_coalesced),
             static_cast<unsigned long long>(snapshot.surface_post_failures));
     telemetry_report_time = now;
+}
+
+int classify_decoder(const char* name) {
+    if (!name) return DECODER_UNKNOWN;
+    if (!std::strcmp(name, "Normal") || !std::strcmp(name, "Normal_Trap")) {
+        return DECODER_NORMAL;
+    }
+    if (!std::strcmp(name, "DynRec") || !std::strcmp(name, "DynRec_Trap")) {
+        return DECODER_DYNREC;
+    }
+    if (!std::strcmp(name, "PageFault")) return DECODER_PAGEFAULT;
+    if (!std::strcmp(name, "HLT_Decode")) return DECODER_HALT;
+    return DECODER_SPECIAL;
+}
+
+const char* configured_decoder_name() {
+    switch (configured_decoder.load(std::memory_order_relaxed)) {
+        case DECODER_NORMAL: return "Normal";
+        case DECODER_DYNREC: return "DynRec";
+        case DECODER_PAGEFAULT: return "PageFault";
+        case DECODER_HALT: return "Halt";
+        case DECODER_SPECIAL: return "Other";
+        default: return "Unknown";
+    }
+}
+
+const char* runtime_decoder_name() {
+    switch (runtime_decoder.load(std::memory_order_relaxed)) {
+        case DECODER_NORMAL: return "Normal";
+        case DECODER_DYNREC: return "DynRec";
+        case DECODER_PAGEFAULT: return "PageFault";
+        case DECODER_HALT: return "Halt";
+        case DECODER_SPECIAL: return "Other";
+        default: return "Unknown";
+    }
+}
+
+void sample_runtime_decoder() {
+    const int decoder = classify_decoder(robowindows_cpu_decoder_name());
+    runtime_decoder.store(decoder, std::memory_order_relaxed);
+    switch (decoder) {
+        case DECODER_DYNREC: ++runtime_dynrec_samples; break;
+        case DECODER_NORMAL: ++runtime_normal_samples; break;
+        case DECODER_PAGEFAULT: ++runtime_pagefault_samples; break;
+        case DECODER_HALT: ++runtime_halt_samples; break;
+        default: ++runtime_special_samples; break;
+    }
+}
+
+void sample_pagefault_diagnostics() {
+    unsigned long long enqueued = 0;
+    unsigned long long completed = 0;
+    unsigned long long wipes = 0;
+    unsigned long long recoveries = 0;
+    unsigned int depth = 0;
+    unsigned int high_water = 0;
+    robowindows_pagefault_diagnostics_snapshot(&enqueued, &completed, &depth,
+            &high_water, &wipes, &recoveries);
+    pagefault_enqueued.store(enqueued, std::memory_order_relaxed);
+    pagefault_completed.store(completed, std::memory_order_relaxed);
+    pagefault_depth.store(depth, std::memory_order_relaxed);
+    pagefault_high_water.store(high_water, std::memory_order_relaxed);
+    pagefault_wipes.store(wipes, std::memory_order_relaxed);
+    pagefault_recoveries.store(recoveries, std::memory_order_relaxed);
+}
+
+void sample_exception_diagnostics() {
+    unsigned long long prepared = 0;
+    unsigned long long delivered = 0;
+    unsigned long long doublefault = 0;
+    unsigned long long gateEntered = 0;
+    unsigned long long iretExecuted = 0;
+    robowindows_cpu_exception_diagnostics_snapshot(&prepared, &delivered, &doublefault,
+            &gateEntered, &iretExecuted);
+    exception_pagefault_prepared.store(prepared, std::memory_order_relaxed);
+    exception_pagefault_delivered.store(delivered, std::memory_order_relaxed);
+    exception_doublefault_delivered.store(doublefault, std::memory_order_relaxed);
+    exception_pagefault_gate_entered.store(gateEntered, std::memory_order_relaxed);
+    exception_iret_executed.store(iretExecuted, std::memory_order_relaxed);
+    guest_resets.store(robowindows_guest_reset_diagnostics_snapshot(),
+            std::memory_order_relaxed);
 }
 
 void log_line(enum retro_log_level level, const char* format, ...) {
@@ -463,6 +579,9 @@ uint16_t android_modifiers(int meta) {
 }
 
 void run_core() {
+    robowindows_pagefault_diagnostics_reset();
+    robowindows_cpu_exception_diagnostics_reset();
+    robowindows_guest_reset_diagnostics_reset();
     if (!core_initialized) {
         retro_set_environment(environment);
         retro_set_video_refresh(video_refresh);
@@ -480,6 +599,9 @@ void run_core() {
         frame_presenter.stop();
         return;
     }
+    configured_decoder = classify_decoder(robowindows_cpu_decoder_name());
+    __android_log_print(ANDROID_LOG_INFO, "RoboWindowsCore", "cpu decoder=%s",
+            configured_decoder_name());
     retro_system_av_info av{};
     retro_get_system_av_info(&av);
     __android_log_print(ANDROID_LOG_INFO, "RoboWindowsCore",
@@ -521,6 +643,9 @@ void run_core() {
                     "frontend cadence updated fps=%.6f", fps);
         }
         retro_run();
+        sample_runtime_decoder();
+        sample_pagefault_diagnostics();
+        sample_exception_diagnostics();
         telemetry.add_emulator_run_calls();
         ++liveness_run_calls;
         report_telemetry_if_due();
@@ -593,6 +718,25 @@ Java_org_robowindows_app_NativeHost_startSession(JNIEnv* env, jclass, jstring co
     submitted_frames = 0;
     liveness_run_calls = 0;
     liveness_frames_published = 0;
+    configured_decoder = DECODER_UNKNOWN;
+    runtime_decoder = DECODER_UNKNOWN;
+    runtime_dynrec_samples = 0;
+    runtime_normal_samples = 0;
+    runtime_pagefault_samples = 0;
+    runtime_halt_samples = 0;
+    runtime_special_samples = 0;
+    pagefault_enqueued = 0;
+    pagefault_completed = 0;
+    pagefault_depth = 0;
+    pagefault_high_water = 0;
+    pagefault_wipes = 0;
+    pagefault_recoveries = 0;
+    exception_pagefault_prepared = 0;
+    exception_pagefault_delivered = 0;
+    exception_doublefault_delivered = 0;
+    exception_pagefault_gate_entered = 0;
+    exception_iret_executed = 0;
+    guest_resets = 0;
     telemetry.reset(RuntimeState::Starting);
     telemetry_report_time = std::chrono::steady_clock::now();
     logged_non_silent_audio = false;
@@ -635,11 +779,36 @@ Java_org_robowindows_app_NativeHost_sessionStatus(JNIEnv*, jclass) {
 
 extern "C" JNIEXPORT jstring JNICALL
 Java_org_robowindows_app_NativeHost_sessionLiveness(JNIEnv* env, jclass) {
-    char result[96];
-    std::snprintf(result, sizeof(result), "runs=%llu frames=%llu",
+    char result[512];
+    std::snprintf(result, sizeof(result),
+            "runs=%llu frames=%llu decoder=%s current=%s dyn=%llu normal=%llu pf=%llu halt=%llu other=%llu "
+            "pfenq=%llu pfret=%llu pfdepth=%u pfmax=%u pfwipe=%llu pfrecover=%llu "
+            "pfprep=%llu pfdeliver=%llu pfgate=%llu iret=%llu df=%llu reset=%llu",
             static_cast<unsigned long long>(liveness_run_calls.load()),
-            static_cast<unsigned long long>(liveness_frames_published.load()));
+            static_cast<unsigned long long>(liveness_frames_published.load()),
+            configured_decoder_name(), runtime_decoder_name(),
+            static_cast<unsigned long long>(runtime_dynrec_samples.load()),
+            static_cast<unsigned long long>(runtime_normal_samples.load()),
+            static_cast<unsigned long long>(runtime_pagefault_samples.load()),
+            static_cast<unsigned long long>(runtime_halt_samples.load()),
+            static_cast<unsigned long long>(runtime_special_samples.load()),
+            static_cast<unsigned long long>(pagefault_enqueued.load()),
+            static_cast<unsigned long long>(pagefault_completed.load()),
+            pagefault_depth.load(), pagefault_high_water.load(),
+            static_cast<unsigned long long>(pagefault_wipes.load()),
+            static_cast<unsigned long long>(pagefault_recoveries.load()),
+            static_cast<unsigned long long>(exception_pagefault_prepared.load()),
+            static_cast<unsigned long long>(exception_pagefault_delivered.load()),
+            static_cast<unsigned long long>(exception_pagefault_gate_entered.load()),
+            static_cast<unsigned long long>(exception_iret_executed.load()),
+            static_cast<unsigned long long>(exception_doublefault_delivered.load()),
+            static_cast<unsigned long long>(guest_resets.load()));
     return env->NewStringUTF(result);
+}
+
+extern "C" JNIEXPORT jstring JNICALL
+Java_org_robowindows_app_NativeHost_sessionDecoder(JNIEnv* env, jclass) {
+    return env->NewStringUTF(configured_decoder_name());
 }
 
 extern "C" JNIEXPORT jboolean JNICALL

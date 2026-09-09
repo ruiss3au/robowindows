@@ -1,7 +1,7 @@
 # Feature Specification: ARM64 Dynamic Recompilation
 
 **Feature**: `008-arm64-dynamic-recompilation`  
-**Status**: Specified; implementation and device validation pending
+**Status**: Correctness gate and first Windows DynRec 20k trial passed; performance validation in progress
 
 ## Scope and interface
 
@@ -11,12 +11,33 @@ Selection saves a preference; only Start boots the guest. Normal restores the
 saved normal configuration, including its cycle value. The first dynamic trial
 uses `core=dynamic`, `cycles=fixed 20000`, and `cputype=pentium_slow`.
 Fixed-cycle buttons are disabled while Dynamic is selected. No automatic/max
-cycle policy or stable-machine promotion is included in this feature.
+cycle policy is exposed in ordinary settings, and no stable-machine promotion
+is included in this feature. The later bounded-auto diagnostic in FR-040 is an
+internal performance experiment, not a selectable machine profile.
 
 Dynamic selection is unavailable until implementation safety tests pass. A
 diagnostic build may then expose it for authorized trials. Release builds keep
 it hidden until the correctness and performance gates below pass; even then,
 it remains experimental and restricted to copies.
+
+For one authorized symbolized reproduction, the debug build may expose a
+separately labeled `Run dynamic diagnostic` action on a stopped experimental
+copy. It is not a normal Start control, cannot target a stable profile, and
+uses the same durable child-process start path as a future experimental UI.
+Its result is deliberately conservative: a failed, stopped, or interrupted
+trial remains quarantined until the documented media-health procedure clears
+it; the action never silently retries or starts the normal profile.
+
+For an explicitly user-authorized diagnostic copy, a debug-only normal-core
+recovery boot may be used to run the guest's own disk check and perform a normal
+Windows shutdown. It cannot select dynrec, is unavailable to stable machines,
+and clears quarantine only after that shutdown is observed and the normal runner
+has unloaded.
+
+On a quarantined experimental card, pressing `Needs disk check` starts that
+normal-core recovery boot directly. It does not show an informational dead end.
+The session toolbar identifies the recovery purpose, and any exit other than a
+detected Windows shutdown leaves the copy quarantined.
 
 The [execution contract](contracts/execution-safety.md) defines the required
 startup ordering, recovery states, media verification, and failure behavior.
@@ -94,6 +115,131 @@ or being trapped in a crash loop.
 - **FR-021**: Configuration selection, starts, recovery, deletion, and media
   mutations MUST be serialized and checked against machine/session generations.
   Old callbacks MUST NOT acknowledge or modify a later session.
+- **FR-022**: Every host input and lifecycle command for an isolated dynamic
+  session MUST be delivered to the child runner rather than the host-process
+  native runtime. Bridge failure MUST stop and quarantine the trial; it MUST NOT
+  silently discard input or continue with split session state.
+- **FR-023**: Native calls, frames, and audio prove only runner liveness. A
+  dynamic trial MUST NOT advance to correctness or performance validation until
+  Windows reaches a usable desktop and the tester explicitly verifies guest
+  keyboard and captured relative mouse response. Failure of this readiness gate
+  rejects the build/profile and requires diagnosis before another guest trial.
+- **FR-024**: For a quarantined experimental copy eligible for the debug recovery
+  route, pressing `Needs disk check` MUST immediately start a normal-core recovery
+  session. RoboWindows MUST not replace that action with an informational dialog.
+  After a verified clean recovery shutdown, both the card warning and any
+  quarantine banner MUST disappear in the same return to the machine list.
+- **FR-025**: Before another Windows dynamic trial, RoboWindows MUST run a
+  versioned, freely redistributable CPU fixture from a newly created disposable
+  image. Normal and dynamic executions MUST use distinct throwaway Android
+  processes and MUST NOT load, mount, hash, or otherwise access any machine
+  profile or user media.
+- **FR-026**: The CPU fixture MUST produce a bounded machine-readable record
+  covering 16-bit integer/flags, 32-bit integer/flags, x87, string operations,
+  self-modifying code, and protected-mode execution. RoboWindows MUST accept a
+  mode only when the record has the expected fixture version, completion magic,
+  complete test mask, and checksum. Timeout, process death, malformed output,
+  or a normal/dynamic mismatch MUST fail the diagnostic visibly.
+- **FR-027**: CPU-fixture success proves decoder correctness only for its named
+  cases; it MUST NOT mark Windows ready. Windows readiness remains a separate,
+  per-attempt record requiring three explicit confirmations: responsive desktop,
+  keyboard response, and captured relative-mouse response. Performance testing
+  is unavailable until all three are recorded for the current build and attempt.
+- **FR-028**: Before another Windows dynamic trial, fixture v2 MUST additionally
+  compare normal and dynamic execution for paging, a handled page fault with
+  validated fault address/error state, interrupt/exception-gate entry and
+  `iret`, invalid-opcode recovery, repeated linked control flow, and
+  self-modification spanning an x86 page
+  boundary. The result MUST identify each case independently; a partial pass
+  MUST remain a diagnostic failure.
+- **FR-029**: Fixture v2 MAY use a multi-sector loader, but its stage count,
+  load addresses, result-sector location, complete image layout, and hashes MUST
+  be generated and verified from repository source. Code and result sectors
+  MUST NOT overlap, and the app MUST reject an image of the wrong version or
+  size. Passing v1 MUST NOT satisfy the v2 build-specific capability gate.
+- **FR-030**: A guarded Windows diagnostic MUST show and record bounded decoder
+  residency sampled on the emulator thread: configured decoder, current decoder
+  class, and counts for dynrec, normal, page-fault, and other/special execution.
+  It MUST NOT expose guest instruction addresses, memory, paths, or contents.
+  Sustained page-fault or interpreter residency MUST reject performance testing
+  and direct the next root-cause investigation.
+- **FR-031**: After sustained page-fault residency, the next guarded diagnostic
+  MUST expose only aggregate page-fault lifecycle evidence: enqueue and
+  completed-return counts, current and high-water queue depth, and wipe/recovery
+  counts. Collection and publication MUST occur on the emulator thread. It MUST
+  NOT export addresses, register values, memory, guest text, media paths, or
+  per-fault records. Another Windows dynamic trial remains blocked until these
+  aggregates can distinguish forward progress from a stuck or repeatedly reset
+  page-fault sequence.
+- **FR-032**: After an isolated CPU fixture or dynamic trial reports its final
+  result and releases native state, its dedicated Android process MUST terminate
+  within two seconds. A cached empty service process is not an acceptable fresh
+  execution boundary. The result message and durable clean/quarantine decision
+  MUST be delivered before termination.
+- **FR-033**: Before changing page-fault recovery thresholds or retry behavior,
+  a fixture v3 MUST compare Normal and DynRec through a deterministic nested
+  page-fault chain with independently validated fault levels and complete
+  returns. It MUST fail on missing, reordered, duplicated, or unreturned levels.
+  Passing the existing single handled fault MUST NOT satisfy this gate. A queue
+  wipe is recovery evidence, not correctness, and MUST NOT convert a failed
+  nested sequence into a pass.
+- **FR-034**: When fixture v3 fails reproducibly, the next
+  diagnostic MUST expose only bounded aggregate CPU exception-lifecycle
+  evidence: prepared and delivered page-fault counts, successful page-fault
+  gate-entry and aggregate `iret` counts, delivered double-fault count,
+  guest-reset count, and an allowlisted current decoder class that distinguishes
+  the halted state. Counters MUST be reset and sampled on the
+  emulator thread. They MUST NOT expose exception addresses, error values,
+  registers, memory, guest text, paths, or per-exception records. The result
+  MUST be combined with a failing instruction-level regression before any CPU
+  or page-fault behavior changes; counters alone do not prove a root cause.
+- **FR-035**: The source-owned CPU fixture may report fixed assertion identifiers
+  in its reserved result word. Identify the first failed assertion before
+  changing emulator behavior. Identifiers MUST NOT contain user-guest data or
+  enable access to machine disks; a nonzero identifier fails the capability gate
+  even when the test mask is otherwise complete.
+- **FR-036**: Fixture v3's expanded mask `0x1fff` MUST verify that `INVLPG`
+  consumes its complete memory operand without executing SIB or displacement
+  bytes or reading operand memory. Cover 32-bit absolute, disp8, SIB plus disp32,
+  and 16-bit absolute addressing; preserve guest registers and flags. Restore
+  and pass the full four-level nested chain after the correction.
+
+**FR-037 — REP fault precision:** The expanded CPU gate (`0x3fff`) MUST execute
+REP STOSD across a deliberately non-present destination page. Its handler MUST
+check the fault's instruction position, write error code, partial count and
+destination, preserved source/value registers, and completed prefix stores.
+After mapping and retry, the fixture MUST verify the remaining stores, zero
+count, final destination, unchanged boundary sentinels and exactly one fault.
+Report a fixed first-failure assertion; do not export user-guest state. Preserve
+the INVLPG and nested-fault regressions. No further Windows dynrec run is
+authorized until this targeted fixture passes and the copy completes recovery.
+
+**FR-038 — Expanded pre-Windows gate:** Implement the required suites, oracle,
+bounded protocol and acceptance rules in [Expanded x86 correctness
+gate](expanded-cpu-coverage.md). All required suites MUST pass before another
+Windows dynrec trial; a partial pass is not capability evidence. This strengthens
+FR-037's prerequisite and does not authorize booting or repairing user media.
+
+**FR-039 — Bounded cycle candidates:** After a clean 20k Windows DynRec trial,
+the debug-only guarded diagnostic MAY run at fixed 30k for performance
+exploration. Only fixed 20k and fixed 30k are accepted. The selected value MUST
+be recorded in the durable attempt journal, sent across the isolated-process
+handoff, verified against the generated configuration immediately before native
+start, and displayed prominently in the session overlay. A stale, missing,
+unsupported or cross-process-mismatched value MUST fail before native start.
+The 30k trial MUST retain the same Normal fallback and quarantine behavior as
+20k; it does not promote 30k or alter ordinary Start/settings.
+
+**FR-040 — Bounded automatic diagnostic:** After fixed 30k improves graphics
+but fails audio continuity, the guarded debug diagnostic MAY test exactly
+`core=dynamic` with `cycles=auto 80% limit 30000`. Raw `auto`, `max`, a missing
+limit, another percentage/limit, and caller-supplied policy text MUST be rejected
+before journal creation or native start. The host MUST persist a named policy
+ID; the child MUST derive the sole permitted config value from its own matching
+allowlist rather than trusting config text. The active overlay MUST display
+`DYNREC AUTO 80% · MAX 30K · EXPERIMENTAL`. Fixed 20k remains the baseline and
+the saved Normal fallback remains unchanged. Audio underruns are not controller
+feedback, so any audible cracking rejects this candidate even if it scales down.
 
 ## Success criteria
 
@@ -148,6 +294,65 @@ or being trapped in a crash loop.
    then it uses a fresh emulator process and its original normal configuration.
 10. Given a normally shut-down experimental session, when Normal is selected,
     then the saved normal settings are selected without starting a guest.
+11. Given an eligible quarantined experimental copy, when `Needs disk check` is
+    pressed, then Windows boots with the normal core so its disk check can run;
+    a normal Windows shutdown clears quarantine and every other exit retains it.
+12. Given an isolated dynamic session, when keyboard, pointer, touch, pause,
+    focus, restart, or input-cancel events occur, then only the child runner
+    receives them, and loss of that bridge fails the trial visibly.
+13. Given a dynamic runner that publishes frames and audio but never reaches a
+    responsive Windows desktop, then the trial fails readiness and no performance
+    validation or further guest trial is authorized from that evidence.
+14. Given the CPU diagnostic, when normal and dynamic fixture runs execute, then
+    they use separate disposable images and processes, report the same complete
+    result record, and leave every machine profile and user disk untouched.
+15. Given a fixture timeout, incomplete mask, corrupt checksum, process death, or
+    result mismatch, then RoboWindows reports the failed stage and does not enable
+    another Windows dynamic trial.
+16. Given fixture v2, when paging deliberately accesses a non-present page, then
+    its handler validates the page-fault address and error code, makes the page
+    present, returns through `iret`, and the retried instruction completes in
+    both normal and dynamic modes.
+17. Given fixture v2, when its generated image is inspected, then the boot loader,
+    test stage and result sector occupy declared non-overlapping sectors and all
+    source-derived hashes match before Android packaging.
+18. Given a guarded dynamic session, when its status is displayed, then the
+    decoder-residency counters distinguish dynrec work from page-fault and normal
+    fallback without revealing a guest address or guest data.
+19. Given a guarded session with sustained page-fault residency, when lifecycle
+    evidence is displayed or logged, then aggregate enqueue, completed-return,
+    current/high-water depth and wipe/recovery counts identify whether the
+    sequence advances, while no per-fault or guest-derived value leaves native
+    execution.
+20. Given an isolated runner reports its final stopped result, when two seconds
+    elapse, then that runner process no longer exists and a later run starts in
+    a new process without losing the prior result or durable disk decision.
+21. Given fixture v3 deliberately triggers nested faults from its page-fault
+    handler, when Normal and DynRec execute it, then every expected level is
+    observed in order, every handler returns, the original instruction resumes,
+    and both bounded result records match without queue recovery.
+22. Given fixture v3 fails under DynRec,
+    when the run times out, then its bounded status distinguishes
+    prepared page faults, delivered page faults, successful page-fault gate
+    entries, aggregate `iret` executions, double faults, guest resets, and an
+    allowlisted halted decoder without exporting guest-derived data.
+
+23. Given the INVLPG operand regression, when it runs against the uncorrected
+    DynRec decoder, then it fails with an identified assertion before paging is
+enabled; after the correction, Normal and DynRec produce identical complete
+`0x1fff` records, including all four nested fault levels.
+
+24. Given an eligible experimental copy and a debug request for fixed 30k,
+when the guarded runner starts, then the journal, child handoff, generated
+configuration and visible `DYNREC 30K · EXPERIMENTAL` label agree; any unsupported
+or mismatched value is rejected before native execution, and a failed or
+unclean stop follows the existing quarantine path.
+
+25. Given an eligible copy and the named bounded-auto request, when the guarded
+runner starts, then journal, child allowlist, effective config and visible label
+all identify auto 80% with a 30k cap. An unlimited, malformed, mismatched or
+unknown policy fails before native execution, and shutdown/recovery behavior is
+identical to a fixed-cycle trial.
 
 ## Out of Scope
 

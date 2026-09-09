@@ -12,8 +12,17 @@
             android:name=".DynamicTrialService"
             android:exported="false"
             android:process=":dynrec" />
+        <service
+            android:name=".NormalCpuFixtureService"
+            android:exported="false"
+            android:process=":cpu_normal" />
+        <service
+            android:name=".DynamicCpuFixtureService"
+            android:exported="false"
+            android:process=":cpu_dynamic" />
         <activity
             android:name=".MainActivity"
+            android:launchMode="singleTop"
             android:configChanges="keyboard|keyboardHidden|navigation|orientation|screenLayout|screenSize|smallestScreenSize|uiMode"
             android:exported="true"
             android:screenOrientation="sensorLandscape">

@@ -2,6 +2,7 @@ package org.robowindows.app;
 
 final class LaunchConfig {
     static final int DYNAMIC_EXPERIMENTAL_CYCLES = 20000;
+    static final int DYNAMIC_PERFORMANCE_CYCLES = 30000;
     private LaunchConfig() {}
 
     static boolean supportsBoot(String extension) {
@@ -98,9 +99,39 @@ final class LaunchConfig {
     private static void validateCycles(String cpuCore, int fixedCycles) {
         if (fixedCycles < 0) throw new IllegalArgumentException("Invalid fixed cycles");
         if (fixedCycles > 0 && !cpuCore.equals("normal") &&
-                !(cpuCore.equals("dynamic") && fixedCycles == DYNAMIC_EXPERIMENTAL_CYCLES)) {
+                !(cpuCore.equals("dynamic") && isDynamicDiagnosticCycles(fixedCycles))) {
             throw new IllegalArgumentException("Fixed cycles require the named experimental policy");
         }
+    }
+
+    static boolean isDynamicDiagnosticCycles(int fixedCycles) {
+        return fixedCycles == DYNAMIC_EXPERIMENTAL_CYCLES ||
+                fixedCycles == DYNAMIC_PERFORMANCE_CYCLES;
+    }
+
+    static String createDynamic(String mediaPath, String extension, int memoryMb,
+            DynamicCyclePolicy policy, boolean soundEnabled) {
+        return applyDynamicCyclePolicy(create(mediaPath, extension, memoryMb, "dynamic", 0,
+                soundEnabled), policy);
+    }
+
+    static String createWindowsDynamic(String diskPath, String isoPath, String bootFloppyPath,
+            boolean bootInstaller, int memoryMb, DynamicCyclePolicy policy,
+            boolean soundEnabled) {
+        return applyDynamicCyclePolicy(createWindowsInstall(diskPath, isoPath, bootFloppyPath,
+                bootInstaller, memoryMb, "dynamic", 0, soundEnabled), policy);
+    }
+
+    private static String applyDynamicCyclePolicy(String config, DynamicCyclePolicy policy) {
+        if (policy == null) throw new IllegalArgumentException("Dynamic cycle policy is required");
+        String marker = "\ncore=dynamic\n";
+        int first = config.indexOf(marker);
+        if (first < 0 || config.indexOf(marker, first + marker.length()) >= 0 ||
+                config.contains("\ncycles=")) {
+            throw new IllegalArgumentException("Dynamic configuration cannot accept cycle policy");
+        }
+        return config.substring(0, first + marker.length()) + "cycles=" + policy.configValue +
+                "\n" + config.substring(first + marker.length());
     }
 
     private static String cycleLine(int fixedCycles) {

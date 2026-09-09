@@ -23,6 +23,7 @@ import java.nio.file.Files;
 public final class DynamicTrialService extends Service {
     private Messenger client;
     private boolean started;
+    private boolean processExitScheduled;
 
     private final Messenger messenger = new Messenger(new Handler(message -> {
         handle(message);
@@ -37,6 +38,7 @@ public final class DynamicTrialService extends Service {
         if (started) NativeHost.stopSession();
         started = false;
         super.onDestroy();
+        scheduleProcessExit();
     }
 
     private void handle(Message message) {
@@ -122,12 +124,19 @@ public final class DynamicTrialService extends Service {
     private void start(Bundle data) throws IOException {
         if (started) throw new IOException("Dynamic runner already owns a session");
         if (data == null) throw new IOException("Dynamic launch description is missing");
+        String dynamicPolicyId = data.getString(DynamicTrialProtocol.DYNAMIC_CYCLE_POLICY);
+        DynamicCyclePolicy dynamicPolicy;
+        try {
+            dynamicPolicy = DynamicCyclePolicy.fromId(dynamicPolicyId);
+        } catch (IllegalArgumentException error) {
+            throw new IOException(error.getMessage(), error);
+        }
         MachineProfile profile = new MachineStore(this).validateDynamicChildHandoff(
                 data.getString(DynamicTrialProtocol.MACHINE_ID),
                 data.getString(DynamicTrialProtocol.ATTEMPT_ID),
-                data.getLong(DynamicTrialProtocol.GENERATION));
+                data.getLong(DynamicTrialProtocol.GENERATION), dynamicPolicy.id);
         File launch = validatedDynamicLaunch(profile, data.getString(DynamicTrialProtocol.LAUNCH_PATH),
-                data.getString(DynamicTrialProtocol.FILES_PATH));
+                data.getString(DynamicTrialProtocol.FILES_PATH), dynamicPolicy);
         Surface surface = data.getParcelable(DynamicTrialProtocol.SURFACE_VALUE);
         NativeHost.setSurface(surface);
         if (!NativeHost.startSession(launch.getPath(), getFilesDir().getPath())) {
@@ -136,8 +145,8 @@ public final class DynamicTrialService extends Service {
         started = true;
     }
 
-    private File validatedDynamicLaunch(MachineProfile profile, String launchPath, String filesPath)
-            throws IOException {
+    private File validatedDynamicLaunch(MachineProfile profile, String launchPath, String filesPath,
+            DynamicCyclePolicy dynamicPolicy) throws IOException {
         if (!getFilesDir().getCanonicalPath().equals(new File(filesPath).getCanonicalPath())) {
             throw new IOException("Dynamic runner storage does not match this app");
         }
@@ -151,11 +160,20 @@ public final class DynamicTrialService extends Service {
         byte[] bytes = Files.readAllBytes(launch.toPath());
         if (bytes.length > 64 * 1024) throw new IOException("Dynamic launch is too large");
         String config = new String(bytes, StandardCharsets.UTF_8);
-        if (!config.contains("core=dynamic") ||
-                !config.contains("cycles=fixed " + LaunchConfig.DYNAMIC_EXPERIMENTAL_CYCLES)) {
+        String expectedCore = "\ncore=dynamic\n";
+        String expectedCycles = "\ncycles=" + dynamicPolicy.configValue + "\n";
+        if (!config.contains(expectedCore) || !config.contains(expectedCycles) ||
+                occurrences(config, "\ncore=") != 1 || occurrences(config, "\ncycles=") != 1) {
             throw new IOException("Dynamic runner rejects a non-dynamic launch");
         }
         return launch;
+    }
+
+    private static int occurrences(String value, String needle) {
+        int count = 0;
+        for (int offset = 0; (offset = value.indexOf(needle, offset)) >= 0;
+                offset += needle.length()) count++;
+        return count;
     }
 
     private void requireStarted() throws IOException {
@@ -166,6 +184,13 @@ public final class DynamicTrialService extends Service {
         if (started) NativeHost.stopSession();
         started = false;
         stopSelf();
+        scheduleProcessExit();
+    }
+
+    private void scheduleProcessExit() {
+        if (processExitScheduled) return;
+        processExitScheduled = true;
+        IsolatedProcessExit.afterResult();
     }
 
     private void sendStatus(String error) {

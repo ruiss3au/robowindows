@@ -1,0 +1,73 @@
+diff --git a/src/cpu/core_dynrec/decoder_opcodes.h b/src/cpu/core_dynrec/decoder_opcodes.h
+index 15ec2bf..6d92596 100644
+--- a/src/cpu/core_dynrec/decoder_opcodes.h
++++ b/src/cpu/core_dynrec/decoder_opcodes.h
+@@ -1307,6 +1310,12 @@ static void dyn_string(StringOps op) {
+ 		default: IllegalOptionDynrec("dyn_string");
+ 	}
+ 	if (decode.rep) MOV_REG_WORD_FROM_HOST_REG(FC_RETOP,DRC_REG_ECX,decode.big_addr);
++	if (op==STR_STOSD) {
++		// Keep the helper's remaining count in FC_RETOP for cycle resumption.
++		// Deliver faults only after publishing completed REP progress.
++		gen_mov_byte_to_reg_low(FC_OP2,&dynrec_stosd_exception);
++		dyn_check_exception(FC_OP2);
++	}
+ 
+ 	if (op<STR_SCASB) {
+ 		// those string operations are allowed for premature termination
+diff --git a/src/cpu/core_dynrec/operators.h b/src/cpu/core_dynrec/operators.h
+index e8b38e8..310c3b8 100644
+--- a/src/cpu/core_dynrec/operators.h
++++ b/src/cpu/core_dynrec/operators.h
+@@ -1930,8 +1930,13 @@ static Bit32u DRC_CALL_CONV dynrec_stosw_dword(Bit32u count,Bit32s add_index,Phy
+ 	return count_left;
+ }
+ 
++// STOSD faults must return to generated code before delivering the exception.
++// The generated caller publishes the remaining REP count and precise EIP.
++static Bit8u dynrec_stosd_exception;
++
+ static Bit16u DRC_CALL_CONV dynrec_stosd_word(Bit16u count,Bit16s add_index,PhysPt di_base) DRC_FC;
+ static Bit16u DRC_CALL_CONV dynrec_stosd_word(Bit16u count,Bit16s add_index,PhysPt di_base) {
++	dynrec_stosd_exception=0;
+ 	Bit16u count_left;
+ 	if (count<(Bitu)CPU_Cycles) {
+ 		count_left=0;
+@@ -1940,9 +1945,12 @@ static Bit16u DRC_CALL_CONV dynrec_stosd_word(Bit16u count,Bit16s add_index,Phys
+ 		count=(Bit16u)CPU_Cycles;
+ 		CPU_Cycles=0;
+ 	}
+-	add_index<<=2;
++	add_index*=4;
+ 	for (;count>0;count--) {
+-		mem_writed(di_base+reg_di,reg_eax);
++		if (mem_writed_checked(di_base+reg_di,reg_eax)) {
++			dynrec_stosd_exception=1;
++			return (Bit16u)(count+count_left);
++		}
+ 		reg_di+=add_index;
+ 	}
+ 	return count_left;
+@@ -1950,6 +1958,7 @@ static Bit16u DRC_CALL_CONV dynrec_stosd_word(Bit16u count,Bit16s add_index,Phys
+ 
+ static Bit32u DRC_CALL_CONV dynrec_stosd_dword(Bit32u count,Bit32s add_index,PhysPt di_base) DRC_FC;
+ static Bit32u DRC_CALL_CONV dynrec_stosd_dword(Bit32u count,Bit32s add_index,PhysPt di_base) {
++	dynrec_stosd_exception=0;
+ 	Bit32u count_left;
+ 	if (count<(Bitu)CPU_Cycles) {
+ 		count_left=0;
+@@ -1958,9 +1967,12 @@ static Bit32u DRC_CALL_CONV dynrec_stosd_dword(Bit32u count,Bit32s add_index,Phy
+ 		count=CPU_Cycles;
+ 		CPU_Cycles=0;
+ 	}
+-	add_index<<=2;
++	add_index*=4;
+ 	for (;count>0;count--) {
+-		mem_writed(di_base+reg_edi,reg_eax);
++		if (mem_writed_checked(di_base+reg_edi,reg_eax)) {
++			dynrec_stosd_exception=1;
++			return count+count_left;
++		}
+ 		reg_edi+=add_index;
+ 	}
+ 	return count_left;

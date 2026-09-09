@@ -17,4 +17,4 @@ apk=${1:-$repo_root/artifacts/robowindows-debug.apk}
 rw_select_device
 rw_require_model
 "${RW_ADB_TARGET[@]}" install -r "$apk"
-echo "Updated RoboWindows on $RW_DEVICE_SERIAL without clearing app data."
+echo "Updated RoboWindows on the verified device without clearing app data."

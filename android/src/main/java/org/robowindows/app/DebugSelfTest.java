@@ -141,12 +141,27 @@ final class DebugSelfTest {
                                 "dynamic-attempt.json").exists(),
                         "dynamic pre-native failure restores normal: " + faultPoint);
             }
-            DynamicAttempt attempt = isolated.prepareDynamicStart(dynamic);
+            boolean rejectedUnsupportedCycles = false;
+            try {
+                isolated.prepareDynamicStart(dynamic, 25000);
+            } catch (IOException expected) {
+                rejectedUnsupportedCycles = true;
+            }
+            require(rejectedUnsupportedCycles &&
+                    readText(new File(dynamic.launchPath)).contains("core=normal") &&
+                    !new File(new File(dynamic.runtimePath).getParentFile(),
+                            "dynamic-attempt.json").exists(),
+                    "unsupported dynamic cycles fail before journal or config mutation");
+            DynamicAttempt attempt = isolated.prepareDynamicStart(dynamic,
+                    DynamicCyclePolicy.AUTO_80_LIMIT_30K);
             String journalText = readText(new File(new File(dynamic.runtimePath).getParentFile(),
                     "dynamic-attempt.json"));
             require(attempt.state.equals(DynamicAttempt.EXECUTING) &&
+                    attempt.dynamicCyclePolicy.equals(DynamicCyclePolicy.AUTO_80_LIMIT_30K.id) &&
                     readText(new File(dynamic.launchPath)).contains("core=dynamic") &&
-                    readText(new File(dynamic.launchPath)).contains("cycles=fixed 20000"),
+                    readText(new File(dynamic.launchPath)).contains(
+                            "cycles=auto 80% limit 30000") &&
+                    journalText.contains("\"dynamicCyclePolicy\":\"auto-80-limit-30k\""),
                     "dynamic handoff is journaled before native execution");
             require(!journalText.contains(dynamic.runtimePath) &&
                     !journalText.contains(dynamic.mediaPath) &&
@@ -154,17 +169,31 @@ final class DebugSelfTest {
                     !journalText.contains(dynamic.mediaName),
                     "dynamic journal contains no private media paths or names");
             require(isolated.validateDynamicChildHandoff(dynamic.id, attempt.attemptId,
-                    attempt.generation).id.equals(dynamic.id),
+                    attempt.generation, DynamicCyclePolicy.AUTO_80_LIMIT_30K.id).id.equals(dynamic.id),
                     "dynamic child handoff binds to the durable attempt");
+            boolean rejectedCycleMismatch = false;
+            try {
+                isolated.validateDynamicChildHandoff(dynamic.id, attempt.attemptId,
+                        attempt.generation, DynamicCyclePolicy.FIXED_20K.id);
+            } catch (IOException expected) {
+                rejectedCycleMismatch = true;
+            }
+            require(rejectedCycleMismatch, "dynamic child rejects a cycle mismatch");
             boolean rejectedStaleAttempt = false;
             try {
-                isolated.validateDynamicChildHandoff(dynamic.id, "stale-attempt", attempt.generation);
+                isolated.validateDynamicChildHandoff(dynamic.id, "stale-attempt",
+                        attempt.generation, DynamicCyclePolicy.AUTO_80_LIMIT_30K.id);
             } catch (IOException expected) {
                 rejectedStaleAttempt = true;
             }
             require(rejectedStaleAttempt, "dynamic child rejects a stale attempt identity");
             DynamicAttempt running = isolated.markDynamicRunning(attempt);
             require(running.state.equals(DynamicAttempt.RUNNING), "dynamic liveness is journaled");
+            running = isolated.markDynamicReadiness(running, DynamicReadiness.DESKTOP);
+            running = isolated.markDynamicReadiness(running, DynamicReadiness.KEYBOARD);
+            running = isolated.markDynamicReadiness(running, DynamicReadiness.CAPTURED_MOUSE);
+            require(DynamicReadiness.complete(running.readinessMask),
+                    "explicit dynamic readiness is journaled");
             isolated.quarantineDynamicAttempt(running);
             require(isolated.recoverDynamicAttempts(), "unfinished dynamic handoff is recovered");
             MachineProfile dynamicRecovered = isolated.load().get(1);
@@ -172,8 +201,18 @@ final class DebugSelfTest {
                     isolated.requiresDynamicMediaCheck(dynamicRecovered) &&
                     readText(new File(dynamicRecovered.launchPath)).contains("core=normal"),
                     "dynamic recovery restores normal and quarantines disk");
+            MachineProfile recoveryBoot = isolated.prepareRecoveryStart(dynamicRecovered);
+            require(recoveryBoot.id.equals(dynamicRecovered.id) &&
+                    readText(new File(recoveryBoot.launchPath)).contains("core=normal"),
+                    "needs-check action permits only normal recovery boot");
+            isolated.markSessionStarted(dynamicRecovered.id);
+            isolated.closeRecoveryAfterCleanShutdown(recoveryBoot);
+            require(!isolated.requiresDynamicMediaCheck(recoveryBoot) &&
+                    !isolated.hasInterruptedSession() &&
+                    isolated.hasCleanGuestShutdown(recoveryBoot.id),
+                    "clean recovery shutdown clears quarantine and active marker");
             File experimentalDirectory = new File(recovered.runtimePath).getParentFile();
-            isolated.deleteMachine(dynamicRecovered);
+            isolated.deleteMachine(recoveryBoot);
             require(!experimentalDirectory.exists() && isolated.load().size() == 1 &&
                     isolated.load().get(0).id.equals(configured.id),
                     "selected machine deletion preserves stable source");

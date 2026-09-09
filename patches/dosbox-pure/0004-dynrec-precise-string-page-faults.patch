@@ -1,0 +1,405 @@
+--- a/src/cpu/core_dynrec/decoder_opcodes.h
++++ b/src/cpu/core_dynrec/decoder_opcodes.h
+@@ -1310,12 +1310,10 @@
+ 		default: IllegalOptionDynrec("dyn_string");
+ 	}
+ 	if (decode.rep) MOV_REG_WORD_FROM_HOST_REG(FC_RETOP,DRC_REG_ECX,decode.big_addr);
+-	if (op==STR_STOSD) {
+-		// Keep the helper's remaining count in FC_RETOP for cycle resumption.
+-		// Deliver faults only after publishing completed REP progress.
+-		gen_mov_byte_to_reg_low(FC_OP2,&dynrec_stosd_exception);
+-		dyn_check_exception(FC_OP2);
+-	}
++	// Keep the helper's remaining count in FC_RETOP for cycle resumption.
++	// Deliver memory faults only after publishing completed string progress.
++	gen_mov_byte_to_reg_low(FC_OP2,&dynrec_string_exception);
++	dyn_check_exception(FC_OP2);
+ 
+ 	if (op<STR_SCASB) {
+ 		// those string operations are allowed for premature termination
+--- a/src/cpu/core_dynrec/operators.h
++++ b/src/cpu/core_dynrec/operators.h
+@@ -1640,8 +1640,13 @@
+ }
+ 
+ 
++// String helpers return to generated code before delivering a memory fault so
++// the caller can publish the remaining REP count and precise instruction EIP.
++static Bit8u dynrec_string_exception;
++
+ static Bit16u DRC_CALL_CONV dynrec_movsb_word(Bit16u count,Bit16s add_index,PhysPt si_base,PhysPt di_base) DRC_FC;
+ static Bit16u DRC_CALL_CONV dynrec_movsb_word(Bit16u count,Bit16s add_index,PhysPt si_base,PhysPt di_base) {
++	dynrec_string_exception=0;
+ 	Bit16u count_left;
+ 	if (count<(Bitu)CPU_Cycles) {
+ 		count_left=0;
+@@ -1651,7 +1656,11 @@
+ 		CPU_Cycles=0;
+ 	}
+ 	for (;count>0;count--) {
+-		mem_writeb(di_base+reg_di,mem_readb(si_base+reg_si));
++		Bit8u value;
++		if (mem_readb_checked(si_base+reg_si,&value) || mem_writeb_checked(di_base+reg_di,value)) {
++			dynrec_string_exception=1;
++			return (Bit16u)(count+count_left);
++		}
+ 		reg_si+=add_index;
+ 		reg_di+=add_index;
+ 	}
+@@ -1660,6 +1669,7 @@
+ 
+ static Bit32u DRC_CALL_CONV dynrec_movsb_dword(Bit32u count,Bit32s add_index,PhysPt si_base,PhysPt di_base) DRC_FC;
+ static Bit32u DRC_CALL_CONV dynrec_movsb_dword(Bit32u count,Bit32s add_index,PhysPt si_base,PhysPt di_base) {
++	dynrec_string_exception=0;
+ 	Bit32u count_left;
+ 	if (count<(Bitu)CPU_Cycles) {
+ 		count_left=0;
+@@ -1669,7 +1679,11 @@
+ 		CPU_Cycles=0;
+ 	}
+ 	for (;count>0;count--) {
+-		mem_writeb(di_base+reg_edi,mem_readb(si_base+reg_esi));
++		Bit8u value;
++		if (mem_readb_checked(si_base+reg_esi,&value) || mem_writeb_checked(di_base+reg_edi,value)) {
++			dynrec_string_exception=1;
++			return count+count_left;
++		}
+ 		reg_esi+=add_index;
+ 		reg_edi+=add_index;
+ 	}
+@@ -1678,6 +1692,7 @@
+ 
+ static Bit16u DRC_CALL_CONV dynrec_movsw_word(Bit16u count,Bit16s add_index,PhysPt si_base,PhysPt di_base) DRC_FC;
+ static Bit16u DRC_CALL_CONV dynrec_movsw_word(Bit16u count,Bit16s add_index,PhysPt si_base,PhysPt di_base) {
++	dynrec_string_exception=0;
+ 	Bit16u count_left;
+ 	if (count<(Bitu)CPU_Cycles) {
+ 		count_left=0;
+@@ -1688,7 +1703,11 @@
+ 	}
+ 	add_index<<=1;
+ 	for (;count>0;count--) {
+-		mem_writew(di_base+reg_di,mem_readw(si_base+reg_si));
++		Bit16u value;
++		if (mem_readw_checked(si_base+reg_si,&value) || mem_writew_checked(di_base+reg_di,value)) {
++			dynrec_string_exception=1;
++			return (Bit16u)(count+count_left);
++		}
+ 		reg_si+=add_index;
+ 		reg_di+=add_index;
+ 	}
+@@ -1697,6 +1716,7 @@
+ 
+ static Bit32u DRC_CALL_CONV dynrec_movsw_dword(Bit32u count,Bit32s add_index,PhysPt si_base,PhysPt di_base) DRC_FC;
+ static Bit32u DRC_CALL_CONV dynrec_movsw_dword(Bit32u count,Bit32s add_index,PhysPt si_base,PhysPt di_base) {
++	dynrec_string_exception=0;
+ 	Bit32u count_left;
+ 	if (count<(Bitu)CPU_Cycles) {
+ 		count_left=0;
+@@ -1707,7 +1727,11 @@
+ 	}
+ 	add_index<<=1;
+ 	for (;count>0;count--) {
+-		mem_writew(di_base+reg_edi,mem_readw(si_base+reg_esi));
++		Bit16u value;
++		if (mem_readw_checked(si_base+reg_esi,&value) || mem_writew_checked(di_base+reg_edi,value)) {
++			dynrec_string_exception=1;
++			return count+count_left;
++		}
+ 		reg_esi+=add_index;
+ 		reg_edi+=add_index;
+ 	}
+@@ -1716,6 +1740,7 @@
+ 
+ static Bit16u DRC_CALL_CONV dynrec_movsd_word(Bit16u count,Bit16s add_index,PhysPt si_base,PhysPt di_base) DRC_FC;
+ static Bit16u DRC_CALL_CONV dynrec_movsd_word(Bit16u count,Bit16s add_index,PhysPt si_base,PhysPt di_base) {
++	dynrec_string_exception=0;
+ 	Bit16u count_left;
+ 	if (count<(Bitu)CPU_Cycles) {
+ 		count_left=0;
+@@ -1726,7 +1751,11 @@
+ 	}
+ 	add_index<<=2;
+ 	for (;count>0;count--) {
+-		mem_writed(di_base+reg_di,mem_readd(si_base+reg_si));
++		Bit32u value;
++		if (mem_readd_checked(si_base+reg_si,&value) || mem_writed_checked(di_base+reg_di,value)) {
++			dynrec_string_exception=1;
++			return (Bit16u)(count+count_left);
++		}
+ 		reg_si+=add_index;
+ 		reg_di+=add_index;
+ 	}
+@@ -1735,6 +1764,7 @@
+ 
+ static Bit32u DRC_CALL_CONV dynrec_movsd_dword(Bit32u count,Bit32s add_index,PhysPt si_base,PhysPt di_base) DRC_FC;
+ static Bit32u DRC_CALL_CONV dynrec_movsd_dword(Bit32u count,Bit32s add_index,PhysPt si_base,PhysPt di_base) {
++	dynrec_string_exception=0;
+ 	Bit32u count_left;
+ 	if (count<(Bitu)CPU_Cycles) {
+ 		count_left=0;
+@@ -1745,7 +1775,11 @@
+ 	}
+ 	add_index<<=2;
+ 	for (;count>0;count--) {
+-		mem_writed(di_base+reg_edi,mem_readd(si_base+reg_esi));
++		Bit32u value;
++		if (mem_readd_checked(si_base+reg_esi,&value) || mem_writed_checked(di_base+reg_edi,value)) {
++			dynrec_string_exception=1;
++			return count+count_left;
++		}
+ 		reg_esi+=add_index;
+ 		reg_edi+=add_index;
+ 	}
+@@ -1755,6 +1789,7 @@
+ 
+ static Bit16u DRC_CALL_CONV dynrec_lodsb_word(Bit16u count,Bit16s add_index,PhysPt si_base) DRC_FC;
+ static Bit16u DRC_CALL_CONV dynrec_lodsb_word(Bit16u count,Bit16s add_index,PhysPt si_base) {
++	dynrec_string_exception=0;
+ 	Bit16u count_left;
+ 	if (count<(Bitu)CPU_Cycles) {
+ 		count_left=0;
+@@ -1764,7 +1799,12 @@
+ 		CPU_Cycles=0;
+ 	}
+ 	for (;count>0;count--) {
+-		reg_al=mem_readb(si_base+reg_si);
++		Bit8u value;
++		if (mem_readb_checked(si_base+reg_si,&value)) {
++			dynrec_string_exception=1;
++			return (Bit16u)(count+count_left);
++		}
++		reg_al=value;
+ 		reg_si+=add_index;
+ 	}
+ 	return count_left;
+@@ -1772,6 +1812,7 @@
+ 
+ static Bit32u DRC_CALL_CONV dynrec_lodsb_dword(Bit32u count,Bit32s add_index,PhysPt si_base) DRC_FC;
+ static Bit32u DRC_CALL_CONV dynrec_lodsb_dword(Bit32u count,Bit32s add_index,PhysPt si_base) {
++	dynrec_string_exception=0;
+ 	Bit32u count_left;
+ 	if (count<(Bitu)CPU_Cycles) {
+ 		count_left=0;
+@@ -1781,7 +1822,12 @@
+ 		CPU_Cycles=0;
+ 	}
+ 	for (;count>0;count--) {
+-		reg_al=mem_readb(si_base+reg_esi);
++		Bit8u value;
++		if (mem_readb_checked(si_base+reg_esi,&value)) {
++			dynrec_string_exception=1;
++			return count+count_left;
++		}
++		reg_al=value;
+ 		reg_esi+=add_index;
+ 	}
+ 	return count_left;
+@@ -1789,6 +1835,7 @@
+ 
+ static Bit16u DRC_CALL_CONV dynrec_lodsw_word(Bit16u count,Bit16s add_index,PhysPt si_base) DRC_FC;
+ static Bit16u DRC_CALL_CONV dynrec_lodsw_word(Bit16u count,Bit16s add_index,PhysPt si_base) {
++	dynrec_string_exception=0;
+ 	Bit16u count_left;
+ 	if (count<(Bitu)CPU_Cycles) {
+ 		count_left=0;
+@@ -1799,7 +1846,12 @@
+ 	}
+ 	add_index<<=1;
+ 	for (;count>0;count--) {
+-		reg_ax=mem_readw(si_base+reg_si);
++		Bit16u value;
++		if (mem_readw_checked(si_base+reg_si,&value)) {
++			dynrec_string_exception=1;
++			return (Bit16u)(count+count_left);
++		}
++		reg_ax=value;
+ 		reg_si+=add_index;
+ 	}
+ 	return count_left;
+@@ -1807,6 +1859,7 @@
+ 
+ static Bit32u DRC_CALL_CONV dynrec_lodsw_dword(Bit32u count,Bit32s add_index,PhysPt si_base) DRC_FC;
+ static Bit32u DRC_CALL_CONV dynrec_lodsw_dword(Bit32u count,Bit32s add_index,PhysPt si_base) {
++	dynrec_string_exception=0;
+ 	Bit32u count_left;
+ 	if (count<(Bitu)CPU_Cycles) {
+ 		count_left=0;
+@@ -1817,7 +1870,12 @@
+ 	}
+ 	add_index<<=1;
+ 	for (;count>0;count--) {
+-		reg_ax=mem_readw(si_base+reg_esi);
++		Bit16u value;
++		if (mem_readw_checked(si_base+reg_esi,&value)) {
++			dynrec_string_exception=1;
++			return count+count_left;
++		}
++		reg_ax=value;
+ 		reg_esi+=add_index;
+ 	}
+ 	return count_left;
+@@ -1825,6 +1883,7 @@
+ 
+ static Bit16u DRC_CALL_CONV dynrec_lodsd_word(Bit16u count,Bit16s add_index,PhysPt si_base) DRC_FC;
+ static Bit16u DRC_CALL_CONV dynrec_lodsd_word(Bit16u count,Bit16s add_index,PhysPt si_base) {
++	dynrec_string_exception=0;
+ 	Bit16u count_left;
+ 	if (count<(Bitu)CPU_Cycles) {
+ 		count_left=0;
+@@ -1835,7 +1894,12 @@
+ 	}
+ 	add_index<<=2;
+ 	for (;count>0;count--) {
+-		reg_eax=mem_readd(si_base+reg_si);
++		Bit32u value;
++		if (mem_readd_checked(si_base+reg_si,&value)) {
++			dynrec_string_exception=1;
++			return (Bit16u)(count+count_left);
++		}
++		reg_eax=value;
+ 		reg_si+=add_index;
+ 	}
+ 	return count_left;
+@@ -1843,6 +1907,7 @@
+ 
+ static Bit32u DRC_CALL_CONV dynrec_lodsd_dword(Bit32u count,Bit32s add_index,PhysPt si_base) DRC_FC;
+ static Bit32u DRC_CALL_CONV dynrec_lodsd_dword(Bit32u count,Bit32s add_index,PhysPt si_base) {
++	dynrec_string_exception=0;
+ 	Bit32u count_left;
+ 	if (count<(Bitu)CPU_Cycles) {
+ 		count_left=0;
+@@ -1853,7 +1918,12 @@
+ 	}
+ 	add_index<<=2;
+ 	for (;count>0;count--) {
+-		reg_eax=mem_readd(si_base+reg_esi);
++		Bit32u value;
++		if (mem_readd_checked(si_base+reg_esi,&value)) {
++			dynrec_string_exception=1;
++			return count+count_left;
++		}
++		reg_eax=value;
+ 		reg_esi+=add_index;
+ 	}
+ 	return count_left;
+@@ -1862,6 +1932,7 @@
+ 
+ static Bit16u DRC_CALL_CONV dynrec_stosb_word(Bit16u count,Bit16s add_index,PhysPt di_base) DRC_FC;
+ static Bit16u DRC_CALL_CONV dynrec_stosb_word(Bit16u count,Bit16s add_index,PhysPt di_base) {
++	dynrec_string_exception=0;
+ 	Bit16u count_left;
+ 	if (count<(Bitu)CPU_Cycles) {
+ 		count_left=0;
+@@ -1871,7 +1942,10 @@
+ 		CPU_Cycles=0;
+ 	}
+ 	for (;count>0;count--) {
+-		mem_writeb(di_base+reg_di,reg_al);
++		if (mem_writeb_checked(di_base+reg_di,reg_al)) {
++			dynrec_string_exception=1;
++			return (Bit16u)(count+count_left);
++		}
+ 		reg_di+=add_index;
+ 	}
+ 	return count_left;
+@@ -1879,6 +1953,7 @@
+ 
+ static Bit32u DRC_CALL_CONV dynrec_stosb_dword(Bit32u count,Bit32s add_index,PhysPt di_base) DRC_FC;
+ static Bit32u DRC_CALL_CONV dynrec_stosb_dword(Bit32u count,Bit32s add_index,PhysPt di_base) {
++	dynrec_string_exception=0;
+ 	Bit32u count_left;
+ 	if (count<(Bitu)CPU_Cycles) {
+ 		count_left=0;
+@@ -1888,7 +1963,10 @@
+ 		CPU_Cycles=0;
+ 	}
+ 	for (;count>0;count--) {
+-		mem_writeb(di_base+reg_edi,reg_al);
++		if (mem_writeb_checked(di_base+reg_edi,reg_al)) {
++			dynrec_string_exception=1;
++			return count+count_left;
++		}
+ 		reg_edi+=add_index;
+ 	}
+ 	return count_left;
+@@ -1896,6 +1974,7 @@
+ 
+ static Bit16u DRC_CALL_CONV dynrec_stosw_word(Bit16u count,Bit16s add_index,PhysPt di_base) DRC_FC;
+ static Bit16u DRC_CALL_CONV dynrec_stosw_word(Bit16u count,Bit16s add_index,PhysPt di_base) {
++	dynrec_string_exception=0;
+ 	Bit16u count_left;
+ 	if (count<(Bitu)CPU_Cycles) {
+ 		count_left=0;
+@@ -1906,7 +1985,10 @@
+ 	}
+ 	add_index<<=1;
+ 	for (;count>0;count--) {
+-		mem_writew(di_base+reg_di,reg_ax);
++		if (mem_writew_checked(di_base+reg_di,reg_ax)) {
++			dynrec_string_exception=1;
++			return (Bit16u)(count+count_left);
++		}
+ 		reg_di+=add_index;
+ 	}
+ 	return count_left;
+@@ -1914,6 +1996,7 @@
+ 
+ static Bit32u DRC_CALL_CONV dynrec_stosw_dword(Bit32u count,Bit32s add_index,PhysPt di_base) DRC_FC;
+ static Bit32u DRC_CALL_CONV dynrec_stosw_dword(Bit32u count,Bit32s add_index,PhysPt di_base) {
++	dynrec_string_exception=0;
+ 	Bit32u count_left;
+ 	if (count<(Bitu)CPU_Cycles) {
+ 		count_left=0;
+@@ -1924,19 +2007,18 @@
+ 	}
+ 	add_index<<=1;
+ 	for (;count>0;count--) {
+-		mem_writew(di_base+reg_edi,reg_ax);
++		if (mem_writew_checked(di_base+reg_edi,reg_ax)) {
++			dynrec_string_exception=1;
++			return count+count_left;
++		}
+ 		reg_edi+=add_index;
+ 	}
+ 	return count_left;
+ }
+ 
+-// STOSD faults must return to generated code before delivering the exception.
+-// The generated caller publishes the remaining REP count and precise EIP.
+-static Bit8u dynrec_stosd_exception;
+-
+ static Bit16u DRC_CALL_CONV dynrec_stosd_word(Bit16u count,Bit16s add_index,PhysPt di_base) DRC_FC;
+ static Bit16u DRC_CALL_CONV dynrec_stosd_word(Bit16u count,Bit16s add_index,PhysPt di_base) {
+-	dynrec_stosd_exception=0;
++	dynrec_string_exception=0;
+ 	Bit16u count_left;
+ 	if (count<(Bitu)CPU_Cycles) {
+ 		count_left=0;
+@@ -1948,7 +2030,7 @@
+ 	add_index*=4;
+ 	for (;count>0;count--) {
+ 		if (mem_writed_checked(di_base+reg_di,reg_eax)) {
+-			dynrec_stosd_exception=1;
++			dynrec_string_exception=1;
+ 			return (Bit16u)(count+count_left);
+ 		}
+ 		reg_di+=add_index;
+@@ -1958,7 +2040,7 @@
+ 
+ static Bit32u DRC_CALL_CONV dynrec_stosd_dword(Bit32u count,Bit32s add_index,PhysPt di_base) DRC_FC;
+ static Bit32u DRC_CALL_CONV dynrec_stosd_dword(Bit32u count,Bit32s add_index,PhysPt di_base) {
+-	dynrec_stosd_exception=0;
++	dynrec_string_exception=0;
+ 	Bit32u count_left;
+ 	if (count<(Bitu)CPU_Cycles) {
+ 		count_left=0;
+@@ -1970,7 +2052,7 @@
+ 	add_index*=4;
+ 	for (;count>0;count--) {
+ 		if (mem_writed_checked(di_base+reg_edi,reg_eax)) {
+-			dynrec_stosd_exception=1;
++			dynrec_string_exception=1;
+ 			return count+count_left;
+ 		}
+ 		reg_edi+=add_index;

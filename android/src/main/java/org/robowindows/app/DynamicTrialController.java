@@ -11,7 +11,7 @@ import java.io.IOException;
 /** Internal owner of an isolated dynamic trial and its durable journal. */
 final class DynamicTrialController implements DynamicTrialClient.Listener {
     interface Listener {
-        void onStatus(int status, String error);
+        void onStatus(int status, String error, String residency);
     }
 
     private final MachineStore machineStore;
@@ -21,7 +21,13 @@ final class DynamicTrialController implements DynamicTrialClient.Listener {
     private MachineProfile profile;
     private boolean guestShutdownObserved;
     private boolean finished;
+    private boolean childStarted;
+    private boolean desiredPaused;
+    private Surface latestSurface;
     private long startedAtMillis;
+    private long pausedAtMillis = -1;
+    private long pausedMillis;
+    private long residencyLoggedAtMillis;
     private final Handler handler = new Handler(Looper.getMainLooper());
     private final Runnable livenessPoll = this::pollLiveness;
 
@@ -32,14 +38,34 @@ final class DynamicTrialController implements DynamicTrialClient.Listener {
     }
 
     void start(MachineProfile selected, Surface surface) throws IOException {
+        start(selected, surface, DynamicCyclePolicy.FIXED_20K);
+    }
+
+    void start(MachineProfile selected, Surface surface, int dynamicCycles) throws IOException {
+        try {
+            start(selected, surface, DynamicCyclePolicy.fromFixedCycles(dynamicCycles));
+        } catch (IllegalArgumentException error) {
+            throw new IOException(error.getMessage(), error);
+        }
+    }
+
+    void start(MachineProfile selected, Surface surface, DynamicCyclePolicy dynamicPolicy)
+            throws IOException {
         if (attempt != null || finished) throw new IOException("Dynamic trial is already active");
         profile = selected;
-        attempt = machineStore.prepareDynamicStart(selected);
+        latestSurface = surface;
+        attempt = machineStore.prepareDynamicStart(selected, dynamicPolicy);
         startedAtMillis = SystemClock.elapsedRealtime();
         try {
             client.connect(() -> {
                 try {
-                    client.start(attempt, profile, surface);
+                    Surface currentSurface = latestSurface;
+                    if (currentSurface == null || !currentSurface.isValid()) {
+                        throw new IOException("Dynamic guest surface is unavailable");
+                    }
+                    client.start(attempt, profile, currentSurface);
+                    childStarted = true;
+                    if (desiredPaused) client.setPaused(true);
                     handler.postDelayed(livenessPoll, 250);
                 } catch (IOException error) {
                     quarantine(error.getMessage());
@@ -51,11 +77,63 @@ final class DynamicTrialController implements DynamicTrialClient.Listener {
         }
     }
 
-    void setPaused(boolean paused) throws IOException { client.setPaused(paused); }
-    void setSurface(Surface surface) throws IOException { client.setSurface(surface); }
-    void cancelInput() throws IOException { client.cancelInput(); }
-    void queryStatus() throws IOException { client.queryStatus(); }
-    void restart() throws IOException { client.restart(); }
+    void setPaused(boolean paused) throws IOException {
+        desiredPaused = paused;
+        long now = SystemClock.elapsedRealtime();
+        if (paused && pausedAtMillis < 0) pausedAtMillis = now;
+        if (!paused && pausedAtMillis >= 0) {
+            pausedMillis += now - pausedAtMillis;
+            pausedAtMillis = -1;
+        }
+        if (childStarted) client.setPaused(paused);
+    }
+    void setSurface(Surface surface) throws IOException {
+        latestSurface = surface;
+        if (childStarted) client.setSurface(surface);
+    }
+    void cancelInput() throws IOException {
+        if (childStarted) client.cancelInput();
+    }
+    void pushKey(int action, int keyCode, int scanCode, int repeatCount, int metaState,
+            int source, int device, long eventNanos) throws IOException {
+        if (childStarted) {
+            client.pushKey(action, keyCode, scanCode, repeatCount, metaState, source, device,
+                    eventNanos);
+        }
+    }
+    void pushMouse(int action, float relativeX, float relativeY, float absoluteX, float absoluteY,
+            int buttonState, int actionButton, float verticalScroll, float horizontalScroll,
+            int source, int device, long eventNanos, boolean captured) throws IOException {
+        if (childStarted) {
+            client.pushMouse(action, relativeX, relativeY, absoluteX, absoluteY, buttonState,
+                    actionButton, verticalScroll, horizontalScroll, source, device, eventNanos,
+                    captured);
+        }
+    }
+    void pushTouch(int action, int pointerCount, float x, float y, float pressure,
+            int source, int device, long eventNanos) throws IOException {
+        if (childStarted) {
+            client.pushTouch(action, pointerCount, x, y, pressure, source, device, eventNanos);
+        }
+    }
+    void queryStatus() throws IOException {
+        if (childStarted) client.queryStatus();
+    }
+    void restart() throws IOException {
+        if (!childStarted) throw new IOException("Dynamic runner is still starting");
+        client.restart();
+    }
+
+    int readinessMask() {
+        return attempt == null ? 0 : attempt.readinessMask;
+    }
+
+    void confirmReadiness(int evidence) throws IOException {
+        if (!childStarted || attempt == null || !DynamicAttempt.RUNNING.equals(attempt.state)) {
+            throw new IOException("Wait for the dynamic guest to start responding");
+        }
+        attempt = machineStore.markDynamicReadiness(attempt, evidence);
+    }
 
     /** User Exit is uncertain even when the process appears to stop normally. */
     void stop() {
@@ -80,11 +158,17 @@ final class DynamicTrialController implements DynamicTrialClient.Listener {
             return;
         }
         try {
+            DynamicLiveness proof = DynamicLiveness.parse(liveness);
+            recordResidency(proof);
             if (status == NativeHost.SESSION_RUNNING &&
-                    DynamicAttempt.EXECUTING.equals(attempt.state) &&
-                    DynamicLiveness.parse(liveness).provesRunning(
-                            SystemClock.elapsedRealtime() - startedAtMillis)) {
-                attempt = machineStore.markDynamicRunning(attempt);
+                    DynamicAttempt.EXECUTING.equals(attempt.state)) {
+                if (proof.provesRunning(unpausedElapsedMillis())) {
+                    if (!proof.usesDynRec()) {
+                        quarantine("Dynamic runner did not select the ARM64 DynRec decoder");
+                        return;
+                    }
+                    attempt = machineStore.markDynamicRunning(attempt);
+                }
             } else if (status == NativeHost.SESSION_GUEST_SHUTDOWN) {
                 guestShutdownObserved = true;
                 client.requestStop();
@@ -92,6 +176,7 @@ final class DynamicTrialController implements DynamicTrialClient.Listener {
                 if (guestShutdownObserved && DynamicAttempt.RUNNING.equals(attempt.state)) {
                     machineStore.closeDynamicAttemptCleanly(attempt);
                     finished = true;
+                    childStarted = false;
                     handler.removeCallbacks(livenessPoll);
                     client.disconnect();
                 } else {
@@ -99,7 +184,7 @@ final class DynamicTrialController implements DynamicTrialClient.Listener {
                     return;
                 }
             }
-            listener.onStatus(status, null);
+            listener.onStatus(status, null, proof.residencySummary());
         } catch (IOException failure) {
             quarantine(failure.getMessage());
         }
@@ -113,19 +198,33 @@ final class DynamicTrialController implements DynamicTrialClient.Listener {
             // The durable journal remains in place and startup recovery will block it.
         }
         finished = true;
+        childStarted = false;
         handler.removeCallbacks(livenessPoll);
         client.disconnect();
         listener.onStatus(NativeHost.SESSION_FAILED,
-                error == null ? "Dynamic trial needs a disk health check" : error);
+                error == null ? "Dynamic trial needs a disk health check" : error, null);
     }
 
     private void pollLiveness() {
-        if (attempt == null || finished || !DynamicAttempt.EXECUTING.equals(attempt.state)) return;
+        if (attempt == null || finished) return;
         try {
             client.queryStatus();
             handler.postDelayed(livenessPoll, 250);
         } catch (IOException error) {
             quarantine(error.getMessage());
         }
+    }
+
+    private long unpausedElapsedMillis() {
+        long now = SystemClock.elapsedRealtime();
+        long currentPause = pausedAtMillis < 0 ? 0 : now - pausedAtMillis;
+        return Math.max(0, now - startedAtMillis - pausedMillis - currentPause);
+    }
+
+    private void recordResidency(DynamicLiveness proof) {
+        long now = SystemClock.elapsedRealtime();
+        if (now - residencyLoggedAtMillis < 5_000) return;
+        residencyLoggedAtMillis = now;
+        android.util.Log.i("RoboWindowsDynrec", "residency " + proof.residencySummary());
     }
 }

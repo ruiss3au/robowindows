@@ -1,2 +1,2 @@
-# Unified-diff context prefixes necessarily appear before source indentation.
-*.patch whitespace=-space-before-tab
+# Patches preserve upstream context indentation and trailing whitespace exactly.
+*.patch whitespace=-space-before-tab,-blank-at-eol

@@ -19,6 +19,7 @@ final class DynamicTrialProtocol {
     static final String MACHINE_ID = "machineId";
     static final String ATTEMPT_ID = "attemptId";
     static final String GENERATION = "generation";
+    static final String DYNAMIC_CYCLE_POLICY = "dynamicCyclePolicy";
     static final String SURFACE_VALUE = "surface";
     static final String PAUSED = "paused";
     static final String STATUS_VALUE = "status";

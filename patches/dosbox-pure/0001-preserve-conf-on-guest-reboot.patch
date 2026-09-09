@@ -1,8 +1,18 @@
 diff --git a/dosbox_pure_libretro.cpp b/dosbox_pure_libretro.cpp
-index ec99bf3..0577f79 100644
+index ec99bf3..b4e904f 100644
 --- a/dosbox_pure_libretro.cpp
 +++ b/dosbox_pure_libretro.cpp
-@@ -2700,12 +2700,16 @@ static void init_dosbox(bool forcemenu = false, bool reinit = false, const std::
+@@ -324,6 +324,9 @@ void NET_SetupEthernet();
+ bool MIDI_TSF_SwitchSF(const char*);
+ const char* DBP_MIDI_StartupError(Section* midisec, const char*& arg);
+ static void DBP_ForceReset(bool forcemenu = false);
++static unsigned long long robowindows_guest_resets;
++extern "C" RETRO_API void robowindows_guest_reset_diagnostics_reset(void) { robowindows_guest_resets = 0; }
++extern "C" RETRO_API unsigned long long robowindows_guest_reset_diagnostics_snapshot(void) { return robowindows_guest_resets; }
+ 
+ static void DBP_QueueEvent(DBP_Event_Type type, Bit8u port, int val = 0, int val2 = 0)
+ {
+@@ -2700,12 +2703,16 @@ static void init_dosbox(bool forcemenu = false, bool reinit = false, const std::
  		#endif
  	}
  	const int path_extlen = (path ? (int)((path_fragment ? path_fragment : path + dbp_content_path.length()) - path_ext) : 0);
@@ -21,7 +31,16 @@ index ec99bf3..0577f79 100644
  	if (dbp_skip_c_mount && !dbconf)
  	{
  		std::string confcontent;
-@@ -3537,6 +3541,8 @@ void retro_run(void)
+@@ -2873,7 +2880,7 @@ static void init_dosbox(bool forcemenu = false, bool reinit = false, const std::
+ }
+ 
+ // This is called on the main thread
+-void DBP_ForceReset(bool forcemenu) { init_dosbox(forcemenu); } 
++void DBP_ForceReset(bool forcemenu) { ++robowindows_guest_resets; init_dosbox(forcemenu); }
+ 
+ void retro_init(void) //#3
+ {
+@@ -3537,6 +3544,8 @@ void retro_run(void)
  			DBP_Buffer& buf = dbp_buffers[buffer_active];
  			if (!dbp_crash_message.empty()) // unexpected shutdown
  				DBP_Shutdown();
@@ -30,3 +49,223 @@ index ec99bf3..0577f79 100644
  			else if (dbp_state == DBPSTATE_REBOOT || dbp_biosreboot)
  				DBP_ForceReset();
  			else if (dbp_state == DBPSTATE_EXITED) // expected shutdown
+@@ -3832,6 +3841,8 @@ void retro_deinit(void)
+ // Unused features
+ void *retro_get_memory_data(unsigned id) { (void)id; return NULL; }
+ size_t retro_get_memory_size(unsigned id) { (void)id; return 0; }
++extern const char* DBP_CPU_GetDecoderName();
++extern "C" RETRO_API const char* robowindows_cpu_decoder_name(void) { return DBP_CPU_GetDecoderName(); }
+ void retro_cheat_reset(void) { }
+ void retro_cheat_set(unsigned index, bool enabled, const char *code) { (void)index; (void)enabled; (void)code; }
+ bool retro_load_game_special(unsigned type, const struct retro_game_info *info, size_t num) { return false; }
+diff --git a/src/cpu/cpu.cpp b/src/cpu/cpu.cpp
+index d28878b..86815d1 100644
+--- a/src/cpu/cpu.cpp
++++ b/src/cpu/cpu.cpp
+@@ -179,7 +179,36 @@ void CPU_SetFlags(Bitu word,Bitu mask) {
+ 	cpu.direction=1-((reg_flags & FLAG_DF) >> 9);
+ }
+ 
++static unsigned long long robowindows_pf_prepared;
++static unsigned long long robowindows_pf_delivered;
++static unsigned long long robowindows_df_delivered;
++static unsigned long long robowindows_pf_gate_entered;
++static unsigned long long robowindows_iret_executed;
++static const Bitu robowindows_exception_df = 8;
++
++extern "C" __attribute__((visibility("default")))
++void robowindows_cpu_exception_diagnostics_reset(void) {
++	robowindows_pf_prepared = 0;
++	robowindows_pf_delivered = 0;
++	robowindows_df_delivered = 0;
++	robowindows_pf_gate_entered = 0;
++	robowindows_iret_executed = 0;
++}
++
++extern "C" __attribute__((visibility("default")))
++void robowindows_cpu_exception_diagnostics_snapshot(
++		unsigned long long *pf_prepared, unsigned long long *pf_delivered,
++		unsigned long long *df_delivered, unsigned long long *pf_gate_entered,
++		unsigned long long *iret_executed) {
++	*pf_prepared = robowindows_pf_prepared;
++	*pf_delivered = robowindows_pf_delivered;
++	*df_delivered = robowindows_df_delivered;
++	*pf_gate_entered = robowindows_pf_gate_entered;
++	*iret_executed = robowindows_iret_executed;
++}
++
+ bool CPU_PrepareException(Bitu which,Bitu error) {
++	if (which == EXCEPTION_PF) ++robowindows_pf_prepared;
+ 	cpu.exception.which=which;
+ 	cpu.exception.error=error;
+ 	return true;
+@@ -551,6 +580,8 @@ void CPU_DebugException(Bit32u triggers,Bitu oldeip) {
+ 
+ void CPU_Exception(Bitu which,Bitu error ) {
+ //	LOG_MSG("Exception %d error %x",which,error);
++	if (which == EXCEPTION_PF) ++robowindows_pf_delivered;
++	if (which == robowindows_exception_df) ++robowindows_df_delivered;
+ 	cpu.exception.error=error;
+ 	CPU_Interrupt(which,CPU_INT_EXCEPTION | ((which>=8) ? CPU_INT_HAS_ERROR : 0),reg_eip);
+ }
+@@ -745,6 +776,7 @@ do_interrupt:
+ 				Segs.phys[cs]=cs_desc.GetBase();
+ 				cpu.code.big=cs_desc.Big()>0;
+ 				reg_eip=gate_off;
++				if (num == EXCEPTION_PF) ++robowindows_pf_gate_entered;
+ 
+ 				if (!(gate.Type()&1)) {
+ 					SETFLAGBIT(IF,false);
+@@ -778,6 +810,7 @@ do_interrupt:
+ 
+ 
+ void CPU_IRET(bool use32,Bitu oldeip) {
++	++robowindows_iret_executed;
+ 	//PAGE_FAULT_CLEANUP_SETUP(Bit32u orig_esp = reg_esp;)
+ 	if (!cpu.pmode) {					/* RealMode IRET */
+ 		if (use32) {
+diff --git a/src/cpu/paging.cpp b/src/cpu/paging.cpp
+index 9d43449..e4a642f 100644
+--- a/src/cpu/paging.cpp
++++ b/src/cpu/paging.cpp
+@@ -124,6 +124,42 @@ static struct {
+ 	PF_Entry entries[PF_QUEUESIZE];
+ } pf_queue;
+ 
++static unsigned long long robowindows_pf_enqueued;
++static unsigned long long robowindows_pf_completed;
++static unsigned long long robowindows_pf_wipes;
++static unsigned long long robowindows_pf_recoveries;
++static Bitu robowindows_pf_high_water;
++
++extern "C" __attribute__((visibility("default")))
++void robowindows_pagefault_diagnostics_reset(void) {
++	robowindows_pf_enqueued = 0;
++	robowindows_pf_completed = 0;
++	robowindows_pf_wipes = 0;
++	robowindows_pf_recoveries = 0;
++	robowindows_pf_high_water = pf_queue.used;
++}
++
++extern "C" __attribute__((visibility("default")))
++void robowindows_pagefault_diagnostics_snapshot(
++		unsigned long long *enqueued, unsigned long long *completed,
++		unsigned int *depth, unsigned int *high_water,
++		unsigned long long *wipes, unsigned long long *recoveries) {
++	*enqueued = robowindows_pf_enqueued;
++	*completed = robowindows_pf_completed;
++	*depth = (unsigned int)pf_queue.used;
++	*high_water = (unsigned int)robowindows_pf_high_water;
++	*wipes = robowindows_pf_wipes;
++	*recoveries = robowindows_pf_recoveries;
++}
++
++extern "C" void robowindows_pagefault_diagnostics_wipe_requested(void) {
++	++robowindows_pf_wipes;
++}
++
++extern "C" void robowindows_pagefault_diagnostics_wipe_recovered(void) {
++	++robowindows_pf_recoveries;
++}
++
+ #ifdef C_DBP_PAGE_FAULT_QUEUE_WIPE
+ extern void DOSBOX_WipePageFaultQueue();
+ extern void DOSBOX_ResetCPUDecoder();
+@@ -327,6 +363,9 @@ void PAGING_PageFault(PhysPt lin_addr,Bitu page_addr,Bitu faultcode) {
+ 	paging.cr2=lin_addr;
+ 	DBP_ASSERT(pf_queue.used < PF_QUEUESIZE);
+ 	PF_Entry * entry=&pf_queue.entries[pf_queue.used++];
++	++robowindows_pf_enqueued;
++	if (pf_queue.used > robowindows_pf_high_water)
++		robowindows_pf_high_water = pf_queue.used;
+ 	//LOG(LOG_PAGING,LOG_NORMAL)("PageFault at %X type [%x] queue %d (paging_prevent_exception_jump: %d)",lin_addr,faultcode,pf_queue.used, (int)paging_prevent_exception_jump);
+ 	//LOG(LOG_PAGING,LOG_NORMAL)("    EAX:%04X ECX:%04X EDX:%04X EBX:%04X",reg_eax,reg_ecx,reg_edx,reg_ebx);
+ 	//LOG(LOG_PAGING,LOG_NORMAL)("    CS:%04X EIP:%08X SS:%04x SP:%08X",SegValue(cs),reg_eip,SegValue(ss),reg_esp);
+@@ -349,6 +388,7 @@ void PAGING_PageFault(PhysPt lin_addr,Bitu page_addr,Bitu faultcode) {
+ #ifdef C_DBP_PAGE_FAULT_QUEUE_WIPE //DBP: Added this check to support page fault queue wiping
+ 	if (DOSBOX_IsWipingPageFaultQueue) return;
+ #endif
++	++robowindows_pf_completed;
+ 	cpudecoder=old_cpudecoder;
+ 	//LOG_MSG("SS:%04x SP:%08X",SegValue(ss),reg_esp);
+ }
+@@ -404,8 +444,7 @@ static void PAGING_NewPageFault(PhysPt lin_addr, Bitu page_addr, bool prepare_on
+ 	//LOG_MSG("FAULT q%d, code %x",  pf_queue.used, faultcode);
+ 	//PrintPageInfo("FA+",lin_addr,faultcode, prepare_only);
+ 	if (prepare_only) {
+-		cpu.exception.which = EXCEPTION_PF;
+-		cpu.exception.error = faultcode;
++		CPU_PrepareException(EXCEPTION_PF, faultcode);
+ 		//LOG_MSG("[%8u] [@%8d] PageFault at %X type [%x] PREPARE",logcnt++, CPU_Cycles,lin_addr,cpu.exception.error);
+ 	} else if (!paging_prevent_exception_jump) {
+ 		//LOG_MSG("[%8u] [@%8d] PageFault at %X type [%x] queue 1",logcnt++, CPU_Cycles,lin_addr,faultcode);
+@@ -904,8 +943,8 @@ static INLINE bool InitPageCheckPresence_CheckOnly(PhysPt lin_addr,bool writing,
+ 	table.load=phys_readd(table_addr);
+ 	if (!table.block.p) {
+ 		paging.cr2=lin_addr;
+-		cpu.exception.which=EXCEPTION_PF;
+-		cpu.exception.error=(writing?0x02:0x00) | (((cpu.cpl&cpu.mpl)==0)?0x00:0x04);
++		CPU_PrepareException(EXCEPTION_PF,
++			(writing?0x02:0x00) | (((cpu.cpl&cpu.mpl)==0)?0x00:0x04));
+ 		//LOG(LOG_PAGING,LOG_NORMAL)("PageFault at %X type [%x] PREPARE",lin_addr,cpu.exception.error);
+ 		//LOG(LOG_PAGING,LOG_NORMAL)("    EAX:%04X ECX:%04X EDX:%04X EBX:%04X",reg_eax,reg_ecx,reg_edx,reg_ebx);
+ 		//LOG(LOG_PAGING,LOG_NORMAL)("    CS:%04X EIP:%08X SS:%04x SP:%08X",SegValue(cs),reg_eip,SegValue(ss),reg_esp);
+@@ -915,8 +954,8 @@ static INLINE bool InitPageCheckPresence_CheckOnly(PhysPt lin_addr,bool writing,
+ 	entry.load=phys_readd(entry_addr);
+ 	if (!entry.block.p) {
+ 		paging.cr2=lin_addr;
+-		cpu.exception.which=EXCEPTION_PF;
+-		cpu.exception.error=(writing?0x02:0x00) | (((cpu.cpl&cpu.mpl)==0)?0x00:0x04);
++		CPU_PrepareException(EXCEPTION_PF,
++			(writing?0x02:0x00) | (((cpu.cpl&cpu.mpl)==0)?0x00:0x04));
+ 		//LOG(LOG_PAGING,LOG_NORMAL)("PageFault at %X type [%x] PREPARE",lin_addr,cpu.exception.error);
+ 		//LOG(LOG_PAGING,LOG_NORMAL)("    EAX:%04X ECX:%04X EDX:%04X EBX:%04X",reg_eax,reg_ecx,reg_edx,reg_ebx);
+ 		//LOG(LOG_PAGING,LOG_NORMAL)("    CS:%04X EIP:%08X SS:%04x SP:%08X",SegValue(cs),reg_eip,SegValue(ss),reg_esp);
+@@ -1141,8 +1180,7 @@ public:
+ 				LOG(LOG_PAGING,LOG_NORMAL)("Page access denied: cpl=%i, %x:%x:%x:%x",
+ 					cpu.cpl,entry.block.us,table.block.us,entry.block.wr,table.block.wr);
+ 				paging.cr2=lin_addr;
+-				cpu.exception.which=EXCEPTION_PF;
+-				cpu.exception.error=0x05 | (writing?0x02:0x00);
++				CPU_PrepareException(EXCEPTION_PF, 0x05 | (writing?0x02:0x00));
+ 				LOG(LOG_PAGING,LOG_NORMAL)("PageFault at %X type [%x] PREPARE",lin_addr,cpu.exception.error);
+ 				//LOG(LOG_PAGING,LOG_NORMAL)("    EAX:%04X ECX:%04X EDX:%04X EBX:%04X",reg_eax,reg_ecx,reg_edx,reg_ebx);
+ 				//LOG(LOG_PAGING,LOG_NORMAL)("    CS:%04X EIP:%08X SS:%04x SP:%08X",SegValue(cs),reg_eip,SegValue(ss),reg_esp);
+@@ -1286,8 +1324,7 @@ public:
+ 				LOG(LOG_PAGING,LOG_NORMAL)("Page access denied: cpl=%i, %x:%x:%x:%x",
+ 					cpu.cpl,entry.block.us,table.block.us,entry.block.wr,table.block.wr);
+ 				paging.cr2=lin_addr;
+-				cpu.exception.which=EXCEPTION_PF;
+-				cpu.exception.error=0x07;
++				CPU_PrepareException(EXCEPTION_PF, 0x07);
+ 				//LOG(LOG_PAGING,LOG_NORMAL)("PageFault at %X type [%x] PREPARE RO",lin_addr,cpu.exception.error);
+ 				//LOG(LOG_PAGING,LOG_NORMAL)("    EAX:%04X ECX:%04X EDX:%04X EBX:%04X",reg_eax,reg_ecx,reg_edx,reg_ebx);
+ 				//LOG(LOG_PAGING,LOG_NORMAL)("    CS:%04X EIP:%08X SS:%04x SP:%08X",SegValue(cs),reg_eip,SegValue(ss),reg_esp);
+diff --git a/src/dosbox.cpp b/src/dosbox.cpp
+index d0cbbe3..6d07909 100644
+--- a/src/dosbox.cpp
++++ b/src/dosbox.cpp
+@@ -169,12 +169,15 @@ static struct DBPArchiveWipe : DBPArchive
+ 	Bit8u *start, *end, *ptr;
+ } wipear;
+ bool DOSBOX_IsWipingPageFaultQueue;
++extern "C" void robowindows_pagefault_diagnostics_wipe_requested(void);
++extern "C" void robowindows_pagefault_diagnostics_wipe_recovered(void);
+ 
+ void DOSBOX_WipePageFaultQueue()
+ {
+ 	/* go back to the first recursion of DOSBOX_RunMachine and wipe the page fault queue */
+ 	if (!DOSBOX_IsWipingPageFaultQueue)
+ 	{
++		robowindows_pagefault_diagnostics_wipe_requested();
+ 		DOSBOX_IsWipingPageFaultQueue = true;
+ 		wipear.ptr = wipear.start;
+ 		wipear.flags |= DBPArchive::FLAG_NORESETINPUT;
+@@ -195,6 +198,7 @@ static void DOSBOX_RestorePageFaultWipe()
+ 	arr.flags |= DBPArchive::FLAG_NORESETINPUT;
+ 	DBPSerialize_All(arr, true, true);
+ 	DOSBOX_IsWipingPageFaultQueue = false;
++	robowindows_pagefault_diagnostics_wipe_recovered();
+ 	DOSBOX_ResetCPUDecoder();
+ 	DOSBOX_SetNormalLoop();
+ }

@@ -21,6 +21,20 @@ Confirm the actual decoder with aggregate diagnostics. If the pinned build
 cannot run this combination, report a failed capability gate and revise the
 spec explicitly before substituting another policy.
 
+After the first clean Windows 20k trial, admit fixed 30k only as a second
+debug-diagnostic candidate. Carry the selected cycle value in the durable
+attempt record and verify it at every host/child/config boundary. Keep 20k as
+the validated baseline, leave the saved Normal fallback unchanged, label the
+active candidate prominently, and reuse the same failure quarantine. Compare
+30k against 20k before adding any ordinary settings control.
+
+If fixed 30k improves graphics but cracks audio, test one bounded automatic
+policy: `auto 80% limit 30000`. Represent it by a project-owned policy ID, not
+free-form configuration. Derive the exact config independently on both sides of
+the process boundary, reject unlimited/unknown variants, and keep it diagnostic
+only. The core's auto controller targets execution time rather than audio
+underruns, so audio remains an explicit acceptance observation.
+
 Persist selection independently from execution. A single versioned machine
 record is authoritative; launch files are regenerable. Per-attempt journals
 remain active until confirmed teardown, and a full normal snapshot supplies
@@ -35,17 +49,94 @@ fallback. Keep migration tests for stable profiles and per-machine clean state.
    bridging with disposable fixtures before exposing dynrec.
 2. **Diagnostic reproduction** — produce a symbolized debug build, confirm the
    experimental disk and clean shutdown, reproduce once, and preserve only a
-   redacted tombstone and configuration evidence.
-3. **Root-cause analysis** — audit the pinned ARMV8LE dynrec path, executable
-   cache permissions, cache flushing, branches, and block linking.
-4. **Minimal correction** — isolate a proven fix under `patches/`; do not change
+   redacted tombstone and configuration evidence. The debug-only diagnostic
+   action must use the production journal and separate-process bridge; it must
+   not add a direct native-start escape hatch.
+3. **Readiness and bridge correction** — route keyboard, captured mouse, touch,
+   input cancellation, pause/focus and restart exclusively to the isolated
+   runner. Treat frames/audio as liveness only; require a responsive Windows
+   desktop plus explicit keyboard and pointer confirmation before continuing.
+   Make the quarantined-card action enter the normal-core recovery session
+   directly so the guest can run its disk check.
+4. **Disposable CPU fixture** — assemble a reviewed 1.44 MB boot image from
+   repository source, copy it to app-private cache for each run, and execute the
+   normal and dynamic variants in different non-exported Android processes. The
+   boot code writes a fixed result sector after real-mode, x87, self-modifying,
+   string and protected-mode checks; the app validates version, mask and checksum
+   and compares both modes. Neither service accepts a machine path.
+5. **Windows-path CPU fixture** — replace v1's single-sector test with a
+   source-built multi-sector v2 fixture. Its protected-mode stage covers paging
+   and handled page faults, interrupt/`iret`, invalid-opcode recovery, repeated
+   linked branches, and cross-page self-modifying code. Keep a dedicated
+   non-overlapping result
+   sector and invalidate all v1 capability evidence.
+6. **Root-cause analysis** — audit the pinned ARMV8LE dynrec path, executable
+   cache permissions, cache flushing, branches, and block linking. Sample only
+   bounded decoder classes on the emulator thread so a later guarded hang can
+   distinguish dynrec execution from page-fault or interpreter residency without
+   collecting guest addresses or contents. If PageFault residency is sustained,
+   instrument only aggregate enqueue, completed-return, current/high-water depth,
+   and wipe/recovery counts at the pinned queue implementation. Reset and sample
+   those counters on the emulator thread and expose them through the existing
+   liveness record; do not alter page-fault control flow while diagnosing it.
+   After each final result, terminate the isolated Android process on a short
+   process-owned timer so Android cannot retain native core globals in a cached
+   service process. Result delivery and the durable disk decision precede exit.
+   Reproduce any nested-fault hypothesis first in a source-built fixture with
+   ordered entry/return validation in Normal and DynRec. Do not tune the queue
+   wipe watchdog as a substitute for correct execution. For a reproducible
+   fixture failure, add aggregate prepared/delivered page-fault,
+   double-fault and guest-reset counters plus an allowlisted halted decoder
+   class. Use those counters to guide an instruction-level regression before
+   changing exception or reset behavior; counters cannot attribute it alone.
+7. **Minimal correction** — isolate a proven fix under `patches/`; do not change
    guest media, UI ownership, input, audio resources, or stable profiles.
-5. **Experimental UI** — offer one named `Dynamic (experimental)` option only
+8. **Experimental UI** — offer one named `Dynamic (experimental)` option only
    on experimental machines, with recovery messaging and normal-core fallback.
-6. **Validation** — run correctness first, then benchmark/AoE2 performance and
+9. **Validation** — run correctness first, then benchmark/AoE2 performance and
    thermal soak. Reject the profile if any correctness or real-time gate fails.
 
+## Attributed correction and regression
+
+The identified `dyn_grp7` INVLPG path reads ModR/M but omits effective-address
+decoding. Correct it using the existing non-reading `dyn_fill_ea` helper before
+the existing TLB clear. Keep this correctness change in its own patch; do not
+alter interpreter, exception recovery, privilege policy, or queue watchdogs.
+First run the operand-consumption regression without the correction, then with
+it on SM-T500 Normal and DynRec. A fixture pass does not establish that every
+Windows crash is resolved.
+
+For attribution, first expose fixed fixture assertion identifiers through its
+existing checksummed result record, validate against the reference emulator,
+and compare Normal/DynRec on disposable images. Restore the complete four-level
+gate after diagnostic reduction. Do not infer a root cause from aggregate fault
+counts or variant nesting depths; require an identified incorrect operation.
+
 ## Rollback
+
+Next delivery is T030–T034 from `expanded-cpu-coverage.md`; execution notes are in
+`sol-handoff.md`. Implement protocol, P0, P1, P2 and full-gate verification in that
+order. Reuse isolated runners and split images into bounded suites. Preserve all
+regressions and require a minimized failure before any additional core change.
+Broader coverage precedes another Windows trial and makes no performance claim.
+
+T029's first fixture reports assertion 21 only under DynRec: the handler sees
+the translated block's earlier instruction address instead of REP STOSD. The
+minimal correction will make STOSD's 16/32-bit address helpers use checked writes,
+return their remaining count before delivering the fault, and enter dynrec's
+existing precise exception path. Preserve completed destination updates and
+leave ECX untouched for non-REP forms. Keep this in patch 0003; other string
+operations remain an explicit audit gap, not implicitly fixed by this patch.
+
+The post-INVLPG Windows application failure requires a separate REP-store/fault
+regression (T029). Keep the corrected INVLPG patch unchanged while locating the
+first bad partial-progress or retry result in source-owned media. Compare against
+the normal interpreter and reference emulator before altering string execution.
+Do not install over the live failed Windows trial. Prefer guest shutdown; if it
+cannot finish, require user-authorized Stop trial, verify the runner has exited
+and quarantine remains, then use disposable-only diagnostics without opening
+the quarantined disk. The REP fixture checks one fault after four of eight stores
+and preserves a fixed first-failure identifier before completing its result.
 
 Disable the experimental profile and restore its last-known-safe normal-core
 configuration. Revert any isolated core patch. Never restore or replace a guest
@@ -72,6 +163,12 @@ failed. Use independent stable-role fixture hashes for isolation, not a real gue
 boot. Then test dynamic-to-normal and normal-to-dynamic transitions in fresh
 processes, late crashes, hangs, process death, stale callbacks, pause and shutdown.
 Review shared-core patches against normal execution before installing for trials.
+
+The fixture source is authoritative. Its build script pins the expected GNU
+binutils major/minor and verifies the boot loader, protected-mode stage and
+complete image layout/hashes before packaging; the generated image stays in
+ignored build output. A source/hash mismatch, stage overflow or overlap fails
+the build. Fixture result files are bounded and contain no device or guest data.
 
 Keep the prior APK on the Debian host. Rollback disables dynamic capability and
 selects normal snapshots without deleting media. An older APK must not be installed

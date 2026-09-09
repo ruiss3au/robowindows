@@ -24,14 +24,30 @@ final class DynamicAttempt {
     final long generation;
     final String state;
     final JSONObject normalFallback;
+    final int readinessMask;
+    final String dynamicCyclePolicy;
 
     DynamicAttempt(String machineId, String attemptId, long generation, String state,
             JSONObject normalFallback) {
+        this(machineId, attemptId, generation, state, normalFallback, 0,
+                DynamicCyclePolicy.FIXED_20K.id);
+    }
+
+    DynamicAttempt(String machineId, String attemptId, long generation, String state,
+            JSONObject normalFallback, int readinessMask) {
+        this(machineId, attemptId, generation, state, normalFallback, readinessMask,
+                DynamicCyclePolicy.FIXED_20K.id);
+    }
+
+    DynamicAttempt(String machineId, String attemptId, long generation, String state,
+            JSONObject normalFallback, int readinessMask, String dynamicCyclePolicy) {
         this.machineId = machineId;
         this.attemptId = attemptId;
         this.generation = generation;
         this.state = state;
         this.normalFallback = normalFallback;
+        this.readinessMask = readinessMask & DynamicReadiness.COMPLETE;
+        this.dynamicCyclePolicy = dynamicCyclePolicy;
     }
 
     DynamicAttempt withState(String nextState) {
@@ -39,12 +55,22 @@ final class DynamicAttempt {
             throw new IllegalArgumentException("Invalid dynamic attempt transition: " + state +
                     " -> " + nextState);
         }
-        return new DynamicAttempt(machineId, attemptId, generation, nextState, normalFallback);
+        return new DynamicAttempt(machineId, attemptId, generation, nextState, normalFallback,
+                readinessMask, dynamicCyclePolicy);
+    }
+
+    DynamicAttempt withReadiness(int evidence) {
+        if (!RUNNING.equals(state)) {
+            throw new IllegalStateException("Dynamic readiness requires a running attempt");
+        }
+        return new DynamicAttempt(machineId, attemptId, generation, state, normalFallback,
+                DynamicReadiness.add(readinessMask, evidence), dynamicCyclePolicy);
     }
 
     /** Corrupt or mismatched durable records are conservatively terminal. */
     DynamicAttempt blocked() {
-        return new DynamicAttempt(machineId, attemptId, generation, BLOCKED, normalFallback);
+        return new DynamicAttempt(machineId, attemptId, generation, BLOCKED, normalFallback,
+                readinessMask, dynamicCyclePolicy);
     }
 
     static DynamicAttempt read(File file) throws IOException {
@@ -53,7 +79,8 @@ final class DynamicAttempt {
                     StandardCharsets.UTF_8));
             return new DynamicAttempt(json.getString("machineId"), json.getString("attemptId"),
                     json.getLong("generation"), json.getString("state"),
-                    json.getJSONObject("normalFallback"));
+                    json.getJSONObject("normalFallback"), json.optInt("readinessMask", 0),
+                    readCyclePolicy(json));
         } catch (JSONException error) {
             throw new IOException("Dynamic recovery record is invalid", error);
         }
@@ -67,6 +94,8 @@ final class DynamicAttempt {
             json.put("generation", generation);
             json.put("state", state);
             json.put("normalFallback", normalFallback);
+            json.put("readinessMask", readinessMask);
+            json.put("dynamicCyclePolicy", dynamicCyclePolicy);
         } catch (JSONException error) {
             throw new IOException("Cannot encode dynamic recovery record", error);
         }
@@ -81,6 +110,18 @@ final class DynamicAttempt {
         } catch (IOException error) {
             staged.delete();
             throw error;
+        }
+    }
+
+    private static String readCyclePolicy(JSONObject json) {
+        String policy = json.optString("dynamicCyclePolicy", "");
+        if (!policy.isEmpty()) return policy;
+        int legacyCycles = json.optInt("dynamicCycles",
+                LaunchConfig.DYNAMIC_EXPERIMENTAL_CYCLES);
+        try {
+            return DynamicCyclePolicy.fromFixedCycles(legacyCycles).id;
+        } catch (IllegalArgumentException ignored) {
+            return "invalid";
         }
     }
 }

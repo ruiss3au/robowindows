@@ -37,6 +37,10 @@ import java.util.Locale;
 import java.util.HashMap;
 
 public final class MainActivity extends Activity {
+    private interface DynamicCommand {
+        void run(DynamicTrialController controller) throws IOException;
+    }
+
     private static final int BG = Color.rgb(16, 19, 24);
     private static final int SURFACE = Color.rgb(25, 30, 38);
     private static final int SURFACE_HIGH = Color.rgb(34, 42, 53);
@@ -46,6 +50,11 @@ public final class MainActivity extends Activity {
     private static final int PICK_MEDIA = 41;
     private static final int CHANGE_MEDIA = 42;
     private static final int WINDOWS_UTILITY = 43;
+    private static final String DYNAMIC_DIAGNOSTIC = "robowindows.runDynamicDiagnostic";
+    private static final String DYNAMIC_DIAGNOSTIC_CYCLES =
+            "robowindows.dynamicDiagnosticCycles";
+    private static final String DYNAMIC_DIAGNOSTIC_POLICY =
+            "robowindows.dynamicDiagnosticPolicy";
 
     private LinearLayout content;
     private boolean pointerCaptured;
@@ -65,6 +74,10 @@ public final class MainActivity extends Activity {
     private boolean sessionPaused;
     private long sessionGeneration;
     private MachineProfile currentSessionProfile;
+    private DynamicTrialController dynamicTrial;
+    private CpuFixtureController cpuFixtureController;
+    private boolean recoverySession;
+    private boolean recoveryGuestShutdownObserved;
     private MachineProfile pendingUtilityProfile;
     private boolean transientDebugSession;
     private AudioManager audioManager;
@@ -94,7 +107,7 @@ public final class MainActivity extends Activity {
                 sessionUiState.resume(android.os.SystemClock.uptimeMillis());
                 syncSessionControls();
                 scheduleControlsHide();
-                NativeHost.setPaused(false);
+                setActiveSessionPaused(false);
             }
         } else if (focusChange == AudioManager.AUDIOFOCUS_LOSS ||
                 focusChange == AudioManager.AUDIOFOCUS_LOSS_TRANSIENT ||
@@ -103,7 +116,7 @@ public final class MainActivity extends Activity {
             releasePointerCaptureAndCancel();
             sessionUiState.pause(android.os.SystemClock.uptimeMillis());
             syncSessionControls();
-            NativeHost.setPaused(true);
+            setActiveSessionPaused(true);
         }
     };
     private final Runnable refreshInputStats = new Runnable() {
@@ -170,6 +183,23 @@ public final class MainActivity extends Activity {
             if (getIntent().getBooleanExtra("robowindows.testPersistence", false)) {
                 DebugSelfTest.run(this);
             }
+            if (getIntent().getBooleanExtra("robowindows.runCpuDiagnostic", false)) {
+                getIntent().removeExtra("robowindows.runCpuDiagnostic");
+                runCpuDiagnostic();
+                return;
+            }
+            if (getIntent().getBooleanExtra(DYNAMIC_DIAGNOSTIC, false)) {
+                String dynamicPolicy = requestedDynamicPolicy(getIntent());
+                getIntent().removeExtra(DYNAMIC_DIAGNOSTIC);
+                getIntent().removeExtra(DYNAMIC_DIAGNOSTIC_CYCLES);
+                getIntent().removeExtra(DYNAMIC_DIAGNOSTIC_POLICY);
+                runDynamicDiagnostic(dynamicPolicy);
+                return;
+            }
+            if (getIntent().getBooleanExtra("robowindows.runRecoveryBoot", false)) {
+                runRecoveryBoot();
+                return;
+            }
             String testConfig = getIntent().getStringExtra("robowindows.testConfig");
             if (testConfig != null && testConfig.endsWith(".conf")) {
                 transientDebugSession = true;
@@ -196,19 +226,175 @@ public final class MainActivity extends Activity {
 
     @Override protected void onNewIntent(Intent intent) {
         super.onNewIntent(intent);
+        setIntent(intent);
         if ((getApplicationInfo().flags & ApplicationInfo.FLAG_DEBUGGABLE) == 0) return;
+        if (intent.getBooleanExtra("robowindows.runCpuDiagnostic", false)) {
+            intent.removeExtra("robowindows.runCpuDiagnostic");
+            handler.post(() -> {
+                if (sessionActive) {
+                    Toast.makeText(this, "Stop the current session first.",
+                            Toast.LENGTH_LONG).show();
+                } else {
+                    runCpuDiagnostic();
+                }
+            });
+            return;
+        }
+        if (intent.getBooleanExtra(DYNAMIC_DIAGNOSTIC, false)) {
+            String dynamicPolicy = requestedDynamicPolicy(intent);
+            intent.removeExtra(DYNAMIC_DIAGNOSTIC);
+            intent.removeExtra(DYNAMIC_DIAGNOSTIC_CYCLES);
+            intent.removeExtra(DYNAMIC_DIAGNOSTIC_POLICY);
+            handler.post(() -> {
+                if (sessionActive) {
+                    Toast.makeText(this, "Stop the current session first.",
+                            Toast.LENGTH_LONG).show();
+                } else {
+                    runDynamicDiagnostic(dynamicPolicy);
+                }
+            });
+            return;
+        }
+        if (intent.getBooleanExtra("robowindows.runRecoveryBoot", false)) {
+            if (sessionActive) {
+                Toast.makeText(this, "Stop the current session first.", Toast.LENGTH_LONG).show();
+            } else {
+                runRecoveryBoot();
+            }
+            return;
+        }
         int keyCode = intent.getIntExtra("robowindows.testKey", -1);
         if (keyCode < 0) return;
         long now = android.os.SystemClock.uptimeMillis();
-        NativeHost.pushKey(KeyEvent.ACTION_DOWN, keyCode, 0, 0, 0,
+        pushSessionKey(KeyEvent.ACTION_DOWN, keyCode, 0, 0, 0,
                 InputDevice.SOURCE_KEYBOARD, 0, now * 1_000_000L);
         // Keep the key down across several guest input polls. An immediate down/up pair can be
         // entirely missed by a libretro core between frames.
         handler.postDelayed(() -> {
             long releasedAt = android.os.SystemClock.uptimeMillis();
-            NativeHost.pushKey(KeyEvent.ACTION_UP, keyCode, 0, 0, 0,
+            pushSessionKey(KeyEvent.ACTION_UP, keyCode, 0, 0, 0,
                     InputDevice.SOURCE_KEYBOARD, 0, releasedAt * 1_000_000L);
         }, 75);
+    }
+
+    /** Deliberately debug-only: ADB must explicitly request the one guarded diagnostic. */
+    private static String requestedDynamicPolicy(Intent intent) {
+        String policyId = intent.getStringExtra(DYNAMIC_DIAGNOSTIC_POLICY);
+        if (policyId != null) return policyId;
+        int cycles = intent.getIntExtra(DYNAMIC_DIAGNOSTIC_CYCLES,
+                LaunchConfig.DYNAMIC_EXPERIMENTAL_CYCLES);
+        try {
+            return DynamicCyclePolicy.fromFixedCycles(cycles).id;
+        } catch (IllegalArgumentException ignored) {
+            return "invalid";
+        }
+    }
+
+    private void runDynamicDiagnostic(String dynamicPolicyId) {
+        DynamicCyclePolicy dynamicPolicy;
+        try {
+            dynamicPolicy = DynamicCyclePolicy.fromId(dynamicPolicyId);
+        } catch (IllegalArgumentException error) {
+            Toast.makeText(this, "Unsupported dynamic diagnostic cycle value.",
+                    Toast.LENGTH_LONG).show();
+            return;
+        }
+        if (!CpuFixtureGate.passed(this)) {
+            Toast.makeText(this, "Run and pass the CPU test for this build first.",
+                    Toast.LENGTH_LONG).show();
+            return;
+        }
+        MachineProfile experimental = null;
+        for (MachineProfile candidate : machineStore.load()) {
+            if (!candidate.isExperimental()) continue;
+            if (experimental != null) {
+                Toast.makeText(this, "Dynamic diagnostic needs exactly one experimental copy.",
+                        Toast.LENGTH_LONG).show();
+                return;
+            }
+            experimental = candidate;
+        }
+        if (experimental == null) {
+            Toast.makeText(this, "No experimental copy is available for the diagnostic.",
+                    Toast.LENGTH_LONG).show();
+            return;
+        }
+        try {
+            showDynamicDiagnostic(machineStore.selectDynamicProfile(experimental), dynamicPolicy);
+        } catch (IOException error) {
+            Toast.makeText(this, error.getMessage(), Toast.LENGTH_LONG).show();
+        }
+    }
+
+    private void runCpuDiagnostic() {
+        if (cpuFixtureController != null) return;
+        LinearLayout page = new LinearLayout(this);
+        page.setOrientation(LinearLayout.VERTICAL);
+        page.setPadding(dp(28), dp(22), dp(28), dp(22));
+        page.setBackgroundColor(BG);
+        Button back = button("Back", v -> {
+            cancelCpuDiagnostic();
+            showHome();
+        });
+        page.addView(back, new LinearLayout.LayoutParams(dp(110), dp(46)));
+        TextView title = text("CPU correctness test", 28, TEXT);
+        title.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+        LinearLayout.LayoutParams titleParams = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        titleParams.topMargin = dp(24);
+        page.addView(title, titleParams);
+        TextView explanation = text("Runs a RoboWindows test image in isolated normal and " +
+                "dynamic processes. No machine disk is opened.", 16, MUTED);
+        LinearLayout.LayoutParams explanationParams = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        explanationParams.topMargin = dp(12);
+        page.addView(explanation, explanationParams);
+        ProgressBar progress = new ProgressBar(this);
+        LinearLayout.LayoutParams progressParams = new LinearLayout.LayoutParams(dp(48), dp(48));
+        progressParams.topMargin = dp(28);
+        page.addView(progress, progressParams);
+        TextView status = text("Preparing CPU fixture…", 17, TEXT);
+        LinearLayout.LayoutParams statusParams = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        statusParams.topMargin = dp(16);
+        page.addView(status, statusParams);
+        setContentView(page);
+
+        CpuFixtureController controller = new CpuFixtureController(this,
+                new CpuFixtureController.Listener() {
+                    @Override public void onProgress(String message) {
+                        if (cpuFixtureController != null) status.setText(message);
+                    }
+
+                    @Override public void onComplete(boolean passed, String message) {
+                        if (cpuFixtureController == null) return;
+                        cpuFixtureController = null;
+                        progress.setVisibility(View.GONE);
+                        status.setText(message);
+                        back.setText("Done");
+                        android.util.Log.i("RoboWindowsCpuFixture",
+                                "status=" + (passed ? "pass" : "fail") + " " + message);
+                        Toast.makeText(MainActivity.this, message, Toast.LENGTH_LONG).show();
+                    }
+                });
+        cpuFixtureController = controller;
+        controller.start();
+    }
+
+    private void cancelCpuDiagnostic() {
+        CpuFixtureController controller = cpuFixtureController;
+        cpuFixtureController = null;
+        if (controller != null) controller.cancel();
+    }
+
+    private void runRecoveryBoot() {
+        for (MachineProfile candidate : machineStore.load()) {
+            if (candidate.isExperimental() && machineStore.requiresDynamicMediaCheck(candidate)) {
+                showSession(candidate, true);
+                return;
+            }
+        }
+        Toast.makeText(this, "No quarantined experimental copy is available.", Toast.LENGTH_LONG).show();
     }
 
     private int dp(int value) {
@@ -286,6 +472,12 @@ public final class MainActivity extends Activity {
         LinearLayout.LayoutParams diagnosticParams = new LinearLayout.LayoutParams(dp(190), dp(46));
         diagnosticParams.topMargin = dp(22);
         rail.addView(button("Input test", v -> showDiagnostics()), diagnosticParams);
+        if ((getApplicationInfo().flags & ApplicationInfo.FLAG_DEBUGGABLE) != 0) {
+            LinearLayout.LayoutParams cpuParams = new LinearLayout.LayoutParams(dp(190), dp(46));
+            cpuParams.topMargin = dp(12);
+            rail.addView(button(CpuFixtureGate.passed(this) ? "✓ CPU test" : "CPU test",
+                    v -> runCpuDiagnostic()), cpuParams);
+        }
 
         content = new LinearLayout(this);
         content.setOrientation(LinearLayout.VERTICAL);
@@ -397,8 +589,8 @@ public final class MainActivity extends Activity {
                 machineStore.bootsInstaller(profile) ? "Install" : "Start";
         Button start = button(startLabel, v -> showSession(profile));
         if (machineStore.requiresDynamicMediaCheck(profile)) {
-            start.setEnabled(false);
             start.setText("Needs disk check");
+            start.setOnClickListener(v -> showSession(profile, true));
         }
         row.addView(start, startParams);
         item.addView(row);
@@ -725,13 +917,20 @@ public final class MainActivity extends Activity {
     }
 
     private void showSession(MachineProfile profile) {
+        showSession(profile, false);
+    }
+
+    private void showSession(MachineProfile profile, boolean recoveryBoot) {
         try {
-            profile = machineStore.prepareNormalStart(profile);
+            profile = recoveryBoot ? machineStore.prepareRecoveryStart(profile) :
+                    machineStore.prepareNormalStart(profile);
         } catch (IOException error) {
             Toast.makeText(this, error.getMessage(), Toast.LENGTH_LONG).show();
             return;
         }
         final MachineProfile sessionProfile = profile;
+        recoverySession = recoveryBoot;
+        recoveryGuestShutdownObserved = false;
         long generation = ++sessionGeneration;
         currentSessionProfile = sessionProfile;
         FrameLayout page = new FrameLayout(this);
@@ -744,7 +943,8 @@ public final class MainActivity extends Activity {
         controls.setBackground(background(Color.argb(238, 25, 30, 38), 0));
         sessionControls = controls;
         controls.addView(button("Exit", v -> showHome()), new LinearLayout.LayoutParams(dp(110), dp(44)));
-        TextView title = text(sessionProfile.name, 20, TEXT);
+        TextView title = text(recoveryBoot ? "Disk check · " + sessionProfile.name :
+                sessionProfile.name, 20, TEXT);
         title.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
         LinearLayout.LayoutParams sessionTitleParams = new LinearLayout.LayoutParams(0,
                 ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
@@ -760,7 +960,7 @@ public final class MainActivity extends Activity {
                 sessionUiState.resume(android.os.SystemClock.uptimeMillis());
                 scheduleControlsHide();
             }
-            NativeHost.setPaused(sessionPaused);
+            setActiveSessionPaused(sessionPaused);
             pause.setText(sessionPaused ? "Resume" : "Pause");
             syncSessionControls();
         });
@@ -794,9 +994,128 @@ public final class MainActivity extends Activity {
         sessionUiState.start(android.os.SystemClock.uptimeMillis());
         syncSessionControls();
         scheduleControlsHide();
-        if (audioFocusPaused) NativeHost.setPaused(true);
+        if (audioFocusPaused) setActiveSessionPaused(true);
         if (sessionActive && !transientDebugSession) machineStore.markSessionStarted(sessionProfile.id);
         handler.postDelayed(() -> confirmSessionStarted(sessionProfile, generation), 700);
+    }
+
+    private void showDynamicDiagnostic(MachineProfile profile, DynamicCyclePolicy dynamicPolicy) {
+        final MachineProfile sessionProfile = profile;
+        currentSessionProfile = profile;
+        FrameLayout page = new FrameLayout(this);
+        page.setBackgroundColor(BG);
+        TextView decoderResidency = text("Decoder residency: waiting…", 13, MUTED);
+        DynamicTrialController controller = new DynamicTrialController(this,
+                (status, error, residency) -> {
+            if (residency != null) decoderResidency.setText(residency);
+            if (error != null) {
+                Toast.makeText(this, error, Toast.LENGTH_LONG).show();
+                showHome();
+            } else if (status == NativeHost.SESSION_STOPPED) {
+                showHome();
+            }
+        });
+        dynamicTrial = controller;
+        GuestDisplayView guest = new GuestDisplayView(this, this::deviceHandle,
+                new GuestDisplayView.SessionBridge() {
+                    @Override public void setSurface(android.view.Surface surface) {
+                        if (dynamicTrial == null) return;
+                        runDynamicCommand(activeController -> activeController.setSurface(surface));
+                    }
+                    @Override public void pushMouse(MotionEvent event, int handle, boolean captured) {
+                        if (dynamicTrial == null) return;
+                        runDynamicCommand(activeController -> activeController.pushMouse(
+                                    event.getActionMasked(),
+                                    event.getAxisValue(MotionEvent.AXIS_RELATIVE_X),
+                                    event.getAxisValue(MotionEvent.AXIS_RELATIVE_Y),
+                                    event.getX(), event.getY(), event.getButtonState(),
+                                    event.getActionButton(),
+                                    event.getAxisValue(MotionEvent.AXIS_VSCROLL),
+                                    event.getAxisValue(MotionEvent.AXIS_HSCROLL), event.getSource(),
+                                    handle, event.getEventTime() * 1_000_000L, captured));
+                    }
+                }, false);
+        sessionGuest = guest;
+        LinearLayout controls = new LinearLayout(this);
+        controls.setGravity(Gravity.CENTER_VERTICAL);
+        controls.setPadding(dp(12), dp(8), dp(12), dp(8));
+        controls.setBackground(background(Color.argb(238, 25, 30, 38), 0));
+        sessionControls = controls;
+        controls.addView(button("Stop trial", v -> showHome()),
+                new LinearLayout.LayoutParams(dp(130), dp(44)));
+        TextView title = text(dynamicPolicy.label + " · " + sessionProfile.name, 20, PRIMARY);
+        title.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+        LinearLayout diagnosticLabels = new LinearLayout(this);
+        diagnosticLabels.setOrientation(LinearLayout.VERTICAL);
+        diagnosticLabels.addView(title);
+        diagnosticLabels.addView(decoderResidency);
+        controls.addView(diagnosticLabels, new LinearLayout.LayoutParams(0,
+                ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+        page.addView(guest, new FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        page.addView(controls, new FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, dp(60), Gravity.TOP));
+        LinearLayout readiness = new LinearLayout(this);
+        readiness.setGravity(Gravity.CENTER_VERTICAL);
+        readiness.setPadding(dp(12), dp(8), dp(12), dp(8));
+        readiness.setBackground(background(Color.argb(238, 25, 30, 38), 0));
+        TextView readinessLabel = text("Confirm only after Windows responds", 14, MUTED);
+        readiness.addView(readinessLabel, new LinearLayout.LayoutParams(0,
+                ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+        Button desktopReady = button("Desktop", null);
+        desktopReady.setOnClickListener(v -> confirmDynamicReadiness(controller,
+                DynamicReadiness.DESKTOP, desktopReady));
+        readiness.addView(desktopReady, new LinearLayout.LayoutParams(dp(130), dp(44)));
+        Button keyboardReady = button("Keyboard", null);
+        keyboardReady.setOnClickListener(v -> confirmDynamicReadiness(controller,
+                DynamicReadiness.KEYBOARD, keyboardReady));
+        LinearLayout.LayoutParams keyboardParams = new LinearLayout.LayoutParams(dp(130), dp(44));
+        keyboardParams.leftMargin = dp(10);
+        readiness.addView(keyboardReady, keyboardParams);
+        Button mouseReady = button("Mouse", null);
+        mouseReady.setOnClickListener(v -> confirmDynamicReadiness(controller,
+                DynamicReadiness.CAPTURED_MOUSE, mouseReady));
+        LinearLayout.LayoutParams mouseParams = new LinearLayout.LayoutParams(dp(130), dp(44));
+        mouseParams.leftMargin = dp(10);
+        readiness.addView(mouseReady, mouseParams);
+        page.addView(readiness, new FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, dp(60), Gravity.BOTTOM));
+        setContentView(page);
+        guest.requestFocus();
+        sessionPaused = false;
+        sessionActive = true;
+        sessionUiState.start(android.os.SystemClock.uptimeMillis());
+        syncSessionControls();
+        // A diagnostic must always leave its explicit stop control visible.
+        requestGuestAudioFocus();
+        guest.post(() -> {
+            if (!sessionActive || dynamicTrial != controller) return;
+            try {
+                controller.start(sessionProfile, guest.getHolder().getSurface(), dynamicPolicy);
+                if (audioFocusPaused) controller.setPaused(true);
+            } catch (IOException error) {
+                Toast.makeText(this, error.getMessage(), Toast.LENGTH_LONG).show();
+                showHome();
+            }
+        });
+    }
+
+    private void confirmDynamicReadiness(DynamicTrialController controller, int evidence,
+            Button button) {
+        if (dynamicTrial != controller || !sessionActive) return;
+        try {
+            if ((controller.readinessMask() & evidence) != 0) return;
+            controller.confirmReadiness(evidence);
+            button.setText("✓ " + button.getText());
+            button.setTextColor(PRIMARY);
+            button.setBackground(background(SURFACE_HIGH, 12));
+            if (DynamicReadiness.complete(controller.readinessMask())) {
+                Toast.makeText(this, "Desktop, keyboard, and captured mouse are confirmed.",
+                        Toast.LENGTH_LONG).show();
+            }
+        } catch (IOException error) {
+            Toast.makeText(this, error.getMessage(), Toast.LENGTH_LONG).show();
+        }
     }
 
     private void pickSessionMedia() {
@@ -809,7 +1128,9 @@ public final class MainActivity extends Activity {
     private void restartSession(MachineProfile profile) {
         sessionPaused = false;
         currentSessionProfile = profile;
-        if (!NativeHost.restartSession()) {
+        if (dynamicTrial != null) {
+            runDynamicCommand(DynamicTrialController::restart);
+        } else if (!NativeHost.restartSession()) {
             Toast.makeText(this, "This machine could not restart.", Toast.LENGTH_LONG).show();
         }
     }
@@ -833,7 +1154,10 @@ public final class MainActivity extends Activity {
         if (!isCurrentSession(profile, generation)) return;
         int status = NativeHost.sessionStatus();
         if (status == NativeHost.SESSION_GUEST_SHUTDOWN) {
-            if (!transientDebugSession) machineStore.markGuestShutdown(profile.id);
+            if (recoverySession) recoveryGuestShutdownObserved = true;
+            if (!transientDebugSession && !recoverySession) {
+                machineStore.markGuestShutdown(profile.id);
+            }
             showHome();
             return;
         }
@@ -856,17 +1180,34 @@ public final class MainActivity extends Activity {
         sessionUiState.exit();
         handler.removeCallbacks(hideSessionControls);
         handler.removeCallbacks(captureRequestTimeout);
-        if (sessionActive) {
-            NativeHost.stopSession();
-            if (!transientDebugSession) machineStore.markSessionStopped();
-        }
+        boolean wasActive = sessionActive;
+        DynamicTrialController trial = dynamicTrial;
         sessionActive = false;
+        dynamicTrial = null;
+        if (wasActive) {
+            if (trial != null) {
+                trial.stop();
+                trial.destroy();
+            } else {
+                NativeHost.stopSession();
+                if (recoverySession && recoveryGuestShutdownObserved) {
+                    try {
+                        machineStore.closeRecoveryAfterCleanShutdown(currentSessionProfile);
+                        dynamicRecoveryApplied = false;
+                    } catch (IOException error) {
+                        Toast.makeText(this, error.getMessage(), Toast.LENGTH_LONG).show();
+                    }
+                } else if (!transientDebugSession) machineStore.markSessionStopped();
+            }
+        }
         sessionPaused = false;
         currentSessionProfile = null;
         sessionGuest = null;
         sessionControls = null;
         consumingRevealTouch = false;
         transientDebugSession = false;
+        recoverySession = false;
+        recoveryGuestShutdownObserved = false;
         audioFocusPaused = false;
         if (audioManager != null && audioFocusRequest != null) {
             audioManager.abandonAudioFocusRequest(audioFocusRequest);
@@ -956,6 +1297,49 @@ public final class MainActivity extends Activity {
         return device != null && device.isExternal() && !device.isVirtual();
     }
 
+    private boolean runDynamicCommand(DynamicCommand command) {
+        DynamicTrialController controller = dynamicTrial;
+        if (controller == null) return false;
+        try {
+            command.run(controller);
+        } catch (IOException error) {
+            Toast.makeText(this, "Dynamic runner connection failed. The copy remains quarantined.",
+                    Toast.LENGTH_LONG).show();
+            handler.post(this::showHome);
+        }
+        return true;
+    }
+
+    private void setActiveSessionPaused(boolean paused) {
+        if (!runDynamicCommand(controller -> controller.setPaused(paused))) {
+            NativeHost.setPaused(paused);
+        }
+    }
+
+    private void cancelActiveSessionInput() {
+        if (!runDynamicCommand(DynamicTrialController::cancelInput)) NativeHost.cancelInput();
+    }
+
+    private void pushSessionKey(int action, int keyCode, int scanCode, int repeatCount,
+            int metaState, int source, int device, long eventNanos) {
+        if (!runDynamicCommand(controller -> controller.pushKey(action, keyCode, scanCode,
+                repeatCount, metaState, source, device, eventNanos))) {
+            NativeHost.pushKey(action, keyCode, scanCode, repeatCount, metaState, source, device,
+                    eventNanos);
+        }
+    }
+
+    private void pushSessionTouch(MotionEvent event) {
+        int handle = deviceHandle(event.getDeviceId());
+        if (!runDynamicCommand(controller -> controller.pushTouch(event.getActionMasked(),
+                event.getPointerCount(), event.getX(), event.getY(), event.getPressure(),
+                event.getSource(), handle, event.getEventTime() * 1_000_000L))) {
+            NativeHost.pushTouch(event.getActionMasked(), event.getPointerCount(), event.getX(),
+                    event.getY(), event.getPressure(), event.getSource(), handle,
+                    event.getEventTime() * 1_000_000L);
+        }
+    }
+
     private String deviceType(InputDevice device) {
         int sources = device.getSources();
         if ((sources & InputDevice.SOURCE_MOUSE) == InputDevice.SOURCE_MOUSE) return "Mouse";
@@ -966,7 +1350,7 @@ public final class MainActivity extends Activity {
 
     @Override public boolean dispatchKeyEvent(KeyEvent event) {
         if (!isExternalPhysical(event.getDevice())) return super.dispatchKeyEvent(event);
-        NativeHost.pushKey(event.getAction(), event.getKeyCode(), event.getScanCode(),
+        pushSessionKey(event.getAction(), event.getKeyCode(), event.getScanCode(),
                 event.getRepeatCount(), event.getMetaState(), event.getSource(),
                 deviceHandle(event.getDeviceId()), event.getEventTime() * 1_000_000L);
         if (sessionActive) return true;
@@ -1010,9 +1394,7 @@ public final class MainActivity extends Activity {
             consumingRevealTouch = true;
             return true;
         }
-        NativeHost.pushTouch(event.getActionMasked(), event.getPointerCount(), event.getX(),
-                event.getY(), event.getPressure(), event.getSource(), deviceHandle(event.getDeviceId()),
-                event.getEventTime() * 1_000_000L);
+        pushSessionTouch(event);
         // Touch remains Android UI input until an explicit guest-touch policy is selected.
         return super.dispatchTouchEvent(event);
     }
@@ -1027,7 +1409,7 @@ public final class MainActivity extends Activity {
             getWindow().getDecorView().releasePointerCapture();
             pointerCaptured = false;
         }
-        if (!hasCapture) NativeHost.cancelInput();
+        if (!hasCapture) cancelActiveSessionInput();
         syncSessionControls();
         if (failed) Toast.makeText(this,
                 "Mouse capture is unavailable. Controls remain available.",
@@ -1048,7 +1430,7 @@ public final class MainActivity extends Activity {
         releasePointerCaptureAndCancel();
         sessionUiState.pause(android.os.SystemClock.uptimeMillis());
         syncSessionControls();
-        if (sessionActive) NativeHost.setPaused(true);
+        if (sessionActive) setActiveSessionPaused(true);
         super.onPause();
     }
 
@@ -1065,13 +1447,16 @@ public final class MainActivity extends Activity {
             }
             syncSessionControls();
         }
-        if (sessionActive && !sessionPaused && !audioFocusPaused) NativeHost.setPaused(false);
+        if (sessionActive && !sessionPaused && !audioFocusPaused) {
+            setActiveSessionPaused(false);
+        }
     }
 
     @Override protected void onDestroy() {
         ((InputManager) getSystemService(Context.INPUT_SERVICE))
                 .unregisterInputDeviceListener(inputListener);
         handler.removeCallbacksAndMessages(null);
+        cancelCpuDiagnostic();
         stopActiveSession();
         super.onDestroy();
     }
@@ -1083,10 +1468,12 @@ public final class MainActivity extends Activity {
             releasePointerCaptureAndCancel();
             sessionUiState.pause(android.os.SystemClock.uptimeMillis());
             syncSessionControls();
+            setActiveSessionPaused(true);
         } else if (!appPaused && !sessionPaused && !audioFocusPaused) {
             sessionUiState.resume(android.os.SystemClock.uptimeMillis());
             syncSessionControls();
             scheduleControlsHide();
+            setActiveSessionPaused(false);
         }
     }
 
@@ -1141,16 +1528,17 @@ public final class MainActivity extends Activity {
             getWindow().getDecorView().releasePointerCapture();
         }
         pointerCaptured = false;
-        NativeHost.cancelInput();
+        cancelActiveSessionInput();
     }
 
     private void scheduleControlsHide() {
         handler.removeCallbacks(hideSessionControls);
+        if (dynamicTrial != null) return;
         handler.postDelayed(hideSessionControls, SessionUiState.CONTROLS_VISIBLE_MS);
     }
 
     private void syncSessionControls() {
-        if (sessionControls != null) sessionControls.setVisibility(
+        if (sessionControls != null) sessionControls.setVisibility(dynamicTrial != null ||
                 sessionUiState.areControlsVisible() ? View.VISIBLE : View.GONE);
     }
 }

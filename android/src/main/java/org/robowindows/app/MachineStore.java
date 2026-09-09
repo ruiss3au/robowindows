@@ -102,6 +102,21 @@ final class MachineStore {
      * only after this method returns successfully.
      */
     synchronized DynamicAttempt prepareDynamicStart(MachineProfile selected) throws IOException {
+        return prepareDynamicStart(selected, DynamicCyclePolicy.FIXED_20K);
+    }
+
+    synchronized DynamicAttempt prepareDynamicStart(MachineProfile selected, int dynamicCycles)
+            throws IOException {
+        try {
+            return prepareDynamicStart(selected, DynamicCyclePolicy.fromFixedCycles(dynamicCycles));
+        } catch (IllegalArgumentException error) {
+            throw new IOException(error.getMessage(), error);
+        }
+    }
+
+    synchronized DynamicAttempt prepareDynamicStart(MachineProfile selected,
+            DynamicCyclePolicy dynamicPolicy) throws IOException {
+        if (dynamicPolicy == null) throw new IOException("Dynamic cycle policy is missing");
         MachineProfile current = requireCurrent(selected);
         if (!current.isExperimental() || !current.isDynamicSelected() || hasInterruptedSession() ||
                 !hasCleanGuestShutdown(current.id)) {
@@ -114,14 +129,14 @@ final class MachineStore {
         try {
             prepared = new DynamicAttempt(current.id, UUID.randomUUID().toString(),
                     current.configurationGeneration, DynamicAttempt.PREPARED,
-                    normalFallbackSettings(current));
+                    normalFallbackSettings(current), 0, dynamicPolicy.id);
         } catch (JSONException error) {
             throw new IOException("Cannot save dynamic fallback", error);
         }
         writeAttempt(prepared, journal, "journal-prepared");
         try {
             faults.before("dynamic-launch");
-            writeDynamicLaunchConfig(current);
+            writeDynamicLaunchConfig(current, dynamicPolicy);
             DynamicAttempt executing = prepared.withState(DynamicAttempt.EXECUTING);
             writeAttempt(executing, journal, "journal-executing");
             return executing;
@@ -196,6 +211,28 @@ final class MachineStore {
     /** Rechecks the exact durable handoff before the child may load native code. */
     synchronized MachineProfile validateDynamicChildHandoff(String machineId, String attemptId,
             long generation) throws IOException {
+        return validateDynamicChildHandoff(machineId, attemptId, generation,
+                DynamicCyclePolicy.FIXED_20K.id);
+    }
+
+    synchronized MachineProfile validateDynamicChildHandoff(String machineId, String attemptId,
+            long generation, int dynamicCycles) throws IOException {
+        try {
+            return validateDynamicChildHandoff(machineId, attemptId, generation,
+                    DynamicCyclePolicy.fromFixedCycles(dynamicCycles).id);
+        } catch (IllegalArgumentException error) {
+            throw new IOException(error.getMessage(), error);
+        }
+    }
+
+    synchronized MachineProfile validateDynamicChildHandoff(String machineId, String attemptId,
+            long generation, String dynamicPolicyId) throws IOException {
+        DynamicCyclePolicy dynamicPolicy;
+        try {
+            dynamicPolicy = DynamicCyclePolicy.fromId(dynamicPolicyId);
+        } catch (IllegalArgumentException error) {
+            throw new IOException(error.getMessage(), error);
+        }
         if (machineId == null || attemptId == null) {
             throw new IOException("Dynamic attempt identity is missing");
         }
@@ -208,6 +245,7 @@ final class MachineStore {
             DynamicAttempt attempt = DynamicAttempt.read(dynamicAttemptFile(profile));
             if (!attemptId.equals(attempt.attemptId) || attempt.generation != generation ||
                     !machineId.equals(attempt.machineId) ||
+                    !attempt.dynamicCyclePolicy.equals(dynamicPolicy.id) ||
                     (!DynamicAttempt.EXECUTING.equals(attempt.state) &&
                     !DynamicAttempt.RUNNING.equals(attempt.state))) {
                 throw new IOException("Dynamic attempt is not authorized for native handoff");
@@ -223,6 +261,20 @@ final class MachineStore {
         DynamicAttempt running = current.withState(DynamicAttempt.RUNNING);
         running.writeAtomically(dynamicAttemptFile(requireProfile(expected.machineId, expected.generation)));
         return running;
+    }
+
+    synchronized DynamicAttempt markDynamicReadiness(DynamicAttempt expected, int evidence)
+            throws IOException {
+        DynamicAttempt current = requireCurrentDynamicAttempt(expected, DynamicAttempt.RUNNING);
+        DynamicAttempt updated;
+        try {
+            updated = current.withReadiness(evidence);
+        } catch (IllegalArgumentException | IllegalStateException error) {
+            throw new IOException(error.getMessage(), error);
+        }
+        updated.writeAtomically(dynamicAttemptFile(
+                requireProfile(expected.machineId, expected.generation)));
+        return updated;
     }
 
     /** Records verified guest shutdown only after native unload/flush has returned. */
@@ -261,6 +313,42 @@ final class MachineStore {
         }
         validateWritableOwnership(current);
         return current;
+    }
+
+    /** Explicit normal-core recovery boot for a user-approved quarantined copy. */
+    synchronized MachineProfile prepareRecoveryStart(MachineProfile selected) throws IOException {
+        MachineProfile current = requireCurrent(selected);
+        if (!current.isExperimental() || current.isDynamicSelected() || hasInterruptedSession()) {
+            throw new IOException("This machine is not eligible for recovery boot");
+        }
+        DynamicAttempt attempt = DynamicAttempt.read(dynamicAttemptFile(current));
+        if (!DynamicAttempt.NEEDS_CHECK.equals(attempt.state) || !current.id.equals(attempt.machineId)) {
+            throw new IOException("This machine does not need recovery boot");
+        }
+        validateWritableOwnership(current);
+        return current;
+    }
+
+    /** Clears quarantine only after guest shutdown and normal native unload. */
+    synchronized void closeRecoveryAfterCleanShutdown(MachineProfile selected) throws IOException {
+        MachineProfile current = requireCurrent(selected);
+        File journal = dynamicAttemptFile(current);
+        DynamicAttempt attempt = DynamicAttempt.read(journal);
+        if (!DynamicAttempt.NEEDS_CHECK.equals(attempt.state) ||
+                !current.id.equals(attempt.machineId)) {
+            throw new IOException("Cannot clear the recovered trial record");
+        }
+        android.content.SharedPreferences preferences = context.getSharedPreferences(preferencesName,
+                Context.MODE_PRIVATE);
+        java.util.HashSet<String> clean = cleanShutdownMachines(preferences);
+        clean.add(current.id);
+        if (!preferences.edit().putStringSet(CLEAN_SHUTDOWN_MACHINES, clean)
+                .remove(CLEAN_SHUTDOWN_MACHINE).remove(ACTIVE_SESSION).commit()) {
+            throw new IOException("Cannot record the recovery shutdown");
+        }
+        if (!journal.delete()) {
+            throw new IOException("Cannot clear the recovered trial record");
+        }
     }
 
     List<MachineProfile> load() {
@@ -1014,17 +1102,19 @@ final class MachineStore {
         }
     }
 
-    private void writeDynamicLaunchConfig(MachineProfile profile) throws IOException {
+    private void writeDynamicLaunchConfig(MachineProfile profile, DynamicCyclePolicy dynamicPolicy)
+            throws IOException {
+        String config;
         if (isWindowsInstaller(profile)) {
-            writeWindowsLaunchConfig(new File(profile.launchPath), new File(profile.runtimePath),
-                    new File(profile.mediaPath), windowsBootFloppy(profile), bootsInstaller(profile),
-                    profile.memoryMb, "dynamic", DYNAMIC_EXPERIMENTAL_CYCLES,
-                    profile.soundEnabled);
+            config = LaunchConfig.createWindowsDynamic(profile.runtimePath, profile.mediaPath,
+                    windowsBootFloppy(profile).getAbsolutePath(), bootsInstaller(profile),
+                    profile.memoryMb, dynamicPolicy, profile.soundEnabled);
         } else {
-            writeLaunchConfig(new File(profile.launchPath), new File(profile.runtimePath),
-                    extension(new File(profile.runtimePath).getName()), profile.memoryMb, "dynamic",
-                    DYNAMIC_EXPERIMENTAL_CYCLES, profile.soundEnabled);
+            config = LaunchConfig.createDynamic(profile.runtimePath,
+                    extension(new File(profile.runtimePath).getName()), profile.memoryMb,
+                    dynamicPolicy, profile.soundEnabled);
         }
+        writeConfigAtomically(new File(profile.launchPath), config);
     }
 
     private boolean save(List<MachineProfile> profiles) {
