@@ -33,6 +33,14 @@ javac -d "$classes_dir" \
 java -cp "$classes_dir" org.robowindows.app.DynamicLivenessTest
 
 javac -d "$classes_dir" \
+  "$repo_dir/android/src/main/java/org/robowindows/app/DynamicProgressWatchdog.java" \
+  "$repo_dir/tests/java/org/robowindows/app/DynamicProgressWatchdogTest.java"
+java -cp "$classes_dir" org.robowindows.app.DynamicProgressWatchdogTest
+
+"$repo_dir/tests/scripts/test-win98-benchmark.sh"
+"$repo_dir/tests/scripts/test-benchmark-telemetry.sh"
+
+javac -d "$classes_dir" \
   "$repo_dir/android/src/main/java/org/robowindows/app/DynamicReadiness.java" \
   "$repo_dir/tests/java/org/robowindows/app/DynamicReadinessTest.java"
 java -cp "$classes_dir" org.robowindows.app.DynamicReadinessTest

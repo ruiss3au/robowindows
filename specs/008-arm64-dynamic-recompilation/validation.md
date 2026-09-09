@@ -685,3 +685,17 @@ enqueues/returns, depth zero/high-water three, and no wipe, double fault or
 guest reset. The automatic candidate is rejected on user-visible graphics and
 audio quality. Fixed 20k remains the best validated DynRec balance; fixed 30k
 and bounded auto remain diagnostic-only failed candidates.
+
+## Host-side progress watchdog — 2026-09-09
+
+An audit against the execution-safety contract found that the guarded controller
+polled indefinitely when the isolated runner stopped completing emulator calls.
+A bounded host-side watchdog now distinguishes bridge responses from emulator
+progress and fails after 30 seconds without either one. Explicit pause suspends
+the deadline and resume starts a fresh window. The failure path records
+`needs-check`, asks the child to stop, and only then disconnects.
+
+The host suite passes silent-runner, responsive-but-stalled, continuously
+advancing, pause/resume and restart-counter cases. A device fault-injection run
+is still required before the full hang/teardown portions of T001 and T013 can be
+closed.

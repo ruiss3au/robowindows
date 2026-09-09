@@ -28,6 +28,7 @@ final class DynamicTrialController implements DynamicTrialClient.Listener {
     private long pausedAtMillis = -1;
     private long pausedMillis;
     private long residencyLoggedAtMillis;
+    private DynamicProgressWatchdog progressWatchdog;
     private final Handler handler = new Handler(Looper.getMainLooper());
     private final Runnable livenessPoll = this::pollLiveness;
 
@@ -56,6 +57,7 @@ final class DynamicTrialController implements DynamicTrialClient.Listener {
         latestSurface = surface;
         attempt = machineStore.prepareDynamicStart(selected, dynamicPolicy);
         startedAtMillis = SystemClock.elapsedRealtime();
+        progressWatchdog = new DynamicProgressWatchdog(startedAtMillis);
         try {
             client.connect(() -> {
                 try {
@@ -80,6 +82,7 @@ final class DynamicTrialController implements DynamicTrialClient.Listener {
     void setPaused(boolean paused) throws IOException {
         desiredPaused = paused;
         long now = SystemClock.elapsedRealtime();
+        if (progressWatchdog != null) progressWatchdog.setPaused(paused, now);
         if (paused && pausedAtMillis < 0) pausedAtMillis = now;
         if (!paused && pausedAtMillis >= 0) {
             pausedMillis += now - pausedAtMillis;
@@ -159,6 +162,9 @@ final class DynamicTrialController implements DynamicTrialClient.Listener {
         }
         try {
             DynamicLiveness proof = DynamicLiveness.parse(liveness);
+            if (progressWatchdog != null) {
+                progressWatchdog.observe(SystemClock.elapsedRealtime(), proof.runCalls);
+            }
             recordResidency(proof);
             if (status == NativeHost.SESSION_RUNNING &&
                     DynamicAttempt.EXECUTING.equals(attempt.state)) {
@@ -198,8 +204,15 @@ final class DynamicTrialController implements DynamicTrialClient.Listener {
             // The durable journal remains in place and startup recovery will block it.
         }
         finished = true;
-        childStarted = false;
         handler.removeCallbacks(livenessPoll);
+        if (childStarted) {
+            try {
+                client.requestStop();
+            } catch (IOException ignored) {
+                // Quarantine is already durable; unbinding also destroys the service.
+            }
+        }
+        childStarted = false;
         client.disconnect();
         listener.onStatus(NativeHost.SESSION_FAILED,
                 error == null ? "Dynamic trial needs a disk health check" : error, null);
@@ -207,6 +220,11 @@ final class DynamicTrialController implements DynamicTrialClient.Listener {
 
     private void pollLiveness() {
         if (attempt == null || finished) return;
+        if (progressWatchdog != null &&
+                progressWatchdog.timedOut(SystemClock.elapsedRealtime())) {
+            quarantine("Dynamic runner stopped responding");
+            return;
+        }
         try {
             client.queryStatus();
             handler.postDelayed(livenessPoll, 250);

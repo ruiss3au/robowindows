@@ -12,9 +12,9 @@ specification, plan, tasks, and validation record when work begins.
 
 ## Next
 
-- Specify a small redistributable Windows 98 benchmark and repeatable AoE2
-  scenario, then compare fixed-20k DynRec with the best sustainable Normal
-  profile.
+- Complete [Feature 009](009-win98-performance-benchmark/spec.md)'s device runs:
+  compare fixed-20k DynRec with the best sustainable Normal profile using the
+  source-built Windows 98 benchmark and repeatable AoE2 scenario.
 - Expose Dynamic only for experimental copies if those correctness,
   performance and recovery gates pass.
 

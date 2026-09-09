@@ -112,6 +112,9 @@ FrameMailbox frame_mailbox;
 FramePresenter frame_presenter(frame_mailbox, telemetry);
 std::chrono::steady_clock::time_point telemetry_report_time;
 
+const char* configured_decoder_name();
+const char* runtime_decoder_name();
+
 void report_telemetry_if_due() {
     const auto now = std::chrono::steady_clock::now();
     const auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
@@ -119,13 +122,15 @@ void report_telemetry_if_due() {
     if (elapsed < 1000) return;
     RuntimeTelemetrySnapshot snapshot = telemetry.take_snapshot(static_cast<uint64_t>(elapsed));
     __android_log_print(ANDROID_LOG_INFO, "RoboWindowsTelemetry",
-            "schema=1 interval_ms=%llu state=%s audio_state=%s run=%llu audio_produced=%llu "
+            "schema=2 interval_ms=%llu state=%s audio_state=%s decoder=%s current=%s "
+            "run=%llu audio_produced=%llu "
             "audio_consumed=%llu queue_min=%llu queue_max=%llu underruns=%llu "
             "missing=%llu dropped=%llu saturated=%llu stream_errors=%llu submitted=%llu published=%llu "
             "presented=%llu coalesced=%llu post_failures=%llu",
             static_cast<unsigned long long>(snapshot.interval_ms),
             runtime_state_name(snapshot.runtime_state),
             audio_phase_name(audio_output_state.phase()),
+            configured_decoder_name(), runtime_decoder_name(),
             static_cast<unsigned long long>(snapshot.emulator_run_calls),
             static_cast<unsigned long long>(snapshot.audio_produced_frames),
             static_cast<unsigned long long>(snapshot.audio_consumed_frames),

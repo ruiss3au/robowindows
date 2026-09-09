@@ -112,6 +112,10 @@
   only while stopped, rerun the build-specific CPU gate, then perform one
   user-observed bounded-auto Windows/AoE2/audio trial and record clean shutdown
   or quarantine.
+- [ ] T039 Detect 30 seconds without bridge response or completed emulator-call
+  progress, excluding pause intervals; quarantine visibly, request orderly
+  teardown, and validate both host logic and isolated-process device behavior
+  (FR-041; scenario 26).
 
 T030–T034 implement FR-038 and are deferred to GPT Sol. See
 [coverage](expanded-cpu-coverage.md) and [handoff](sol-handoff.md).
@@ -339,3 +343,10 @@ host, full CPU-gate and device handoff checks passed. The user found both
 graphics and audio unsatisfactory, so bounded auto is rejected. Shutdown was
 clean, telemetry and temperature showed no CPU correctness or throttling event,
 and fixed 20k remains the diagnostic baseline.
+
+T039 implementation closes the previously missing 30-second progress watchdog.
+Host tests cover a silent bridge, status replies without completed emulator-call
+progress, sustained progress, pause/resume and counter reset on restart. Timeout
+durably quarantines the attempt and requests orderly child teardown before the
+host disconnects. Device timeout injection and the broader unfinished T001/T013
+matrix remain open; this test does not claim those gates complete.

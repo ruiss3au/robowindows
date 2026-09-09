@@ -1,0 +1,16 @@
+# Tasks: Windows 98 Performance Benchmark
+
+- [x] T001 Define the versioned workload, result schema, comparison rules, and
+  safety boundary (FR-001–009).
+- [x] T002 Build the Win32 CPU, memory, and visible GDI benchmark reproducibly
+  from source and package generated media outside Git (FR-001–03).
+- [x] T003 Add strict guest-result parser and host telemetry aggregation tests
+  for invalid, incomplete, lifecycle-invalid, and redacted inputs (FR-003–05, 008).
+- [ ] T004 Add the SM-T500 capture/report entry point with core/cycle, FPS,
+  audio, decoder, lifecycle and thermal metrics (FR-004–05, 008–09).
+- [ ] T005 Run three matched fixed-20k DynRec captures on `incoming - copy` and
+  retain the human audio/input/AoE2 and clean-shutdown evidence separately.
+- [ ] T006 Run three matched captures at the highest Normal profile meeting the
+  same quality gates; compare medians without opening or changing `incoming`.
+- [ ] T007 Complete the separate ten-cycle and 30-minute thermal gates before any
+  promotion decision (Feature 008 T009–T011).

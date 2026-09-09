@@ -4,15 +4,23 @@ Debug builds expose one sanitized snapshot per reporting interval through logcat
 write the same records to an app-private report. This is an internal diagnostic contract,
 not a public network API.
 
+The native log line is one part of this record. Schema 2 adds `configured_decoder`
+and `current_decoder`; the benchmark collector binds those intervals to an
+allowlisted profile/cycle declaration and build/thermal envelope. Completion of
+the general app-side profile/session/termination envelope remains Feature 002
+T010–T011 and is not implied by the benchmark collector.
+
 ## Snapshot
 
 ```text
-schema_version: 1
+schema_version: 2
 session_id: opaque identifier
 interval_ms: positive integer
 runtime_state: starting | foreground | paused | background | surface_lost | stopping
 profile_id: product-owned identifier
 cpu_core: normal | auto | dynamic_experimental
+configured_decoder: Normal | DynRec | Unknown
+current_decoder: Normal | DynRec | PageFault | Halt | Other | Unknown
 cycle_policy: auto | fixed | max
 cycle_value: integer or null
 emulated_scheduler_delta_ms: non-negative integer or null
@@ -46,6 +54,9 @@ termination: null | user_stop | orderly_shutdown | native_failure | unknown
   boundary signal but does not by itself prove audible speaker clipping.
 - Queue minima/maxima are sampled without blocking either real-time callback.
 - Unknown enum values make a consumer reject that record version, not guess.
+- Schema 2 adds the configured and current decoder to every interval. Existing
+  schema-1 records remain historical evidence but cannot satisfy a new observed-
+  core benchmark capture.
 
 ## Privacy and volume
 

@@ -241,6 +241,14 @@ allowlist rather than trusting config text. The active overlay MUST display
 the saved Normal fallback remains unchanged. Audio underruns are not controller
 feedback, so any audible cracking rejects this candidate even if it scales down.
 
+**FR-041 — Bounded progress watchdog:** A foreground, unpaused dynamic trial
+MUST fail visibly and enter `needs-check` when either the child bridge produces
+no status response or its completed emulator-call counter makes no progress for
+30 seconds. Explicit pause and lifecycle pause intervals MUST suspend the timer;
+resume starts a fresh 30-second window. Failure handling MUST request orderly
+child teardown before disconnecting and MUST never clear the active journal as
+clean.
+
 ## Success criteria
 
 - **SC-001 — isolation:** attempted starts with stable roles, aliased disks or
@@ -353,6 +361,11 @@ runner starts, then journal, child allowlist, effective config and visible label
 all identify auto 80% with a 30k cap. An unlimited, malformed, mismatched or
 unknown policy fails before native execution, and shutdown/recovery behavior is
 identical to a fixed-cycle trial.
+
+26. Given a foreground dynamic trial, when the bridge is silent or continues
+replying without an emulator-call counter change for 30 seconds, then
+RoboWindows quarantines the attempt, reports the failure, and requests runner
+teardown. A paused trial does not time out, and resume receives a fresh window.
 
 ## Out of Scope
 

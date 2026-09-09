@@ -22,7 +22,7 @@ case "$answer" in y|Y|yes|YES) ;; *) echo "Cancelled."; exit 0 ;; esac
 
 sudo apt-get update
 sudo apt-get install --yes \
-  ca-certificates curl git make ninja-build unzip zip \
+  binutils ca-certificates curl git make ninja-build unzip xorriso zip \
   openjdk-17-jdk-headless
 
 sdk_root="${XDG_DATA_HOME:-$HOME/.local/share}/robowindows/android-sdk"

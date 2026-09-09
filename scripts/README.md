@@ -17,6 +17,12 @@ guest media, and backups are intentionally outside Git.
 | Command | Purpose | Side effects |
 |---|---|---|
 | `scripts/build-android.sh --debug` | Build the ARM64 debug APK and checksum | Writes ignored build/artifact output |
+| `scripts/build-win98-benchmark.sh` | Build the source-owned Windows 98 benchmark EXE/ISO, map and checksums | Writes ignored `artifacts/win98-benchmark/` output |
+| `scripts/parse-win98-benchmark.sh FILE` | Strictly validate and normalize `RWBENCH.TXT` | Read-only |
+| `scripts/summarize-benchmark-telemetry.sh PROFILE LOG` | Validate and summarize matched benchmark telemetry | Read-only |
+| `scripts/capture-sm-t500-benchmark.sh --profile PROFILE` | Capture bounded telemetry, result screen and temperature for an already-running experimental guest | Does not start, stop, or change the guest; writes ignored evidence |
+| `scripts/finalize-sm-t500-benchmark.sh ...` | Merge a strict guest result with host metrics and explicit human checks | Refuses to overwrite an existing final report |
+| `scripts/compare-sm-t500-benchmarks.sh ...` | Compare three valid fixed-20k DynRec reports with three matched Normal reports | Emits medians/deltas; never promotes while long gates are pending |
 | `scripts/test-host.sh` | Compile and run Java/C++ host checks | Temporary files only |
 | `scripts/check-repository.sh` | Check Git hygiene and shell syntax | Read-only |
 | `scripts/check-experimental-fat.sh --image FILE --expected PATH` | Read-only FAT health check for a quarantined experimental volume | Requires `fsck.fat`/`dosfsck` and `mtype`; never mounts or repairs |

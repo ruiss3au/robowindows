@@ -1,0 +1,38 @@
+# Implementation Plan: Windows 98 Performance Benchmark
+
+Build a small Win32 program from reviewed assembly with pinned GNU binutils. It
+runs timed CPU, memory and visible GDI phases, with a low-volume source-owned
+reference tone during graphics load, and writes a bounded text result. Package
+it on a deterministic data CD image; never commit the image or executable.
+
+Add host tests for result parsing and telemetry aggregation. A device collector
+uses the repository ADB discovery helper, records only bounded aggregate logcat
+and thermal data, and emits a redacted report under ignored `artifacts/`. The
+first version may require the tester to launch the guest program and retrieve its
+result; automation must not simulate a clean Windows shutdown or bypass Feature
+008 recovery.
+
+Compare fixed-20k DynRec against the highest Normal profile that independently
+passes guest-time and audio gates. Use three matched runs and retain subsystem
+metrics; do not compute a promotional verdict from synthetic throughput alone.
+Existing trials reject Normal fixed-30k for audio breakup, so fixed-20k is the
+current Normal comparison candidate unless new matched evidence rejects it.
+
+Rollback removes only generated benchmark artifacts and collector code. It does
+not alter a machine, disk, execution selection, or existing DynRec patches.
+
+## Build and debug strategy
+
+- Pin GNU binutils 2.40 and xorriso 1.5.4; build a PE32 GUI executable requiring
+  only Windows 98-era KERNEL32, USER32, GDI32 and WINMM APIs.
+- Emit the executable, ISO, SHA-256 manifest, linker map and disassembly under
+  ignored output. Rebuild twice and require identical executable/ISO hashes.
+- Inspect PE version, entry point and imports automatically. Run the binary in a
+  disposable Wine/Xvfb prefix as a reference smoke test and strictly parse its
+  result before Windows 98 testing.
+- Use named phase symbols and the linker map to translate an invalid-page-fault
+  address. A failure is attributed to the benchmark only after reproduction in
+  the reference run; a Windows-98-only failure is minimized by phase before any
+  emulator change.
+- On-device debug captures retain bounded phase/result and host aggregate data,
+  never guest memory, PCM, framebuffer contents, private paths or raw crash data.
