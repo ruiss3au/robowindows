@@ -130,6 +130,12 @@
   fault progression. Compare reference, Normal and DynRec results plus bounded
   aggregates before changing the one-cycle PageFaultCore loop, queue recovery,
   exception delivery, or DynRec execution (FR-033–038, FR-042–043; scenario 28).
+- [x] T043 Add a standalone bounded-64 PageFaultCore slice that stops on `iret`,
+  preserves guest cycle and nested-watchdog accounting, and changes no queue or
+  DynRec policy. Run host/build checks and the complete disposable SM-T500 gate;
+  require exact `0x0103` parity, balanced depth-four completion, at least 16-fold
+  fewer PageFaultCore calls, at least three-fold lower cumulative duration, and
+  a maximum inclusive call below 50 ms (FR-044; scenario 29).
 
 T030–T034 implement FR-038 and are deferred to GPT Sol. See
 [coverage](expanded-cpu-coverage.md) and [handoff](sol-handoff.md).

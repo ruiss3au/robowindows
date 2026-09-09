@@ -1,0 +1,81 @@
+diff --git a/include/paging.h b/include/paging.h
+--- a/include/paging.h
++++ b/include/paging.h
+@@ -88,6 +88,7 @@ void PAGING_Enable(bool enabled);
+ bool PAGING_Enabled(void);
+ void PAGING_ChangedWP(void);
+ void PAGING_SwitchCPL(bool isUser);
+ void PAGING_OnChangeCore(void);
++void PAGING_PageFaultCoreIret(void);
+ 
+ Bitu PAGING_GetDirBase(void);
+ void PAGING_SetDirBase(Bitu cr3);
+diff --git a/src/cpu/cpu.cpp b/src/cpu/cpu.cpp
+--- a/src/cpu/cpu.cpp
++++ b/src/cpu/cpu.cpp
+@@ -811,6 +811,7 @@ void CPU_Interrupt(Bitu num,Bitu type,Bitu oldeip) {
+ 
+ void CPU_IRET(bool use32,Bitu oldeip) {
+ 	++robowindows_iret_executed;
++	PAGING_PageFaultCoreIret();
+ 	//PAGE_FAULT_CLEANUP_SETUP(Bit32u orig_esp = reg_esp;)
+ 	if (!cpu.pmode) {					/* RealMode IRET */
+ 		if (use32) {
+diff --git a/src/cpu/paging.cpp b/src/cpu/paging.cpp
+--- a/src/cpu/paging.cpp
++++ b/src/cpu/paging.cpp
+@@ -134,6 +134,19 @@ static unsigned long long robowindows_pf_core_total_us;
+ static unsigned long long robowindows_pf_core_max_us;
+ static unsigned long long robowindows_pf_core_slow_10ms;
+ 
++static const Bit32s robowindows_pf_core_slice_cycles = 64;
++struct RoboWindowsPageFaultSlice {
++	Bit32s iret_remaining;
++	bool entered_nested_slice;
++};
++static RoboWindowsPageFaultSlice *robowindows_pf_core_active_slice;
++
++void PAGING_PageFaultCoreIret(void) {
++	if (!robowindows_pf_core_active_slice) return;
++	robowindows_pf_core_active_slice->iret_remaining = CPU_Cycles;
++	CPU_Cycles = 0;
++}
++
+ extern "C" __attribute__((visibility("default")))
+ void robowindows_pagefault_diagnostics_reset(void) {
+ 	robowindows_pf_enqueued = 0;
+@@ -341,10 +354,22 @@ static Bits PageFaultCore(void) {
+ 	++robowindows_pf_core_entries;
+ 	const std::chrono::steady_clock::time_point started =
+ 		std::chrono::steady_clock::now();
++	RoboWindowsPageFaultSlice slice = {-1, false};
++	RoboWindowsPageFaultSlice *parent_slice = robowindows_pf_core_active_slice;
++	if (parent_slice) parent_slice->entered_nested_slice = true;
++	robowindows_pf_core_active_slice = &slice;
+ 	CPU_CycleLeft+=CPU_Cycles;
+-	CPU_Cycles=1;
++	CPU_Cycles=robowindows_pf_core_slice_cycles;
+ 	Bits ret=CPU_Core_Full_Run();
+-	CPU_CycleLeft+=CPU_Cycles;
++	robowindows_pf_core_active_slice = parent_slice;
++	Bit32s remaining = slice.iret_remaining >= 0 ? slice.iret_remaining : CPU_Cycles;
++	Bitu executed = robowindows_pf_core_slice_cycles;
++	if (slice.entered_nested_slice) executed = 1;
++	else if (remaining >= 0 && remaining <= robowindows_pf_core_slice_cycles)
++		executed = (Bitu)(robowindows_pf_core_slice_cycles - remaining);
++	if (!executed) executed = 1;
++	CPU_CycleLeft-=(Bit32s)executed;
++	CPU_Cycles=0;
+ 	if (ret<0) E_Exit("Got a dosbox close machine in pagefault core?");
+ 	if (ret)
+ 		return robowindows_pagefault_core_return(ret, started);
+@@ -364,7 +391,8 @@ static Bits PageFaultCore(void) {
+ #ifdef C_DBP_PAGE_FAULT_QUEUE_WIPE
+ 	if (DOSBOX_IsWipingPageFaultQueue)
+ 		return robowindows_pagefault_core_return(-1, started);
+-	if ((pf_queue.used >= 2 && DBP_PageFaultCycles++ > 5000000) || pf_queue.used > 50)
++	if (pf_queue.used >= 2) DBP_PageFaultCycles += executed;
++	if ((pf_queue.used >= 2 && DBP_PageFaultCycles > 5000000) || pf_queue.used > 50)
+ 	{
+ 		LOG(LOG_PAGING,LOG_NORMAL)("Wiping page fault queue after %d queueups", pf_queue.used);
+ 		DOSBOX_WipePageFaultQueue();

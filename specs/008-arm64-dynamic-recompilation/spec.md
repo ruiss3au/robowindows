@@ -275,6 +275,23 @@ measured without guest addresses, contents, or per-call logs. A timeout,
 unbalanced queue, incomplete record, or wrong nesting result blocks any
 PageFaultCore or watchdog correction and another Windows DynRec trial.
 
+**FR-044 — Bounded PageFaultCore slice:** After FR-043 reproduces one-cycle
+call amplification, PageFaultCore MUST run at most 64 full-core guest
+instructions per decoder invocation. Any `iret` executed inside that slice MUST
+end the slice immediately so the current top fault is re-evaluated before an
+instruction at the restored address can execute. The slice MUST preserve CPU
+cycle accounting and advance the existing nested-fault watchdog in guest-work
+units rather than decoder-call units; it MUST NOT change queue limits, wipe
+thresholds, exception delivery, DynRec translation, caching, linking, or the
+Normal decoder. The `0x0103` suite MUST retain identical reference, Normal and
+DynRec result records, zero wipes, zero final depth, and balanced queue/core
+entries and returns. On the SM-T500 it MUST reduce the reproduced PageFaultCore
+entry count by at least 16 times, reduce cumulative PageFaultCore duration by at
+least three times, and keep the maximum inclusive call below 50 ms. The fixed
+10-ms counter remains characterization evidence because a parent call includes
+synchronous nested-fault work. Failure rolls back the slice patch and blocks
+Windows trials.
+
 ## Success criteria
 
 - **SC-001 — isolation:** attempted starts with stable roles, aliased disks or
@@ -407,6 +424,14 @@ retry in reference, Normal and DynRec with identical records. The target log
 reports balanced completed PageFaultCore calls and a zero final queue depth; its
 aggregate call count may characterize the current one-cycle amplification but
 is not encoded as a device-speed-dependent guest assertion.
+
+29. Given the bounded PageFaultCore slice, when the same `0x0103` image runs on
+the SM-T500, then its exact DynRec result still matches reference and Normal,
+the queue reaches depth four and settles without a wipe, PageFaultCore entries
+and returns balance, entries fall by at least 16 times from the recorded
+1,049,545-call baseline, cumulative duration falls by at least three times from
+444,155 microseconds, and the maximum inclusive call remains below 50 ms. An
+`iret` boundary or nested-fault mismatch rejects the correction.
 
 ## Out of Scope
 

@@ -99,7 +99,16 @@ fallback. Keep migration tests for stable profiles and per-machine clean state.
    the guest result; use exact functional records for correctness and the
    bounded host aggregate only to characterize the execution policy.
 7. **Minimal correction** — isolate a proven fix under `patches/`; do not change
-   guest media, UI ownership, input, audio resources, or stable profiles.
+   guest media, UI ownership, input, audio resources, or stable profiles. For
+   the reproduced PageFaultCore amplification, replace the one-instruction
+   decoder invocation with a fixed maximum of 64 full-core instructions. Stop
+   immediately on `iret`, recheck the top fault before restored execution, keep
+   cycle/watchdog accounting in guest-work units, and leave queue thresholds and
+   every DynRec translation/cache/link path unchanged. Roll back the standalone
+   patch if exact fixture parity, queue balance, a 16-fold call reduction,
+   three-fold cumulative-duration reduction, or the 50-ms inclusive-call bound
+   fails. The 10-ms counter remains diagnostic because an outer call includes
+   synchronous work performed by its nested faults.
 8. **Experimental UI** — offer one named `Dynamic (experimental)` option only
    on experimental machines, with recovery messaging and normal-core fallback.
 9. **Validation** — run correctness first, then benchmark/AoE2 performance and
@@ -122,6 +131,12 @@ gate after diagnostic reduction. Do not infer a root cause from aggregate fault
 counts or variant nesting depths; require an identified incorrect operation.
 
 ## Rollback
+
+If the bounded PageFaultCore slice fails exact fixture parity, queue balance,
+cycle accounting, watchdog preservation, or its device reduction bounds, remove
+only patch `0007-bounded-pagefault-core-slice.patch`, rebuild the prior one-cycle
+core, and invalidate the build-specific CPU capability token. Do not roll back
+or replace any guest disk; no Windows trial is authorized from a failed slice.
 
 Next delivery is T030–T034 from `expanded-cpu-coverage.md`; execution notes are in
 `sol-handoff.md`. Implement protocol, P0, P1, P2 and full-gate verification in that

@@ -840,3 +840,43 @@ correctness and fully balanced nested fault state. It does not justify a queue
 wipe or another Windows trial. The next execution change must be evaluated
 against this suite and retain the same reference/Normal/DynRec record, zero
 wipes, bounded nesting and complete return balance.
+
+## Bounded PageFaultCore slice — 2026-09-09
+
+Patch `0007-bounded-pagefault-core-slice.patch` replaces PageFaultCore's fixed
+one-instruction invocation with a maximum of 64 full-core instructions. It
+maintains independent slice state across recursive faults and stops the active
+slice whenever `CPU_IRET` executes, so PageFaultCore re-evaluates the current
+top fault before running an instruction at the restored address. Consumed guest
+work is charged back to the existing cycle pool, including the outer instruction
+that entered a nested slice. The existing nested-fault watchdog advances by
+that guest work rather than by the now-coarser decoder-call count. Queue sizes,
+wipe thresholds, exception delivery, DynRec translation, cache and block linking
+are unchanged. The Normal decoder does not enter PageFaultCore in this gate.
+
+The initial requirement proposed that no inclusive PageFaultCore call reach 10
+ms. Device evidence showed why that is not the correct boundary for the minimal
+change: a parent call includes all synchronous work performed by a depth-four
+child chain. Eliminating that inclusion would require changing synchronous
+exception unwinding rather than correcting call amplification. FR-044 therefore
+retains the fixed 10-ms count as characterization and uses a 50-ms inclusive
+maximum, three-fold cumulative-duration reduction and 16-fold call reduction;
+these remain comfortably inside the experimental 75-ms audio low-water mark.
+
+Pinned-source reconstruction, the patch-structure host check, the complete host
+suite, the eight-suite QEMU 7.2.22 oracle and the ARM64 debug build passed. On
+the SM-T500, suite `0x0103` again produced identical complete Normal and DynRec
+records. DynRec enqueued and completed 21 faults, reached a high-water depth of
+four, settled at depth zero and performed no wipe. PageFaultCore entries and
+returns both fell from 1,049,545 to 16,408, a 64-fold reduction. Cumulative
+duration fell from 444,155 to 106,260 microseconds, a 4.18-fold reduction, and
+the maximum inclusive call fell from 210,125 to 23,613 microseconds. Two calls
+included at least 10 ms of nested work. The complete legacy-plus-eight-suite
+Normal/DynRec gate passed after the targeted suite.
+
+Postflight inspection found no guest child, CPU-fixture child, active-session
+marker or dynamic-attempt journal. The installed APK and host artifact both had
+SHA-256 `25a0e64ff3872b3ead65d491dfd0559213559ab4e3fb4d198e785592f7abe5ca`.
+No machine disk was opened and stable `incoming` remained untouched. T043 is
+complete; this result permits a separately guarded experimental-copy validation
+but is not itself Windows or audio evidence.

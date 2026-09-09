@@ -74,6 +74,7 @@ test "$(od -An -tx1 -j8704 -N22 "$fixture_image" | tr -d ' \n')" = \
 
 "$repo_dir/tests/scripts/check-experimental-fat-test.sh"
 bash "$repo_dir/tests/scripts/check-stosd-helper-test.sh"
+bash "$repo_dir/tests/scripts/check-pagefault-core-slice-test.sh"
 
 g++ -std=c++17 -Wall -Wextra -Werror \
   -I"$repo_dir/android/src/main/cpp" \
