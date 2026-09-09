@@ -1,6 +1,6 @@
 # Feature Specification: Windows 98 Performance Benchmark
 
-**Feature**: `009-win98-performance-benchmark`  
+**Feature**: `009-win98-performance-benchmark`
 **Status**: In progress
 
 ## User Story
