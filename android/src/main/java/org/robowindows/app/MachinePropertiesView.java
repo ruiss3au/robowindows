@@ -8,6 +8,11 @@ import android.widget.Button;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.TextView;
+import android.widget.EditText;
+import android.text.Editable;
+import android.text.TextWatcher;
+import android.text.InputType;
+import android.view.inputmethod.EditorInfo;
 import java.io.IOException;
 
 /** Windows-style property sheet; changing widgets only changes the draft. */
@@ -40,7 +45,7 @@ final class MachinePropertiesView extends LinearLayout {
     private int dp(int n) { return ClassicUi.dp(getContext(), n); }
     private void reset(MachineProfile p) {
         profile = p;
-        draft = new SettingsDraft(p.memoryMb, p.fixedCycles, p.soundEnabled,
+        draft = new SettingsDraft(p.name, p.memoryMb, p.fixedCycles, p.soundEnabled,
                 p.isDynamicSelected(), p.cpuCore);
     }
     private TextView text(String s) {
@@ -81,6 +86,27 @@ final class MachinePropertiesView extends LinearLayout {
         boolean editable = !store.hasInterruptedSession() && !store.requiresDynamicMediaCheck(profile);
         if (!editable) body.addView(text("Settings are read-only until the session and disk-check recovery finish."));
         if (tab == 0) {
+            TextView nameLabel = text("Machine name");
+            EditText name = new EditText(getContext());
+            name.setId(View.generateViewId());
+            nameLabel.setLabelFor(name.getId());
+            name.setTag("machine-name");
+            name.setTextSize(16); name.setTextColor(ClassicUi.INK);
+            name.setInputType(InputType.TYPE_CLASS_TEXT);
+            name.setSingleLine(true);
+            name.setImeOptions(EditorInfo.IME_ACTION_DONE | EditorInfo.IME_FLAG_NO_EXTRACT_UI);
+            name.setBackground(ClassicUi.bevel(getContext(), true));
+            name.setPadding(dp(12), dp(8), dp(12), dp(8));
+            name.setMinimumHeight(dp(48)); name.setEnabled(editable);
+            name.setText(draft.name);
+            name.addTextChangedListener(new TextWatcher() {
+                @Override public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
+                @Override public void onTextChanged(CharSequence s, int start, int before, int count) {
+                    draft.name = s.toString(); updateFooter();
+                }
+                @Override public void afterTextChanged(Editable s) {}
+            });
+            body.addView(nameLabel); body.addView(name);
             body.addView(text(profile.family + " · " + (profile.isExperimental() ? "Experimental copy" : "Stable machine") +
                     " · " + draft.memoryMb + " MB memory"));
             option(body, "DOS compatibility · 16 MB", draft.memoryMb == 16, editable,

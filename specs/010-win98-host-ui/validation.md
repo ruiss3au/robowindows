@@ -134,3 +134,61 @@ and stable `incoming` remains Normal. The overlay correction is accepted and
 requires no further guest trial. Broader T007 enlarged-text/navigation/dialog
 and explicitly confirmed input checks remain unclaimed; no omitted quality gate
 has been promoted to passed.
+
+## Name editing and final UI acceptance — 2026-09-10
+
+General properties now edit the display name through the existing staged batch
+save. Host tests cover normalized whitespace, empty/control/format rejection,
+Unicode names and the 64-code-point boundary. Disposable Android checks cover
+rename publication, invalid-name rejection, stale-generation rejection, active
+save rejection, publication rollback preserving the old name, unchanged machine
+identity/media paths and retained clean provenance/CPU choice.
+
+Android view probes passed draft retention across tabs, Cancel, Apply, OK and
+normalized saved text. All four properties tabs passed measured touch-target,
+button-text-height and scroll-viewport checks at 640×360 dp with 100% and 150%
+font scale, and 1000×600 dp with 200% text. These used app-local resource contexts;
+the tablet's system display/font settings were not changed. Title bars ellipsize
+long names instead of consuming the properties viewport.
+
+The real keyboard/Back check found an Android 16/API-36 regression: system Back
+bypassed the legacy callback and left a dirty property sheet without prompting.
+No guest was running and stored preferences stayed unchanged. After registering
+the platform callback, system Back showed `Discard changes?`; Tab focused
+`Keep editing`, and Enter returned to the intact draft. Cancel preserved the
+entire preferences checksum. Empty-name Apply showed `Settings not saved` /
+`Enter a machine name.` rather than publishing anything. Tests and About both
+returned to Machines through the actual system Back event.
+
+Apply then renamed only the stopped experimental copy from `incoming - copy`
+to the user-selected `win98 dynrec exp`. Its generation advanced exactly once;
+redacted comparisons verified every other profile field unchanged, identical
+stable-profile metadata, and identical non-profile preferences (including clean
+shutdown provenance). The library showed the new name and retained `Start
+DynRec` / experimental 20k. Stable `incoming` was not renamed or started.
+
+The complete host suite, repository hygiene, diff whitespace, pinned sources,
+Android build and `REQUIRE_SURFACE=1 scripts/test-sm-t500-core.sh` passed. Final
+installed candidate SHA-256:
+`0029dd9276059d6acced548cc9be082670f5e6f4cce0311115c9e1343d98f350`.
+The disposable script included successful overlay, settings, enlarged-layout,
+persistence/input bridge and core lifecycle probes. Real Windows sessions were
+not needed for this follow-up; their earlier starts/clean shutdowns and overlay
+acceptance remain recorded above. Session-dialog checks are being completed on
+the disposable fixture, not on either user disk.
+
+The disposable blank-disk session verified actual system Back revealing controls
+then showing `Stop without guest shutdown?`. Tab/Enter selected Cancel and kept
+the same session running. Restart showed its unsaved-work warning; system Back
+dismissed it without a restart (the bounded log contained one start and no
+restart). Explicit Stop then cleanly unloaded only this fixture and returned to
+Machines. The three generated fixture files were removed. Final postflight
+found no active-session preference, attempt journal or isolated child, and both
+real machines stopped with the renamed copy still selecting DynRec 20k.
+
+T007 and T009–T011 are complete for the scoped host UI: real-copy Normal/DynRec
+start/shutdown evidence above, automated storage/layout probes, and on-device
+touch/keyboard/Back/dialog checks. Keyboard events here are ADB-injected Android
+UI events, not a new physical guest-keyboard/mouse certification. This closes
+Feature 010 without claiming the omitted audio, timing, thermal, repeated-cycle
+or full guest-input quality gates. No further Windows trial was needed.

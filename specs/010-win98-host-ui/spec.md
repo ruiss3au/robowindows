@@ -1,6 +1,6 @@
 # Feature 010: Classic host UI and CPU settings
 
-**Status:** In implementation
+**Status:** Scoped host-UI acceptance complete (2026-09-10)
 
 - **FR-001:** All project-owned screens use a touch-friendly classic Windows
   application treatment: gray panels, navy title bars, square bevels, readable
@@ -31,8 +31,18 @@
   backgrounds, including confirmed readiness buttons. Labels and keyboard focus
   remain readable; library/properties/dialog panels remain opaque. Do not resize
   the guest or hide the persistent DynRec stop/readiness controls to achieve this.
+- **FR-010:** General properties include an editable machine display name in the
+  same Apply/OK/Cancel draft. Trim surrounding whitespace; accept 1–64 Unicode
+  code points and reject control/format characters. Invalid names preserve the
+  draft and show a useful error. Rename only stopped, non-recovery machines;
+  preserve machine ID, disk/media paths, ownership, CPU choice and clean-shutdown
+  provenance. Names are labels, never filesystem paths or machine selectors.
+- **FR-011:** Android Back, including the modern system Back callback, honors
+  dirty-properties confirmation and guest reveal/stop confirmation. It must not
+  silently abandon drafts or stop a guest by bypassing the host navigation flow.
 
 Acceptance includes dirty Cancel, save failure, repeated mode changes, two-copy
 target selection, clean preference persistence, crash recovery, disabled-state
-explanations, enlarged text and keyboard/touch navigation. The engine, audio,
+explanations, rename validation/persistence/rollback, enlarged text and
+keyboard/touch navigation. The engine, audio,
 FPS/GPU, benchmark automation and dropped long campaigns are out of scope.

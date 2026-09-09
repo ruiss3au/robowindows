@@ -373,6 +373,9 @@ final class MachineStore {
         if (hasInterruptedSession() || requiresDynamicMediaCheck(p)) {
             throw new IOException("Stop the session and complete recovery before saving settings");
         }
+        final String name;
+        try { name = SettingsDraft.validatedName(draft.name); }
+        catch (IllegalArgumentException error) { throw new IOException(error.getMessage()); }
         ensureSettingsReady(p);
         if (draft.dynamic) {
             String reason = dynamicUnavailable(p, cpuPassed);
@@ -386,7 +389,7 @@ final class MachineStore {
         }
         validateWritableOwnership(p);
         if (!draft.dirty()) return p;
-        MachineProfile updated = new MachineProfile(p.id, p.name, p.family, p.mediaName,
+        MachineProfile updated = new MachineProfile(p.id, name, p.family, p.mediaName,
                 p.mediaPath, p.runtimePath, p.mediaSha256, p.launchPath, draft.memoryMb,
                 draft.normalCore, draft.sound, p.createdAt, p.lastBootedAt, p.mediaAssets,
                 p.role, draft.normalCycles, p.lastKnownSafeCycles,

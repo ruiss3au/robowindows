@@ -77,6 +77,8 @@ final class ClassicUi {
         title.setText(label);
         title.setTextColor(WHITE);
         title.setTextSize(20);
+        title.setSingleLine(true);
+        title.setEllipsize(android.text.TextUtils.TruncateAt.END);
         title.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
         bar.addView(title, new LinearLayout.LayoutParams(0, -2, 1));
         if (close != null) {

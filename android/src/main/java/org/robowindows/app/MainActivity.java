@@ -139,8 +139,15 @@ public final class MainActivity extends Activity {
                 }
             };
 
+    private android.window.OnBackInvokedCallback systemBackCallback;
+
     @Override protected void onCreate(Bundle state) {
         super.onCreate(state);
+        if (android.os.Build.VERSION.SDK_INT >= 33) {
+            systemBackCallback = () -> { if (!handleHostBack()) moveTaskToBack(true); };
+            getOnBackInvokedDispatcher().registerOnBackInvokedCallback(
+                    android.window.OnBackInvokedDispatcher.PRIORITY_DEFAULT, systemBackCallback);
+        }
         getWindow().setStatusBarColor(BG);
         getWindow().setNavigationBarColor(BG);
         machineStore = new MachineStore(this);
@@ -1391,15 +1398,19 @@ public final class MainActivity extends Activity {
     }
 
     @Override public void onBackPressed() {
-        if (properties != null) { properties.requestClose(); return; }
-        if (cpuFixtureController != null) { cancelCpuDiagnostic(); showTests(); return; }
-        if (sessionActive && revealSessionControls()) return;
+        if (!handleHostBack()) super.onBackPressed();
+    }
+
+    private boolean handleHostBack() {
+        if (properties != null) { properties.requestClose(); return true; }
+        if (cpuFixtureController != null) { cancelCpuDiagnostic(); showTests(); return true; }
+        if (sessionActive && revealSessionControls()) return true;
         if (sessionActive) {
             confirmSessionAction(false);
-            return;
+            return true;
         }
-        if (!homeVisible && !copyInProgress) { showHome(); return; }
-        if (!copyInProgress) super.onBackPressed();
+        if (!homeVisible && !copyInProgress) { showHome(); return true; }
+        return copyInProgress;
     }
 
     @Override protected void onPause() {
@@ -1430,6 +1441,9 @@ public final class MainActivity extends Activity {
     }
 
     @Override protected void onDestroy() {
+        if (android.os.Build.VERSION.SDK_INT >= 33 && systemBackCallback != null) {
+            getOnBackInvokedDispatcher().unregisterOnBackInvokedCallback(systemBackCallback);
+        }
         ((InputManager) getSystemService(Context.INPUT_SERVICE))
                 .unregisterInputDeviceListener(inputListener);
         handler.removeCallbacksAndMessages(null);

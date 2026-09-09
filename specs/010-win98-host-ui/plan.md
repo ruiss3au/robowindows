@@ -47,3 +47,26 @@ touch targets and guest geometry, and retain opaque classic styling elsewhere.
 Add drawable alpha/state regression probes. Build without interrupting the active
 guest; install and visually verify only after confirmed clean Windows shutdown.
 Rollback affects overlay styling only, never machine state or emulator timing.
+
+Add display-name editing to the existing draft and transactional batch save,
+without moving/renaming any disk or directory or changing schema 7. Validate
+before publication; keep the name in the dirty-state and rollback tests. Use a
+labelled native single-line text field with keyboard focus and no fullscreen
+IME editor; switching tabs preserves the unsaved text. Test Apply/OK/Cancel and
+dirty-close/error dialogs on stopped machines. Rename only the user's selected
+experimental copy to `win98 dynrec exp` after validation, retaining DynRec 20k.
+
+Finish host-UI acceptance using enlarged-text and constrained-layout rendering,
+keyboard/touch navigation and dialog checks, preferably with disposable fixtures
+and app-local test contexts rather than changing Android-wide display settings.
+The completed Normal/DynRec real-copy starts and clean shutdowns remain valid;
+use a disposable session for destructive-dialog/input-isolation probes, not a
+new Windows campaign. Keep full physical guest-input quality gates explicitly
+separate from host-UI acceptance. No push is implied by this follow-up work.
+
+The on-device keyboard/Back check found Android 16 (API 36) bypassed the legacy
+`onBackPressed` override and returned to the launcher without resolving a dirty
+draft. Register the platform `OnBackInvokedCallback` on API 33+ and share the
+existing navigation decision with the legacy callback. Retain IME/dialog Back
+handling and test the real system event, not only direct method invocation.
+This follows the [Android 16 Back behavior change](https://developer.android.com/about/versions/16/behavior-changes-16#predictive-back).

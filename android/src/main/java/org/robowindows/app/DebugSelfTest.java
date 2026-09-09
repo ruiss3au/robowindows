@@ -227,6 +227,7 @@ final class DebugSelfTest {
             MachineProfile windows = isolated.importMachine(Uri.fromFile(windowsInput), "Windows");
             require(windows.memoryMb == 64 && windows.cpuCore.equals("normal"),
                     "Windows creation defaults");
+            PropertiesUiProbe.run(context, isolated, windows);
             isolated.markSessionStarted(imported.id);
             require(isolated.hasInterruptedSession(), "interrupted session marker");
             isolated.markSessionStopped();
@@ -285,22 +286,38 @@ final class DebugSelfTest {
         MachineProfile stable = store.load().get(0);
         String stableConfig = readText(new File(stable.launchPath));
         String stableProfile = stable.toJson().toString();
-        SettingsDraft draft = new SettingsDraft(original.memoryMb, original.fixedCycles,
+        SettingsDraft draft = new SettingsDraft(original.name, original.memoryMb, original.fixedCycles,
                 original.soundEnabled, original.isDynamicSelected(), original.cpuCore);
         draft.normalCycles = 20000;
         draft.sound = !original.soundEnabled;
         draft.dynamic = true;
+        draft.name = "  win98 dynrec exp  ";
         MachineProfile p = store.saveSettings(original, draft, true);
-        require(p.isDynamicSelected() && p.fixedCycles == 20000 && p.soundEnabled == draft.sound &&
+        require(p.name.equals("win98 dynrec exp") && p.id.equals(original.id) &&
+                p.runtimePath.equals(original.runtimePath) && p.mediaPath.equals(original.mediaPath) &&
+                p.launchPath.equals(original.launchPath) && p.mediaSha256.equals(original.mediaSha256) &&
+                store.hasCleanGuestShutdown(p.id) &&
+                p.isDynamicSelected() && p.fixedCycles == 20000 && p.soundEnabled == draft.sound &&
                 p.configurationGeneration == original.configurationGeneration + 1 &&
                 !store.requiresDynamicMediaCheck(p) && readText(new File(p.launchPath)).contains("core=normal"),
                 "batch Apply persists preference and Normal fallback without starting");
         boolean stale = false;
         try { store.saveSettings(original, draft, true); } catch (IOException expected) { stale = true; }
         require(stale, "stale properties cannot overwrite a newer generation");
-        SettingsDraft normal = new SettingsDraft(p.memoryMb, p.fixedCycles, p.soundEnabled, true, p.cpuCore);
+        for (String invalid : new String[]{" ", "bad\nname", new String(new char[65]).replace('\0', 'x')}) {
+            SettingsDraft bad = new SettingsDraft(p.name, p.memoryMb, p.fixedCycles,
+                    p.soundEnabled, p.isDynamicSelected(), p.cpuCore);
+            bad.name = invalid;
+            boolean rejected = false;
+            try { store.saveSettings(p, bad, true); } catch (IOException expected) { rejected = true; }
+            require(rejected && store.load().get(1).name.equals(p.name) &&
+                    store.load().get(1).configurationGeneration == p.configurationGeneration,
+                    "invalid rename cannot publish settings");
+        }
+        SettingsDraft normal = new SettingsDraft(p.name, p.memoryMb, p.fixedCycles, p.soundEnabled, true, p.cpuCore);
         normal.dynamic = false;
-        SettingsDraft invalidStable = new SettingsDraft(stable.memoryMb, stable.fixedCycles,
+        normal.name = "Renamed Normal";
+        SettingsDraft invalidStable = new SettingsDraft(stable.name, stable.memoryMb, stable.fixedCycles,
                 stable.soundEnabled, false, stable.cpuCore);
         invalidStable.dynamic = true;
         boolean rejectedStable = false;
@@ -323,6 +340,7 @@ final class DebugSelfTest {
             boolean failed = false;
             try { faulty.saveSettings(p, normal, true); } catch (IOException expected) { failed = true; }
             require(failed && store.load().get(1).configurationGeneration == p.configurationGeneration &&
+                    store.load().get(1).name.equals(p.name) &&
                     store.load().get(1).isDynamicSelected() &&
                     readText(new File(p.launchPath)).contains("core=normal"), "batch save rollback " + point);
         }
@@ -346,12 +364,12 @@ final class DebugSelfTest {
         p = store.load().get(1);
         require(p.isDynamicSelected() && p.fixedCycles == 20000 && p.soundEnabled == draft.sound,
                 "clean DynRec retains selection and complete Normal settings");
-        normal = new SettingsDraft(p.memoryMb, p.fixedCycles, p.soundEnabled, true, p.cpuCore);
+        normal = new SettingsDraft(p.name, p.memoryMb, p.fixedCycles, p.soundEnabled, true, p.cpuCore);
         normal.dynamic = false;
         p = store.saveSettings(p, normal, true);
         require(!store.prepareNormalStart(p).isDynamicSelected(), "Normal selected start uses Normal");
         MachineProfile second = store.createExperimentalCopy(stable);
-        SettingsDraft secondDraft = new SettingsDraft(second.memoryMb, second.fixedCycles,
+        SettingsDraft secondDraft = new SettingsDraft(second.name, second.memoryMb, second.fixedCycles,
                 second.soundEnabled, false, second.cpuCore);
         secondDraft.dynamic = true;
         second = store.saveSettings(second, secondDraft, true);

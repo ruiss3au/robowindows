@@ -5,16 +5,18 @@ specification, plan, tasks, and validation record when work begins.
 
 ## Now
 
-- Deliver Feature 010's classic, touch-friendly host UI, staged machine
-  properties, Normal/DynRec selector and Tests panel. Persist DynRec preference
-  only after clean shutdown; retain experimental-copy-only safety and recovery.
+- Feature 010 is delivered and its scoped host-UI acceptance is complete:
+  classic touch-friendly screens, staged properties with editable machine names,
+  Normal/DynRec selector, Tests panel, translucent session controls and modern
+  Android Back confirmations. Clean shutdown retains DynRec selection; recovery
+  and experimental-copy-only restrictions remain intact.
 - DynRec performance investigation is paused by user choice after the clean
   same-build pair. Clock accuracy, medians and long-term stability remain
   unverified; do not automatically queue more benchmark or long-gate runs.
 
 - Keep fixed-20k DynRec as the experimental baseline; fixed 30k and bounded
   auto failed audio or overall quality.
-- Diagnose the remaining DynRec workload spikes and audio queue depletion with
+- If runtime investigation resumes, diagnose workload spikes and audio queue depletion with
   Feature 002's implemented balanced 100 ms scheduler and schema-3 diagnostics.
   The post-PageFaultCore matched pair completed cleanly, but DynRec recorded
   12 underruns and 1,862 missing audio frames while Normal recorded zero
@@ -30,8 +32,9 @@ specification, plan, tasks, and validation record when work begins.
 
 ## Next
 
-- Complete the scoped Feature 010 UI smoke checks on the copy. Resume Feature
-  009's clock/median campaign only if the user later requests it.
+- Use the completed UI and address specific reported issues. Resume Feature
+  009's clock/median campaign only if the user later requests it; no new guest
+  trial is queued by completing the UI milestone.
 - Per the user's 2026-09-09 scope decision, drop further AoE2/audio, ten-cycle,
   pause/resume and 30-minute thermal runs from this campaign. Record them as
   untested/incomplete, not passed; do not automatically queue them afterward.
@@ -48,13 +51,6 @@ specification, plan, tasks, and validation record when work begins.
   This improves host presentation; it does not promise 30 unique game frames per
   second. Defer this feature until the DynRec correctness, audio, stability, and
   performance gates above are satisfied.
-- **Windows 98–style Android interface — now Feature 010.** Redesign RoboWindows' own machine
-  library, settings, dialogs, and session controls to look like a Windows 98
-  application, with classic gray panels, beveled buttons, title bars, and period
-  typography. Retain usable touch targets, readable text, keyboard/mouse access,
-  and clear session/recovery controls. Use project-owned or redistributable
-  assets and keep all visible host UI owned by RoboWindows. Define the numbered
-  feature and visual acceptance criteria when this future design work begins.
 - Complete release-readiness work.
 
 ## Never
