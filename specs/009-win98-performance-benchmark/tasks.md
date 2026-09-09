@@ -25,5 +25,8 @@ diagnostic evidence, but both fail the zero-underrun quality gate. Balanced-100m
 removed those underruns in its first complete pair, while exposing an erroneous
 catch-up-cap resynchronization. After correcting that shared policy, Normal
 passed its short gate but the matched DynRec start failed in Windows Explorer
-before the benchmark. Repetition is deferred to the measured DynRec hot-path
-investigation; no median or promotion claim is available.
+before the benchmark. The bounded PageFaultCore correction then permitted a
+new complete matched pair: Normal retained zero underruns, while DynRec recorded
+12 underruns and 1,862 missing frames despite balanced fault state and no
+deadline resynchronization. Median repetition remains deferred; no promotion
+claim is available.

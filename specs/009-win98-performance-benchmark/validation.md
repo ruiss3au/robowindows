@@ -193,3 +193,51 @@ two `Start` actions, no quarantine, no DynRec worker and no attempt journal.
 Stable `incoming` was never opened. Per Feature 002 T063, benchmark/AoE2/median
 and long-gate repetitions stop here pending investigation of the measured DynRec
 page-fault hot path.
+
+## Post-PageFaultCore matched pair — 2026-09-09
+
+After Feature 008 T043/T044 passed, one new matched fixed-20k pair ran against
+only `incoming - copy` with installed APK SHA-256
+`25a0e64ff3872b3ead65d491dfd0559213559ab4e3fb4d198e785592f7abe5ca`.
+Normal ran first and shut down cleanly before the guarded DynRec attempt began.
+The tablet remained awake with RoboWindows foregrounded for both 40-second
+captures. Workload v2 completed three exact 10,000-ms phases in each run, both
+strict guest records parsed successfully, declared and observed decoders
+matched, lifecycle validation passed, and neither run reported a stream error,
+dropped audio frame, saturated sample, surface-post failure, or nonzero thermal status.
+
+| Metric | Normal fixed 20k | DynRec fixed 20k |
+|---|---:|---:|
+| CPU operations/ms | 3,204 | 3,193 |
+| Memory KiB/ms | 10 | 12 |
+| Off-screen GDI rectangles/s | 3,615 | 15,048 |
+| Presented FPS | 15.09 | 15.05 |
+| Maximum `retro_run()` | 23,915 us | 42,228 us |
+| Maximum scheduler lateness | 9,721 us | 112,503 us |
+| Catch-up calls | 6 | 72 |
+| Deadline resynchronizations | 0 | 0 |
+| Audio queue min/max | 3,932 / 5,814 frames | 0 / 6,882 frames |
+| Audio underruns / missing frames | 0 / 0 | 12 / 1,862 |
+
+DynRec CPU throughput was effectively equal to Normal, memory retained its
+coarse 12-versus-10 KiB/ms result, and GDI was 4.16 times faster. The new
+PageFaultCore slice eliminated the prior startup failure: the final bounded
+sample showed 214 balanced fault enqueues/returns at depth zero, 58,031 balanced
+PageFaultCore entries/returns, a 195-microsecond maximum call, and no slow-10-ms
+call, wipe, double fault, or reset.
+
+The pair nevertheless fails the strict promotion-quality gate. Normal had no
+audio underrun or missing frame, while DynRec's queue reached zero and recorded
+12 underrun callbacks with 1,862 missing frames during the benchmark. The
+benchmark is silent, so human audio and the separate physical-input procedure
+remain `not_tested`; they are not inferred from counters. Both sessions ended
+through Windows BIOS APM shutdown, followed by `guest requested shutdown` and
+`guest stopped cleanly`. Postflight found no isolated process, active-session
+marker, or dynamic-attempt journal. Stable `incoming` was never opened.
+
+This pair confirms that sustained PageFaultCore residency is no longer the
+benchmark blocker. It does not justify the remaining T005/T006 median runs:
+DynRec still fails zero settled underruns/missing frames and the user separately
+reported somewhat laggy graphics in AoE2. Further work should measure the
+remaining DynRec workload spikes and presentation path before repetition; the
+ten-cycle, pause/resume, thermal, and promotion gates remain open.
