@@ -7,6 +7,9 @@ cd "$repo_root"
 
 failed=0
 while IFS= read -r -d '' path; do
+  # A tracked file deleted in the worktree remains in `git ls-files --cached`
+  # until commit; deletion itself must not make the hygiene check unreadable.
+  [[ -e $path ]] || continue
   case ${path,,} in
     *.iso|*.img|*.img.gz|*.ima|*.vhd|*.vhdx|*.qcow2|*.key|*.keystore|*.jks|*.apk)
       echo "Prohibited tracked artifact: $path" >&2; failed=1 ;;

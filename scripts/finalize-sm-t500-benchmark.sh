@@ -35,7 +35,7 @@ done
 
 guest="$($(dirname "$0")/parse-win98-benchmark.sh "$guest_result")"
 gdi_rate="$(sed -n 's/^gdi_throughput=//p' <<<"$guest")"
-gdi_mpix="$(awk -v fills="$gdi_rate" 'BEGIN { printf "%.3f", fills * 0.256 }')"
+gdi_mpix="$(awk -v rects="$gdi_rate" 'BEGIN { printf "%.3f", rects * 0.004096 }')"
 short_quality=pass
 [[ $audio == pass && $input == pass && $gdi == pass && $shutdown == clean ]] || short_quality=fail
 grep -q '^audio_underruns=0$' "$capture_dir/telemetry-summary.txt" || short_quality=fail

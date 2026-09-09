@@ -1,8 +1,11 @@
 # Implementation Plan: Windows 98 Performance Benchmark
 
 Build a small Win32 program from reviewed assembly with pinned GNU binutils. It
-runs timed CPU, memory and visible GDI phases, with a low-volume source-owned
-reference tone during graphics load, and writes a bounded text result. Package
+runs timed CPU and memory phases plus an off-screen GDI phase in a compact,
+live-metrics utility window. A small progress strip is rate-limited to ten updates
+per guest second; randomized GDI work stays off-screen, the program plays no
+sound, and it never flashes the full window. It
+writes a bounded text result. Package
 it on a deterministic data CD image; never commit the image or executable.
 
 Add host tests for result parsing and telemetry aggregation. A device collector
@@ -24,12 +27,13 @@ not alter a machine, disk, execution selection, or existing DynRec patches.
 ## Build and debug strategy
 
 - Pin GNU binutils 2.40 and xorriso 1.5.4; build a PE32 GUI executable requiring
-  only Windows 98-era KERNEL32, USER32, GDI32 and WINMM APIs.
+  only Windows 98-era KERNEL32, USER32 and GDI32 APIs.
 - Emit the executable, ISO, SHA-256 manifest, linker map and disassembly under
   ignored output. Rebuild twice and require identical executable/ISO hashes.
 - Inspect PE version, entry point and imports automatically. Run the binary in a
   disposable Wine/Xvfb prefix as a reference smoke test and strictly parse its
-  result before Windows 98 testing.
+  result before Windows 98 testing. Capture the reference window and reject a
+  build that fills or alternates the whole client area.
 - Use named phase symbols and the linker map to translate an invalid-page-fault
   address. A failure is attributed to the benchmark only after reproduction in
   the reference run; a Windows-98-only failure is minimized by phase before any

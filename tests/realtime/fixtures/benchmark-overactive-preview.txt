@@ -1,5 +1,5 @@
 RW98BENCH schema=2 workload=2 duration_ms=30000
 phase=cpu unit=ops_per_ms elapsed_ms=10000 work=1000000 throughput=100 integrity=1234ABCD
 phase=memory unit=kib_per_ms elapsed_ms=10001 work=500050 throughput=50 integrity=89ABCDEF
-phase=gdi pixels_per_rect=4096 elapsed_ms=10000 work=600 throughput=60 frames=99 fps=9 integrity=01020304
-complete=0
+phase=gdi pixels_per_rect=4096 elapsed_ms=10000 work=600 throughput=60 frames=110 fps=11 integrity=01020304
+complete=1

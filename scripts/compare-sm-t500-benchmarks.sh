@@ -44,7 +44,7 @@ median_three() {
 }
 
 printf 'comparison_schema=1\napp_sha256=%s\ndynrec_profile=dynrec-fixed-20k\nnormal_profile=normal-fixed-20k\nruns_per_profile=3\n' "$build_hash"
-for metric in cpu_throughput memory_throughput gdi_throughput presented_fps; do
+for metric in cpu_throughput memory_throughput gdi_throughput gdi_fps presented_fps; do
   dynrec=$(median_three "$(field "$metric" "$1")" "$(field "$metric" "$2")" "$(field "$metric" "$3")")
   normal=$(median_three "$(field "$metric" "$4")" "$(field "$metric" "$5")" "$(field "$metric" "$6")")
   delta=$(awk -v dynamic="$dynrec" -v baseline="$normal" 'BEGIN { if (baseline == 0) print "undefined"; else printf "%.2f", (dynamic - baseline) * 100 / baseline }')

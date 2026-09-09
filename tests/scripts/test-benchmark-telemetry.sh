@@ -31,7 +31,7 @@ printf '%s\n' "$summary" >"$capture/telemetry-summary.txt"
 "$repo_dir/scripts/finalize-sm-t500-benchmark.sh" --capture-dir "$capture" \
   --guest-result "$repo_dir/tests/realtime/fixtures/benchmark-valid.txt" \
   --audio pass --input pass --gdi pass --shutdown clean >/dev/null
-grep -q '^gdi_megapixels_per_s=15.360$' "$capture/final-report.txt"
+grep -q '^gdi_megapixels_per_s=0.246$' "$capture/final-report.txt"
 grep -q '^short_run_quality=pass$' "$capture/final-report.txt"
 if "$repo_dir/scripts/finalize-sm-t500-benchmark.sh" --capture-dir "$capture" \
   --guest-result "$repo_dir/tests/realtime/fixtures/benchmark-valid.txt" \
@@ -50,7 +50,7 @@ for index in $(seq 1 6); do
   fps=$(awk -v i="$index" 'BEGIN { printf "%.2f", 20 + i }')
   {
     printf 'profile=%s\ninstalled_apk_sha256=abcdef\ncomplete=1\n' "$profile"
-    printf 'cpu_throughput=%s\nmemory_throughput=%s\ngdi_throughput=%s\npresented_fps=%s\n' "$cpu" "$memory" "$gdi" "$fps"
+    printf 'cpu_throughput=%s\nmemory_throughput=%s\ngdi_throughput=%s\ngdi_fps=9\npresented_fps=%s\n' "$cpu" "$memory" "$gdi" "$fps"
     printf 'short_run_quality=pass\n'
   } >"$reports/$index.txt"
 done

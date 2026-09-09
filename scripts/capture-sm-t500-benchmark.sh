@@ -89,7 +89,7 @@ version_name="$("${RW_ADB_TARGET[@]}" shell dumpsys package "$package" | sed -n 
 } >"$output_dir/metadata.txt"
 
 thermal_snapshot "$output_dir/thermal-start.txt"
-since="$("${RW_ADB_TARGET[@]}" shell date '+%m-%d %H:%M:%S.000' | tr -d '\r')"
+since="$("${RW_ADB_TARGET[@]}" shell "date '+%m-%d %H:%M:%S.000'" | tr -d '\r')"
 echo "Capture started. Launch RWBENCH.EXE now; it runs for 30 seconds."
 set +e
 timeout "${seconds}s" "${RW_ADB_TARGET[@]}" logcat -v threadtime -T "$since" \

@@ -13,6 +13,7 @@
 .globl _DestroyWindow
 .globl _LoadCursorA
 .globl _MessageBoxA
+.globl _SetWindowTextA
 _RegisterClassA: ret
 _CreateWindowExA: ret
 _ShowWindow: ret
@@ -26,3 +27,4 @@ _ReleaseDC: ret
 _DestroyWindow: ret
 _LoadCursorA: ret
 _MessageBoxA: ret
+_SetWindowTextA: ret

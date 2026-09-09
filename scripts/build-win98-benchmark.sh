@@ -47,7 +47,6 @@ make_import_library() {
 make_import_library kernel32
 make_import_library user32
 make_import_library gdi32
-make_import_library winmm
 
 as --32 --gdwarf-2 "$source_dir/benchmark.s" -o "$work_dir/benchmark.o"
 ld -mi386pe --no-insert-timestamp --subsystem windows:4.0 \
@@ -56,12 +55,16 @@ ld -mi386pe --no-insert-timestamp --subsystem windows:4.0 \
   -Map "$work_dir/RWBENCH.MAP" \
   -o "$work_dir/RW98BENCH.EXE" "$work_dir/benchmark.o" \
   "$work_dir/libkernel32.a" "$work_dir/libuser32.a" \
-  "$work_dir/libgdi32.a" "$work_dir/libwinmm.a"
+  "$work_dir/libgdi32.a"
 
 objdump -f "$work_dir/RW98BENCH.EXE" | grep -q 'file format pei-i386'
-for dll in KERNEL32.dll USER32.dll GDI32.dll WINMM.dll; do
+for dll in KERNEL32.dll USER32.dll GDI32.dll; do
   objdump -p "$work_dir/RW98BENCH.EXE" | grep -qi "DLL Name: $dll"
 done
+if objdump -p "$work_dir/RW98BENCH.EXE" | grep -qi 'DLL Name: WINMM.dll'; then
+  echo "Benchmark workload must not import WINMM or play a test tone" >&2
+  exit 1
+fi
 
 objdump -d "$work_dir/RW98BENCH.EXE" >"$work_dir/RWBENCH.DISASM"
 

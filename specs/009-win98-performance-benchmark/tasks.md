@@ -14,3 +14,8 @@
   same quality gates; compare medians without opening or changing `incoming`.
 - [ ] T007 Complete the separate ten-cycle and 30-minute thermal gates before any
   promotion decision (Feature 008 T009–T011).
+- [x] T008 Retire workload v1 after its full-window GDI loop stalled Windows 98.
+  Implement workload v2 as a compact, closable, silent utility with phase text,
+  off-screen 320×200 GDI work, a calm progress strip capped at ten guest FPS, guest preview
+  FPS in the strict result, and a desktop/reference visual check before another
+  tablet trial (FR-002, FR-010; scenarios 1 and 5).

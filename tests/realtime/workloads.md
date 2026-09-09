@@ -1,6 +1,6 @@
 # RoboWindows performance workloads
 
-## RW98BENCH workload 1
+## RW98BENCH workload 2
 
 Use `scripts/build-win98-benchmark.sh` to build `RWBENCH.ISO`. Attach that ISO
 through RoboWindows `Change Media` only to a running experimental copy, then run
@@ -13,15 +13,19 @@ The source-owned Win32 program runs these phases once, in order:
 2. **Memory, 10 guest seconds:** generate and write a 64 KiB working set, then
    read fixed locations for an integrity value. Report KiB per guest millisecond
    (numerically close to MiB/s).
-3. **GDI/audio, 10 guest seconds:** alternate visible 640×400 `PatBlt` fills while
-   playing a low-volume, embedded 1.378 kHz 8-bit mono reference tone through
-   Windows multimedia. Report fills/s; multiply by 0.256 for megapixels/s.
+3. **GDI, 10 guest seconds:** draw pseudorandom 64×64 `PatBlt` rectangles into a
+   320×200 compatible bitmap. Report rectangles/s and multiply by 0.004096 for
+   megapixels/s. Randomized work is never copied to the display. A narrow progress
+   strip advances at no more than ten guest updates/s and its update FPS is
+   reported separately.
 
+The compact utility shows live elapsed/work/rate values about four times per
+guest second, plays no sound, and handles Close or Escape during every phase.
 Every phase reports its actual `GetTickCount` duration, work count, integer rate
 and integrity value. The program displays the full record and saves it to
 `C:\RWBENCH.TXT`. `scripts/parse-win98-benchmark.sh` must accept the record.
 
-Start a 40-second host capture immediately before launching the program:
+Start a matched host capture immediately before launching the program:
 
 ```sh
 scripts/capture-sm-t500-benchmark.sh --profile dynrec-fixed-20k
@@ -30,7 +34,7 @@ scripts/capture-sm-t500-benchmark.sh --profile dynrec-fixed-20k
 The capture records emulator-call rate, submitted/published/presented FPS,
 coalescing, audio production/consumption/failures, observed decoder and thermal
 snapshots. The tester separately records audible cracking/pitch, physical input,
-normal Windows shutdown and whether the GDI phase visibly remained responsive.
+normal Windows shutdown and whether the utility remained responsive.
 
 Compare three valid runs per profile using the median CPU, memory and GDI rates.
 Keep guest resolution, Android orientation/foreground state, RoboWindows build,
