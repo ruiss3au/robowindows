@@ -28,8 +28,8 @@ them.
 
 ## Requirements
 
-- **FR-001**: The main screen MUST display `v<version name> · <revision>` below
-  the top-left RoboWindows brand.
+- **FR-001**: The main screen MUST display `v<version name> · <revision>` in its
+  visible library status bar (Feature 010 replaces the former brand-adjacent placement).
 - **FR-002**: The revision MUST default to a 12-character abbreviated `HEAD` and
   MUST add `+dirty` when tracked or untracked non-ignored files differ.
 - **FR-003**: `ROBOWINDOWS_BUILD_REVISION` MUST allow reproducible archive/CI

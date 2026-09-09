@@ -27,6 +27,7 @@ final class MachineStore {
     private static final String CLEAN_SHUTDOWN_MACHINE = "clean_shutdown_machine";
     private static final String CLEAN_SHUTDOWN_MACHINES = "clean_shutdown_machines";
     private static final String DYNAMIC_ATTEMPT_FILE = "dynamic-attempt.json";
+    private static final String SETTINGS_PENDING_FILE = "settings-pending";
     static final int DYNAMIC_EXPERIMENTAL_CYCLES = LaunchConfig.DYNAMIC_EXPERIMENTAL_CYCLES;
     private static final long COPY_SAFETY_MARGIN_BYTES = 256L * 1024L * 1024L;
     static final int SAFE_EXPERIMENTAL_CYCLES = 12000;
@@ -70,11 +71,13 @@ final class MachineStore {
      */
     synchronized MachineProfile selectDynamicProfile(MachineProfile selected) throws IOException {
         MachineProfile current = requireCurrent(selected);
+        ensureSettingsReady(current);
         if (!current.isExperimental() || hasInterruptedSession() ||
                 !hasCleanGuestShutdown(current.id)) {
             throw new IOException("Dynamic trials require a cleanly shut down experimental copy");
         }
         validateWritableOwnership(current);
+        if (requiresDynamicMediaCheck(current)) throw new IOException("Complete disk-check recovery first");
         MachineProfile updated = copyWithExecution(current, MachineProfile.EXECUTION_DYNAMIC,
                 current.configurationGeneration + 1);
         replaceProfile(updated);
@@ -118,6 +121,7 @@ final class MachineStore {
             DynamicCyclePolicy dynamicPolicy) throws IOException {
         if (dynamicPolicy == null) throw new IOException("Dynamic cycle policy is missing");
         MachineProfile current = requireCurrent(selected);
+        ensureSettingsReady(current);
         if (!current.isExperimental() || !current.isDynamicSelected() || hasInterruptedSession() ||
                 !hasCleanGuestShutdown(current.id)) {
             throw new IOException("Dynamic trial is not eligible to start");
@@ -184,7 +188,13 @@ final class MachineStore {
                 MachineProfile fallback = normalFallbackProfile(profile, attempt.normalFallback);
                 writeProfileLaunchConfig(fallback,
                         isWindowsInstaller(fallback) && bootsInstaller(fallback));
-                replaceProfile(fallback);
+                if (DynamicAttempt.CLOSED_CLEAN.equals(attempt.state)) {
+                    replaceProfile(copyWithExecution(fallback, MachineProfile.EXECUTION_DYNAMIC,
+                            profile.configurationGeneration));
+                    markCleanShutdownDurably(profile.id);
+                } else {
+                    replaceProfile(fallback);
+                }
                 if (DynamicAttempt.PREPARED.equals(attempt.state) ||
                         DynamicAttempt.CLOSED_CLEAN.equals(attempt.state)) {
                     if (!journal.delete()) throw new IOException("Cannot clear completed trial record");
@@ -285,8 +295,12 @@ final class MachineStore {
         current.withState(DynamicAttempt.CLOSED_CLEAN).writeAtomically(journal);
         MachineProfile fallback = normalFallbackProfile(profile, current.normalFallback);
         writeProfileLaunchConfig(fallback, isWindowsInstaller(fallback) && bootsInstaller(fallback));
-        replaceProfile(fallback);
-        markGuestShutdown(fallback.id);
+        faults.before("clean-preference");
+        replaceProfile(copyWithExecution(fallback, MachineProfile.EXECUTION_DYNAMIC,
+                profile.configurationGeneration));
+        faults.before("clean-provenance");
+        markCleanShutdownDurably(fallback.id);
+        faults.before("clean-journal-clear");
         if (!journal.delete()) throw new IOException("Cannot clear clean dynamic trial record");
     }
 
@@ -304,6 +318,7 @@ final class MachineStore {
     /** Freshly validates an ordinary start; callers must not trust stale UI state. */
     synchronized MachineProfile prepareNormalStart(MachineProfile selected) throws IOException {
         MachineProfile current = requireCurrent(selected);
+        ensureSettingsReady(current);
         if (current.isDynamicSelected()) {
             throw new IOException("Dynamic trials require the diagnostic runner");
         }
@@ -313,6 +328,90 @@ final class MachineStore {
         }
         validateWritableOwnership(current);
         return current;
+    }
+
+    private void markCleanShutdownDurably(String machineId) throws IOException {
+        android.content.SharedPreferences p = context.getSharedPreferences(preferencesName, Context.MODE_PRIVATE);
+        java.util.HashSet<String> clean = cleanShutdownMachines(p);
+        clean.add(machineId);
+        if (!p.edit().putStringSet(CLEAN_SHUTDOWN_MACHINES, clean)
+                .remove(CLEAN_SHUTDOWN_MACHINE).commit()) {
+            throw new IOException("Cannot record clean shutdown");
+        }
+    }
+
+    /** Repair only derived configuration from the authoritative saved profile. */
+    private void ensureSettingsReady(MachineProfile profile) throws IOException {
+        File marker = new File(machineDirectory(profile), SETTINGS_PENDING_FILE);
+        if (!marker.exists()) return;
+        if (hasInterruptedSession() || requiresDynamicMediaCheck(profile)) {
+            throw new IOException("Settings recovery requires a stopped, healthy machine");
+        }
+        validateWritableOwnership(profile);
+        writeProfileLaunchConfig(profile, isWindowsInstaller(profile) && bootsInstaller(profile));
+        if (!marker.delete()) throw new IOException("Cannot finish saved settings recovery");
+    }
+
+    synchronized String dynamicUnavailable(MachineProfile selected, boolean cpuPassed) {
+        try {
+            MachineProfile p = requireCurrent(selected);
+            String reason = SettingsDraft.dynamicUnavailable(BuildConfig.DEBUG, p.isExperimental(),
+                    hasInterruptedSession(), requiresDynamicMediaCheck(p),
+                    hasCleanGuestShutdown(p.id), cpuPassed);
+            if (reason != null) return reason;
+            if (selectedUtility(p) != null) return "Use the Windows disk boot source before selecting DynRec.";
+            validateWritableOwnership(p);
+            return null;
+        } catch (IOException error) {
+            return "Machine storage or settings changed; reopen Settings or complete recovery.";
+        }
+    }
+
+    synchronized MachineProfile saveSettings(MachineProfile selected, SettingsDraft draft,
+            boolean cpuPassed) throws IOException {
+        MachineProfile p = requireCurrent(selected);
+        if (hasInterruptedSession() || requiresDynamicMediaCheck(p)) {
+            throw new IOException("Stop the session and complete recovery before saving settings");
+        }
+        ensureSettingsReady(p);
+        if (draft.dynamic) {
+            String reason = dynamicUnavailable(p, cpuPassed);
+            if (reason != null) throw new IOException(reason);
+        }
+        if ((draft.memoryMb != p.memoryMb && draft.memoryMb != 16 && draft.memoryMb != 64) ||
+                (!draft.normalCore.equals(p.cpuCore) && !draft.normalCore.equals("normal")) ||
+                (p.isExperimental() ? !isExperimentalCycleCandidate(draft.normalCycles) :
+                        draft.normalCycles != p.fixedCycles)) {
+            throw new IOException("Unsupported settings selection");
+        }
+        validateWritableOwnership(p);
+        if (!draft.dirty()) return p;
+        MachineProfile updated = new MachineProfile(p.id, p.name, p.family, p.mediaName,
+                p.mediaPath, p.runtimePath, p.mediaSha256, p.launchPath, draft.memoryMb,
+                draft.normalCore, draft.sound, p.createdAt, p.lastBootedAt, p.mediaAssets,
+                p.role, draft.normalCycles, p.lastKnownSafeCycles,
+                draft.dynamic ? MachineProfile.EXECUTION_DYNAMIC : MachineProfile.EXECUTION_NORMAL,
+                p.configurationGeneration + 1);
+        File marker = new File(machineDirectory(p), SETTINGS_PENDING_FILE);
+        try (FileOutputStream out = new FileOutputStream(marker)) {
+            out.write(1); out.flush(); out.getFD().sync();
+        }
+        try {
+            faults.before("settings-launch");
+            writeProfileLaunchConfig(updated, isWindowsInstaller(updated) && bootsInstaller(updated));
+            faults.before("settings-profile");
+            replaceProfile(updated);
+        } catch (IOException error) {
+            try {
+                faults.before("settings-rollback");
+                replaceProfile(p);
+                writeProfileLaunchConfig(p, isWindowsInstaller(p) && bootsInstaller(p));
+                if (!marker.delete()) throw new IOException("Settings recovery remains pending");
+            } catch (IOException rollback) { error.addSuppressed(rollback); }
+            throw error;
+        }
+        if (!marker.delete()) throw new IOException("Settings saved; reopen Settings to finish recovery");
+        return updated;
     }
 
     /** Explicit normal-core recovery boot for a user-approved quarantined copy. */
@@ -886,6 +985,21 @@ final class MachineStore {
         }
     }
 
+    File selectedUtility(MachineProfile profile) {
+        if (!isWindowsInstaller(profile)) return null;
+        File launch = new File(profile.launchPath);
+        if (launch.length() > 65536) return null;
+        try {
+            String config = new String(java.nio.file.Files.readAllBytes(launch.toPath()), StandardCharsets.UTF_8);
+            for (MediaAsset asset : profile.mediaAssets) {
+                if (!LaunchConfig.supportsBoot(extension(asset.runtimePath))) continue;
+                String escaped = asset.runtimePath.replace("\\", "\\\\").replace("\"", "\\\"");
+                if (config.contains("boot \"" + escaped + "\"")) return new File(asset.runtimePath);
+            }
+        } catch (IOException ignored) { /* Start's ownership/config validation still applies. */ }
+        return null;
+    }
+
     void setWindowsInstallerBoot(MachineProfile profile, boolean installer) throws IOException {
         if (!isWindowsInstaller(profile)) throw new IOException("Not a Windows installer profile");
         writeWindowsLaunchConfig(new File(profile.launchPath), new File(profile.runtimePath),
@@ -931,6 +1045,13 @@ final class MachineStore {
             throws IOException {
         File launch = new File(profile.launchPath);
         if (isWindowsInstaller(profile)) {
+            File utility = selectedUtility(profile);
+            if (utility != null) {
+                writeConfigAtomically(launch, LaunchConfig.createWindowsUtility(profile.runtimePath,
+                        profile.mediaPath, utility.getAbsolutePath(), profile.memoryMb,
+                        profile.cpuCore, profile.fixedCycles, profile.soundEnabled));
+                return;
+            }
             writeWindowsLaunchConfig(launch, new File(profile.runtimePath), new File(profile.mediaPath),
                     windowsBootFloppy(profile), bootInstaller, profile.memoryMb, profile.cpuCore,
                     profile.fixedCycles, profile.soundEnabled);

@@ -9,6 +9,21 @@ rw_require_model
 adb_bin=$RW_ADB
 export ANDROID_SERIAL=$RW_DEVICE_SERIAL
 package="org.robowindows.app.debug"
+if [[ -n $("$adb_bin" shell pm path "$package" 2>/dev/null) ]]; then
+  for process in "$package:dynrec" "$package:cpu_normal" "$package:cpu_dynamic"; do
+    [[ -z $("$adb_bin" shell pidof "$process" || true) ]] || {
+      echo "Stop the guest or CPU fixture before installing" >&2; exit 1;
+    }
+  done
+  if "$adb_bin" shell run-as "$package" test -f shared_prefs/machine_store.xml; then
+    preferences=$("$adb_bin" shell run-as "$package" cat shared_prefs/machine_store.xml)
+    if rg -q 'name="active_session"' <<<"$preferences"; then
+      echo "Shut down the guest normally before installing" >&2; exit 1
+    fi
+  fi
+  journals=$("$adb_bin" shell run-as "$package" find files -name dynamic-attempt.json | tr -d '\r')
+  [[ -z "$journals" ]] || { echo "Resolve the interrupted trial before testing" >&2; exit 1; }
+fi
 fixture_dir="$(mktemp -d)"
 device_stage_image="/data/local/tmp/robowindows-core-test.img"
 device_stage_config="/data/local/tmp/robowindows-core-test.conf"
@@ -72,12 +87,14 @@ if [[ "${KEEP_SESSION:-0}" == "1" ]]; then
   exit 0
 fi
 "$adb_bin" shell sleep 7
-logs="$($adb_bin logcat -d -s RoboWindowsCore:V RoboWindowsTest:I AndroidRuntime:E DEBUG:E libc:F)"
+logs="$($adb_bin logcat -d -s RoboWindowsCore:V RoboWindowsTelemetry:I RoboWindowsTest:I AndroidRuntime:E DEBUG:E libc:F)"
 printf '%s\n' "$logs"
 grep -q 'guest started' <<<"$logs"
 grep -q 'persistence and input bridge probes passed' <<<"$logs"
 grep -q 'first guest frame 640x400' <<<"$logs"
-grep -q 'audio start result=0' <<<"$logs"
+grep -q 'audio stream open requested_rate=48000 actual_rate=48000' <<<"$logs"
+# nosound=true has no producer frames; an opened stream is not an audio quality pass.
+grep -q 'schema=3 .*audio_state=prebuffering .*audio_produced=0' <<<"$logs"
 grep -q 'guest paused' <<<"$logs"
 grep -q 'guest resumed' <<<"$logs"
 grep -q 'media change queued' <<<"$logs"
@@ -85,8 +102,8 @@ grep -q 'media change completed' <<<"$logs"
 grep -q 'guest stopped cleanly' <<<"$logs"
 grep -q 'guest restart completed' <<<"$logs"
 if [[ "${REQUIRE_SURFACE:-0}" == "1" ]]; then
-  grep -q 'first rendered frame surface=' <<<"$logs"
-elif grep -q 'first rendered frame surface=' <<<"$logs"; then
+  grep -Eq 'schema=3 .*presented=[1-9][0-9]* .*post_failures=0' <<<"$logs"
+elif grep -Eq 'schema=3 .*presented=[1-9][0-9]* .*post_failures=0' <<<"$logs"; then
   echo "Guest frame was rendered to the Android surface"
 else
   echo "Guest surface was unavailable; rerun unlocked with REQUIRE_SURFACE=1" >&2

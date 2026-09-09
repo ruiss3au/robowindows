@@ -35,7 +35,9 @@ performance trials without sharing its writable disk with my stable machine.
   machine's app-private directory and profile; no machine is deleted merely by showing the
   control.
 - **FR-010**: The selected experimental cycle profile MUST use the shared RoboWindows selected
-  button treatment: dark surface, primary checkmarked label, and no redundant status line.
+  button treatment: checked, inset classic control with visible focus (Feature 010
+  supersedes the original dark theme). Feature 008/010 permits guarded debug
+  DynRec selection; this does not expose raw or automatic CPU configuration.
 
 ## Acceptance Scenarios
 

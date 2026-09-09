@@ -216,6 +216,7 @@ final class DebugSelfTest {
                     isolated.hasCleanGuestShutdown(recoveryBoot.id),
                     "clean recovery shutdown clears quarantine and active marker");
             File experimentalDirectory = new File(recovered.runtimePath).getParentFile();
+            recoveryBoot = exerciseClassicSettings(context, isolated, recoveryBoot);
             isolated.deleteMachine(recoveryBoot);
             require(!experimentalDirectory.exists() && isolated.load().size() == 1 &&
                     isolated.load().get(0).id.equals(configured.id),
@@ -276,6 +277,90 @@ final class DebugSelfTest {
                     .edit().clear().commit();
             deleteTree(testRoot);
         }
+    }
+
+    private static MachineProfile exerciseClassicSettings(Context context, MachineStore store,
+            MachineProfile original) throws Exception {
+        MachineProfile stable = store.load().get(0);
+        String stableConfig = readText(new File(stable.launchPath));
+        String stableProfile = stable.toJson().toString();
+        SettingsDraft draft = new SettingsDraft(original.memoryMb, original.fixedCycles,
+                original.soundEnabled, original.isDynamicSelected(), original.cpuCore);
+        draft.normalCycles = 20000;
+        draft.sound = !original.soundEnabled;
+        draft.dynamic = true;
+        MachineProfile p = store.saveSettings(original, draft, true);
+        require(p.isDynamicSelected() && p.fixedCycles == 20000 && p.soundEnabled == draft.sound &&
+                p.configurationGeneration == original.configurationGeneration + 1 &&
+                !store.requiresDynamicMediaCheck(p) && readText(new File(p.launchPath)).contains("core=normal"),
+                "batch Apply persists preference and Normal fallback without starting");
+        boolean stale = false;
+        try { store.saveSettings(original, draft, true); } catch (IOException expected) { stale = true; }
+        require(stale, "stale properties cannot overwrite a newer generation");
+        SettingsDraft normal = new SettingsDraft(p.memoryMb, p.fixedCycles, p.soundEnabled, true, p.cpuCore);
+        normal.dynamic = false;
+        SettingsDraft invalidStable = new SettingsDraft(stable.memoryMb, stable.fixedCycles,
+                stable.soundEnabled, false, stable.cpuCore);
+        invalidStable.dynamic = true;
+        boolean rejectedStable = false;
+        try { store.saveSettings(stable, invalidStable, true); } catch (IOException expected) { rejectedStable = true; }
+        require(rejectedStable, "stable machine cannot select DynRec");
+        boolean rejectedGate = false;
+        try { store.saveSettings(p, draft, false); } catch (IOException expected) { rejectedGate = true; }
+        require(rejectedGate, "settings enforce CPU capability");
+        store.markSessionStarted(p.id);
+        boolean rejectedActive = false;
+        try { store.saveSettings(p, normal, true); } catch (IOException expected) { rejectedActive = true; }
+        store.markSessionStopped();
+        store.markGuestShutdown(p.id);
+        require(rejectedActive, "active settings save is rejected");
+        for (String point : new String[]{"settings-launch", "settings-profile"}) {
+            MachineStore faulty = new MachineStore(context, new File(new File(context.getCacheDir(),
+                    "debug-machine-store"), "private"), "machine_store_debug_probe", candidate -> {
+                if (point.equals(candidate)) throw new IOException("injected settings failure");
+            });
+            boolean failed = false;
+            try { faulty.saveSettings(p, normal, true); } catch (IOException expected) { failed = true; }
+            require(failed && store.load().get(1).configurationGeneration == p.configurationGeneration &&
+                    store.load().get(1).isDynamicSelected() &&
+                    readText(new File(p.launchPath)).contains("core=normal"), "batch save rollback " + point);
+        }
+        for (String point : new String[]{"clean-preference", "clean-provenance", "clean-journal-clear"}) {
+            DynamicAttempt attempt = store.markDynamicRunning(store.prepareDynamicStart(p));
+            MachineStore faulty = new MachineStore(context, new File(new File(context.getCacheDir(),
+                    "debug-machine-store"), "private"), "machine_store_debug_probe", candidate -> {
+                if (point.equals(candidate)) throw new IOException("injected clean completion failure");
+            });
+            boolean failed = false;
+            try { faulty.closeDynamicAttemptCleanly(attempt); } catch (IOException expected) { failed = true; }
+            require(failed && store.requiresDynamicMediaCheck(p), "interrupted clean completion retains journal");
+            store.recoverDynamicAttempts();
+            p = store.load().get(1);
+            require(p.isDynamicSelected() && store.hasCleanGuestShutdown(p.id) &&
+                    !store.requiresDynamicMediaCheck(p), "closed-clean replay retains DynRec " + point);
+            require(!store.recoverDynamicAttempts(), "clean replay is idempotent");
+        }
+        DynamicAttempt attempt = store.markDynamicRunning(store.prepareDynamicStart(p));
+        store.closeDynamicAttemptCleanly(attempt);
+        p = store.load().get(1);
+        require(p.isDynamicSelected() && p.fixedCycles == 20000 && p.soundEnabled == draft.sound,
+                "clean DynRec retains selection and complete Normal settings");
+        normal = new SettingsDraft(p.memoryMb, p.fixedCycles, p.soundEnabled, true, p.cpuCore);
+        normal.dynamic = false;
+        p = store.saveSettings(p, normal, true);
+        require(!store.prepareNormalStart(p).isDynamicSelected(), "Normal selected start uses Normal");
+        MachineProfile second = store.createExperimentalCopy(stable);
+        SettingsDraft secondDraft = new SettingsDraft(second.memoryMb, second.fixedCycles,
+                second.soundEnabled, false, second.cpuCore);
+        secondDraft.dynamic = true;
+        second = store.saveSettings(second, secondDraft, true);
+        require(!store.load().get(1).isDynamicSelected() && second.isDynamicSelected() &&
+                !second.id.equals(p.id), "two-copy selection changes only the explicit target");
+        store.deleteMachine(second);
+        require(stableProfile.equals(store.load().get(0).toJson().toString()) &&
+                stableConfig.equals(readText(new File(stable.launchPath))), "settings preserve stable fixture");
+        Log.i(TAG, "classic settings and persistent clean-mode probes passed");
+        return p;
     }
 
     private static void require(boolean value, String message) {

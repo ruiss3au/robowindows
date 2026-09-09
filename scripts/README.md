@@ -27,7 +27,7 @@ guest media, and backups are intentionally outside Git.
 | `scripts/test-host.sh` | Compile and run Java/C++ host checks | Temporary files only |
 | `scripts/check-repository.sh` | Check Git hygiene and shell syntax | Read-only |
 | `scripts/check-experimental-fat.sh --image FILE --expected PATH` | Read-only FAT health check for a quarantined experimental volume | Requires `fsck.fat`/`dosfsck` and `mtype`; never mounts or repairs |
-| `scripts/test-sm-t500-core.sh` | Run the disposable direct-core device test | Installs APK and creates temporary tablet files |
+| `scripts/test-sm-t500-core.sh` | Run disposable settings/storage, input and direct-core device probes; silent fixture validates stream opening and schema-3 presentation, not audio continuity | Requires stopped machines; installs APK and creates temporary tablet files |
 | `scripts/test-sm-t500-realtime.sh` | Legacy realtime clone/environment test modes | Some modes create explicit host/device clones |
 | `scripts/cleanup-tablet-storage.sh --preflight` | Verify the two disposable tablet areas and protected library | Read-only; requires RoboWindows at Machines |
 | `scripts/cleanup-tablet-storage.sh --delete` | Permanently remove only verified disposable tablet areas | Re-runs preflight and checks library invariants |

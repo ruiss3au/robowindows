@@ -57,6 +57,13 @@ saved Normal fallback, never the diagnostic cycle policy.
 
 ## State transitions
 
+Feature 010 makes clean execution selection persistent: after verified clean
+shutdown, restore the derived Normal launch description and clean provenance
+while retaining selected DynRec. Replaying `closed-clean` performs the same
+idempotent completion. All other interrupted attempts still restore Normal;
+quarantine cannot be cleared by selecting a mode. Staged UI settings are saved
+as one validated generation, never by booting or chaining partial selections.
+
 | State | Meaning and next action |
 | --- | --- |
 | prepared | No native handoff allowed yet. Interrupted preparation restores normal. |

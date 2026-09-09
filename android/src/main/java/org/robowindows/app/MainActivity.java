@@ -41,12 +41,12 @@ public final class MainActivity extends Activity {
         void run(DynamicTrialController controller) throws IOException;
     }
 
-    private static final int BG = Color.rgb(16, 19, 24);
-    private static final int SURFACE = Color.rgb(25, 30, 38);
-    private static final int SURFACE_HIGH = Color.rgb(34, 42, 53);
-    private static final int PRIMARY = Color.rgb(117, 213, 181);
-    private static final int TEXT = Color.rgb(238, 243, 247);
-    private static final int MUTED = Color.rgb(157, 170, 183);
+    private static final int BG = ClassicUi.GRAY;
+    private static final int SURFACE = ClassicUi.GRAY;
+    private static final int SURFACE_HIGH = 0xffd6d6d6;
+    private static final int PRIMARY = ClassicUi.NAVY;
+    private static final int TEXT = ClassicUi.INK;
+    private static final int MUTED = 0xff454545;
     private static final int PICK_MEDIA = 41;
     private static final int CHANGE_MEDIA = 42;
     private static final int WINDOWS_UTILITY = 43;
@@ -56,7 +56,9 @@ public final class MainActivity extends Activity {
     private static final String DYNAMIC_DIAGNOSTIC_POLICY =
             "robowindows.dynamicDiagnosticPolicy";
 
-    private LinearLayout content;
+    private MachinePropertiesView properties;
+    private boolean hostDialogOpen;
+    private boolean homeVisible;
     private boolean pointerCaptured;
     private final SessionUiState sessionUiState = new SessionUiState();
     private GuestDisplayView sessionGuest;
@@ -327,7 +329,8 @@ public final class MainActivity extends Activity {
     }
 
     private void runCpuDiagnostic() {
-        if (cpuFixtureController != null) return;
+        if (cpuFixtureController != null || sessionActive || copyInProgress || machineStore.hasInterruptedSession()) return;
+        properties = null;
         LinearLayout page = new LinearLayout(this);
         page.setOrientation(LinearLayout.VERTICAL);
         page.setPadding(dp(28), dp(22), dp(28), dp(22));
@@ -413,150 +416,125 @@ public final class MainActivity extends Activity {
     private GradientDrawable background(int color, int radius) {
         GradientDrawable drawable = new GradientDrawable();
         drawable.setColor(color);
-        drawable.setCornerRadius(dp(radius));
+        drawable.setCornerRadius(0);
         return drawable;
     }
 
     private Button button(String label, View.OnClickListener listener) {
-        Button button = new Button(this);
-        button.setText(label);
-        button.setTextColor(BG);
-        button.setTextSize(15);
-        button.setAllCaps(false);
-        button.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
-        button.setBackground(background(PRIMARY, 12));
-        button.setOnClickListener(listener);
-        button.setPadding(dp(18), 0, dp(18), 0);
-        return button;
+        return ClassicUi.button(this, label, listener);
     }
-
-    // Product-wide selected-control treatment: retain the dark interface surface and use the
-    // primary color only for the active label and checkmark, rather than a separate status line.
     private Button selectedButton(String label, View.OnClickListener listener) {
-        Button button = button("✓ " + label, listener);
-        button.setTextColor(PRIMARY);
-        button.setBackground(background(SURFACE_HIGH, 12));
-        return button;
+        Button b = button("✓ " + label, listener);
+        b.setSelected(true);
+        return b;
     }
 
     private LinearLayout card() {
         LinearLayout card = new LinearLayout(this);
         card.setOrientation(LinearLayout.VERTICAL);
         card.setPadding(dp(20), dp(18), dp(20), dp(18));
-        card.setBackground(background(SURFACE, 16));
+        card.setBackground(ClassicUi.bevel(this, true));
         return card;
     }
 
+    @Override public void setContentView(View view) {
+        ClassicUi.ensureTouchTargets(view);
+        if (view instanceof LinearLayout && "classic-page".equals(view.getTag())) {
+            LinearLayout page = (LinearLayout) view;
+            boolean scrollable = false;
+            for (int i = 0; i < page.getChildCount(); i++) scrollable |= page.getChildAt(i) instanceof ScrollView;
+            if (!scrollable && page.getChildCount() > 1) {
+                LinearLayout body = new LinearLayout(this);
+                body.setOrientation(LinearLayout.VERTICAL);
+                while (page.getChildCount() > 1) {
+                    View child = page.getChildAt(1); page.removeViewAt(1); body.addView(child);
+                }
+                ScrollView scroll = new ScrollView(this);
+                scroll.addView(body);
+                page.addView(scroll, new LinearLayout.LayoutParams(-1, 0, 1));
+            }
+        }
+        if (view instanceof LinearLayout && !(view instanceof MachinePropertiesView) &&
+                !"classic-page".equals(view.getTag())) {
+            LinearLayout shell = hostPage("RoboWindows", false);
+            ScrollView scroll = new ScrollView(this);
+            scroll.setFillViewport(true);
+            scroll.addView(view);
+            shell.addView(scroll, new LinearLayout.LayoutParams(-1, 0, 1));
+            view = shell;
+        }
+        super.setContentView(view);
+        homeVisible = false;
+    }
+
+    private LinearLayout hostPage(String title, boolean close) {
+        LinearLayout page = new LinearLayout(this);
+        page.setOrientation(LinearLayout.VERTICAL);
+        page.setPadding(dp(12), dp(12), dp(12), dp(12));
+        page.setTag("classic-page");
+        page.setBackgroundColor(BG);
+        page.addView(ClassicUi.title(this, title, close ? this::showHome : null));
+        return page;
+    }
+
     private void showHome() {
+        properties = null;
         diagnosticStats = null;
         diagnosticDevices = null;
         handler.removeCallbacks(refreshInputStats);
         stopActiveSession();
-        LinearLayout root = new LinearLayout(this);
-        root.setOrientation(LinearLayout.HORIZONTAL);
-        root.setPadding(dp(28), dp(22), dp(28), dp(22));
-        root.setBackgroundColor(BG);
-
-        LinearLayout rail = new LinearLayout(this);
-        rail.setOrientation(LinearLayout.VERTICAL);
-        rail.setPadding(0, 0, dp(28), 0);
-        TextView brand = text("ROBOWINDOWS", 15, PRIMARY);
-        brand.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
-        rail.addView(brand);
-        TextView buildIdentity = text(BuildIdentity.label(
-                BuildConfig.VERSION_NAME, BuildConfig.SOURCE_REVISION), 12, MUTED);
-        LinearLayout.LayoutParams identityParams = new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-        identityParams.topMargin = dp(3);
-        rail.addView(buildIdentity, identityParams);
-        LinearLayout.LayoutParams diagnosticParams = new LinearLayout.LayoutParams(dp(190), dp(46));
-        diagnosticParams.topMargin = dp(22);
-        rail.addView(button("Input test", v -> showDiagnostics()), diagnosticParams);
-        if ((getApplicationInfo().flags & ApplicationInfo.FLAG_DEBUGGABLE) != 0) {
-            LinearLayout.LayoutParams cpuParams = new LinearLayout.LayoutParams(dp(190), dp(46));
-            cpuParams.topMargin = dp(12);
-            rail.addView(button(CpuFixtureGate.passed(this) ? "✓ CPU test" : "CPU test",
-                    v -> runCpuDiagnostic()), cpuParams);
-        }
-
-        content = new LinearLayout(this);
-        content.setOrientation(LinearLayout.VERTICAL);
-
-        LinearLayout header = new LinearLayout(this);
-        header.setGravity(Gravity.CENTER_VERTICAL);
-        TextView heading = text("Machines", 28, TEXT);
-        heading.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
-        header.addView(heading, new LinearLayout.LayoutParams(0,
-                ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
-        header.addView(button("Add machine", v -> showAddMachine()),
-                new LinearLayout.LayoutParams(dp(180), dp(48)));
-        content.addView(header);
-
+        LinearLayout root = hostPage("RoboWindows — Machines", false);
+        LinearLayout nav = new LinearLayout(this);
+        nav.addView(selectedButton("Machines", v -> {}), new LinearLayout.LayoutParams(0, -2, 1));
+        nav.addView(button("Tests", v -> showTests()), new LinearLayout.LayoutParams(0, -2, 1));
+        nav.addView(button("About", v -> showAbout()), new LinearLayout.LayoutParams(0, -2, 1));
+        root.addView(nav);
+        root.addView(button("Add machine…", v -> showAddMachine()));
         if (machineStore.hasInterruptedSession()) {
-            LinearLayout recovery = card();
-            TextView message = text("The previous session did not close normally. Your imported media is safe.",
-                    15, TEXT);
-            recovery.addView(message);
-            LinearLayout.LayoutParams dismissParams = new LinearLayout.LayoutParams(dp(130), dp(44));
-            dismissParams.topMargin = dp(12);
-            recovery.addView(button("Dismiss", v -> {
-                machineStore.acknowledgeRecovery();
-                showHome();
-            }), dismissParams);
-            LinearLayout.LayoutParams recoveryParams = new LinearLayout.LayoutParams(
-                    ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-            recoveryParams.topMargin = dp(16);
-            content.addView(recovery, recoveryParams);
+            root.addView(text("The previous session did not close normally. Writable guest disks may need checking.", 16, TEXT));
+            root.addView(button("Acknowledge interrupted session", v -> {
+                machineStore.acknowledgeRecovery(); showHome();
+            }));
         }
-        if (experimentalRecoveryApplied) {
-            LinearLayout recovery = card();
-            recovery.addView(text("An interrupted experimental run was restored to its safe " +
-                    "performance profile.", 15, TEXT));
-            LinearLayout.LayoutParams recoveryParams = new LinearLayout.LayoutParams(
-                    ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-            recoveryParams.topMargin = dp(16);
-            content.addView(recovery, recoveryParams);
+        if (dynamicRecoveryApplied || experimentalRecoveryApplied) {
+            root.addView(text("An interrupted trial returned to its Normal fallback. Check the machine's recovery status.", 16, TEXT));
         }
-        if (dynamicRecoveryApplied) {
-            LinearLayout recovery = card();
-            recovery.addView(text("An unfinished dynamic trial was returned to its normal " +
-                    "profile. Its experimental disk remains quarantined for a health check.",
-                    15, TEXT));
-            LinearLayout.LayoutParams recoveryParams = new LinearLayout.LayoutParams(
-                    ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-            recoveryParams.topMargin = dp(16);
-            content.addView(recovery, recoveryParams);
-        }
-
         ScrollView scroll = new ScrollView(this);
         LinearLayout library = new LinearLayout(this);
         library.setOrientation(LinearLayout.VERTICAL);
         List<MachineProfile> profiles = machineStore.load();
-        if (profiles.isEmpty()) {
-            LinearLayout empty = card();
-            empty.setGravity(Gravity.CENTER);
-            TextView title = text("No machines yet", 22, TEXT);
-            title.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
-            empty.addView(title);
-            TextView copy = text("Add a DOS or Windows machine to get started.", 14, MUTED);
-            LinearLayout.LayoutParams copyParams = new LinearLayout.LayoutParams(
-                    ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-            copyParams.topMargin = dp(8);
-            empty.addView(copy, copyParams);
-            library.addView(empty, new LinearLayout.LayoutParams(
-                    ViewGroup.LayoutParams.MATCH_PARENT, dp(230)));
-        } else {
-            for (MachineProfile profile : profiles) addMachineCard(library, profile);
-        }
+        if (profiles.isEmpty()) library.addView(text("No machines yet. Add your own DOS or Windows media to begin.", 18, TEXT));
+        for (MachineProfile profile : profiles) addMachineCard(library, profile);
         scroll.addView(library);
-        LinearLayout.LayoutParams scrollParams = new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f);
-        scrollParams.topMargin = dp(20);
-        content.addView(scroll, scrollParams);
-
-        root.addView(rail, new LinearLayout.LayoutParams(dp(278), ViewGroup.LayoutParams.MATCH_PARENT));
-        root.addView(content, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1f));
+        LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(-1, 0, 1);
+        p.topMargin = dp(12); root.addView(scroll, p);
+        TextView identity = text(BuildIdentity.label(BuildConfig.VERSION_NAME, BuildConfig.SOURCE_REVISION), 13, MUTED);
+        identity.setPadding(dp(8), dp(8), dp(8), dp(8));
+        identity.setBackground(ClassicUi.bevel(this, true));
+        root.addView(identity);
         setContentView(root);
+        homeVisible = true;
+    }
+
+    private void showTests() {
+        if (sessionActive || cpuFixtureController != null || copyInProgress) return;
+        LinearLayout page = hostPage("RoboWindows — Tests", true);
+        page.addView(text("Tests run only when machines are stopped. CPU tests use disposable images, never machine disks.", 16, TEXT));
+        Button cpu = button(CpuFixtureGate.passed(this) ? "✓ CPU correctness — capability passed" : "Run CPU correctness test", v -> runCpuDiagnostic());
+        cpu.setEnabled(BuildConfig.DEBUG && !machineStore.hasInterruptedSession());
+        page.addView(cpu);
+        page.addView(text("Capability results apply to this core build. They do not certify Windows stability or performance.", 15, MUTED));
+        page.addView(button("Keyboard and mouse input test", v -> showDiagnostics()));
+        page.addView(text("For a guest trial, select a mode in machine Properties and choose Start. Launch the Windows benchmark manually. No long-test campaign runs automatically.", 16, TEXT));
+        setContentView(page);
+    }
+
+    private void showAbout() {
+        LinearLayout page = hostPage("About RoboWindows", true);
+        page.addView(text("A standalone Android interface for your DOS and compatible Windows software.", 18, TEXT));
+        page.addView(text(BuildIdentity.label(BuildConfig.VERSION_NAME, BuildConfig.SOURCE_REVISION), 16, TEXT));
+        page.addView(text("DynRec is experimental and restricted to independent copies. Clock accuracy and long-term stability remain unverified. No proprietary guest software is included.", 16, TEXT));
+        setContentView(page);
     }
 
     private void addMachineCard(LinearLayout library, MachineProfile profile) {
@@ -568,8 +546,10 @@ public final class MainActivity extends Activity {
         TextView name = text(profile.name, 20, TEXT);
         name.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
         labels.addView(name);
-        String detail = profile.isExperimental() ? "Experimental copy · " + profile.family :
-                profile.family;
+        String detail = (profile.isExperimental() ? "Experimental copy" : "Stable") + " · " +
+                (profile.isDynamicSelected() ? "DynRec (experimental) · 20k" : "Normal" +
+                (profile.fixedCycles > 0 ? " · " + profile.fixedCycles / 1000 + "k" : "")) +
+                (machineStore.requiresDynamicMediaCheck(profile) ? " · Needs disk check" : " · Stopped");
         if (profile.lastBootedAt > 0) {
             detail += " · Used " + DateUtils.getRelativeTimeSpanString(profile.lastBootedAt,
                     System.currentTimeMillis(), DateUtils.MINUTE_IN_MILLIS);
@@ -583,11 +563,11 @@ public final class MainActivity extends Activity {
                 ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
         row.addView(button("Settings", v -> showSettings(profile)),
                 new LinearLayout.LayoutParams(dp(140), dp(48)));
-        LinearLayout.LayoutParams startParams = new LinearLayout.LayoutParams(dp(130), dp(48));
+        LinearLayout.LayoutParams startParams = new LinearLayout.LayoutParams(dp(160), ViewGroup.LayoutParams.WRAP_CONTENT);
         startParams.leftMargin = dp(10);
         String startLabel = machineStore.isWindowsInstaller(profile) &&
                 machineStore.bootsInstaller(profile) ? "Install" : "Start";
-        Button start = button(startLabel, v -> showSession(profile));
+        Button start = button(profile.isDynamicSelected() ? "Start DynRec" : startLabel, v -> startSelectedMachine(profile));
         if (machineStore.requiresDynamicMediaCheck(profile)) {
             start.setText("Needs disk check");
             start.setOnClickListener(v -> showSession(profile, true));
@@ -601,106 +581,29 @@ public final class MainActivity extends Activity {
     }
 
     private void showSettings(MachineProfile profile) {
-        LinearLayout page = new LinearLayout(this);
-        page.setOrientation(LinearLayout.VERTICAL);
-        page.setPadding(dp(28), dp(22), dp(28), dp(22));
-        page.setBackgroundColor(BG);
-        page.addView(button("Back", v -> showHome()), new LinearLayout.LayoutParams(dp(110), dp(46)));
-        TextView title = text(profile.name, 28, TEXT);
-        title.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
-        LinearLayout.LayoutParams titleParams = new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-        titleParams.topMargin = dp(24);
-        page.addView(title, titleParams);
-        TextView summary = text(configurationSummary(profile), 16, MUTED);
-        LinearLayout.LayoutParams summaryParams = new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-        summaryParams.topMargin = dp(10);
-        page.addView(summary, summaryParams);
-        LinearLayout presets = new LinearLayout(this);
-        LinearLayout.LayoutParams preset = new LinearLayout.LayoutParams(dp(230), dp(54));
-        presets.addView(button("DOS compatibility", v -> saveConfiguration(profile, 16, "normal",
-                profile.soundEnabled)), preset);
-        LinearLayout.LayoutParams balanced = new LinearLayout.LayoutParams(dp(230), dp(54));
-        balanced.leftMargin = dp(12);
-        presets.addView(button("Windows compatible", v -> saveConfiguration(profile, 64, "normal",
-                profile.soundEnabled)), balanced);
-        LinearLayout.LayoutParams presetsParams = new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-        presetsParams.topMargin = dp(24);
-        page.addView(presets, presetsParams);
-        if (profile.isExperimental()) {
-            TextView performance = text("Performance trial: normal CPU only. Each option uses " +
-                    "a separate disk from the stable machine.", 15, MUTED);
-            LinearLayout.LayoutParams performanceParams = new LinearLayout.LayoutParams(
-                    ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-            performanceParams.topMargin = dp(20);
-            page.addView(performance, performanceParams);
-            LinearLayout trials = new LinearLayout(this);
-            trials.setOrientation(LinearLayout.VERTICAL);
-            LinearLayout trialRow = null;
-            int[] cycles = MachineStore.EXPERIMENTAL_CYCLE_CANDIDATES;
-            for (int index = 0; index < cycles.length; index++) {
-                int cycle = cycles[index];
-                if (index % 2 == 0) {
-                    trialRow = new LinearLayout(this);
-                    if (index > 0) {
-                        LinearLayout.LayoutParams rowParams = new LinearLayout.LayoutParams(
-                                ViewGroup.LayoutParams.WRAP_CONTENT,
-                                ViewGroup.LayoutParams.WRAP_CONTENT);
-                        rowParams.topMargin = dp(12);
-                        trials.addView(trialRow, rowParams);
-                    } else {
-                        trials.addView(trialRow);
-                    }
-                }
-                LinearLayout.LayoutParams trialParams = new LinearLayout.LayoutParams(dp(130), dp(54));
-                if (trialRow.getChildCount() > 0) trialParams.leftMargin = dp(12);
-                String label = cycle / 1000 + "k cycles";
-                Button trial = profile.fixedCycles == cycle ? selectedButton(label, v ->
-                        savePerformanceProfile(profile, cycle)) : button(label, v ->
-                        savePerformanceProfile(profile, cycle));
-                trialRow.addView(trial, trialParams);
-            }
-            LinearLayout.LayoutParams trialsParams = new LinearLayout.LayoutParams(
-                    ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-            trialsParams.topMargin = dp(12);
-            page.addView(trials, trialsParams);
-        } else {
-            LinearLayout.LayoutParams copyParams = new LinearLayout.LayoutParams(dp(270), dp(54));
-            copyParams.topMargin = dp(20);
-            page.addView(button("Create experimental copy", v -> createExperimentalCopy(profile)),
-                    copyParams);
+        if (sessionActive || cpuFixtureController != null || copyInProgress) return;
+        // Media imports increment the generation; reopen from authoritative metadata.
+        for (MachineProfile current : machineStore.load()) {
+            if (current.id.equals(profile.id)) { profile = current; break; }
         }
-        LinearLayout.LayoutParams soundParams = new LinearLayout.LayoutParams(dp(190), dp(54));
-        soundParams.topMargin = dp(16);
-        page.addView(button(profile.soundEnabled ? "Turn sound off" : "Turn sound on",
-                v -> saveConfiguration(profile, profile.memoryMb, profile.cpuCore,
-                        !profile.soundEnabled)), soundParams);
-        if (machineStore.isWindowsInstaller(profile)) {
-            boolean installer = machineStore.bootsInstaller(profile);
-            LinearLayout.LayoutParams bootParams = new LinearLayout.LayoutParams(dp(260), dp(54));
-            bootParams.topMargin = dp(16);
-            page.addView(button(installer ? "Boot Windows disk" : "Boot installer", v -> {
+        properties = new MachinePropertiesView(this, machineStore, profile, new MachinePropertiesView.Actions() {
+            @Override public void close() { properties = null; showHome(); }
+            @Override public void copy(MachineProfile p) { properties = null; createExperimentalCopy(p); }
+            @Override public void delete(MachineProfile p) { confirmDeleteMachine(p); }
+            @Override public void recover(MachineProfile p) { properties = null; showSession(p, true); }
+            @Override public void media(MachineProfile p, boolean utility) {
+                if (utility) { pickWindowsUtility(p); return; }
                 try {
-                    machineStore.setWindowsInstallerBoot(profile, !installer);
-                    showSettings(profile);
+                    machineStore.setWindowsInstallerBoot(p, !machineStore.bootsInstaller(p));
+                    for (MachineProfile fresh : machineStore.load()) if (fresh.id.equals(p.id)) {
+                        showSettings(fresh); return;
+                    }
                 } catch (IOException error) {
-                    Toast.makeText(this, "The boot source could not be changed.",
-                            Toast.LENGTH_LONG).show();
+                    Toast.makeText(MainActivity.this, "The boot source could not be changed.", Toast.LENGTH_LONG).show();
                 }
-            }), bootParams);
-            LinearLayout.LayoutParams utilityParams = new LinearLayout.LayoutParams(dp(260), dp(54));
-            utilityParams.topMargin = dp(16);
-            page.addView(button("Boot utility disk", v -> pickWindowsUtility(profile)), utilityParams);
-        }
-        Button delete = button("Delete machine", v -> confirmDeleteMachine(profile));
-        delete.setTextColor(TEXT);
-        delete.setBackground(background(Color.rgb(201, 78, 72), 12));
-        LinearLayout.LayoutParams deleteParams = new LinearLayout.LayoutParams(dp(210), dp(54));
-        deleteParams.topMargin = dp(30);
-        page.addView(delete, deleteParams);
-        setContentView(page);
+            }
+        });
+        setContentView(properties);
     }
 
     private String configurationSummary(MachineProfile profile) {
@@ -916,19 +819,67 @@ public final class MainActivity extends Activity {
         }
     }
 
+    private void startSelectedMachine(MachineProfile selected) {
+        if (sessionActive || cpuFixtureController != null || copyInProgress) return;
+        for (MachineProfile p : machineStore.load()) {
+            if (!p.id.equals(selected.id)) continue;
+            if (p.configurationGeneration != selected.configurationGeneration) {
+                Toast.makeText(this, "Settings changed; review the refreshed machine.", Toast.LENGTH_LONG).show();
+                showHome(); return;
+            }
+            if (machineStore.requiresDynamicMediaCheck(p)) { showSession(p, true); return; }
+            if (p.isDynamicSelected()) {
+                String reason = machineStore.dynamicUnavailable(p, CpuFixtureGate.passed(this));
+                if (reason != null) { new AlertDialog.Builder(this).setTitle("DynRec unavailable")
+                        .setMessage(reason).setPositiveButton("OK", null).show(); return; }
+                showDynamicDiagnostic(p, DynamicCyclePolicy.FIXED_20K);
+            } else showSession(p);
+            return;
+        }
+        Toast.makeText(this, "Machine is unavailable.", Toast.LENGTH_LONG).show();
+    }
+
     private void showSession(MachineProfile profile) {
         showSession(profile, false);
     }
 
+    private MachineProfile validateDisposableCoreFixture(MachineProfile p) throws IOException {
+        if (!BuildConfig.DEBUG || !"debug-test".equals(p.id) || machineStore.hasInterruptedSession()) {
+            throw new IOException("Disposable core fixture is unavailable");
+        }
+        for (MachineProfile real : machineStore.load()) {
+            if (machineStore.requiresDynamicMediaCheck(real)) throw new IOException("Recover the interrupted trial first");
+        }
+        java.io.File root = new java.io.File(getFilesDir().getCanonicalFile(), "debug-core-test");
+        if (!root.getCanonicalFile().equals(root)) throw new IOException("Fixture directory must not be aliased");
+        java.io.File launch = new java.io.File(p.launchPath).getCanonicalFile();
+        java.io.File disk = new java.io.File(root, "test.img");
+        if (!launch.equals(new java.io.File(root, "launch.conf")) || !launch.isFile() ||
+                launch.length() > 4096 || !disk.getCanonicalFile().equals(disk) ||
+                !disk.isFile() || disk.length() != 1474560) {
+            throw new IOException("Disposable fixture must use its private generated files");
+        }
+        String config = new String(java.nio.file.Files.readAllBytes(launch.toPath()),
+                java.nio.charset.StandardCharsets.UTF_8);
+        String scriptDisk = new java.io.File(getFilesDir(), "debug-core-test/test.img").getAbsolutePath();
+        if (!config.equals(DisposableCoreConfig.expected(scriptDisk))) {
+            throw new IOException("Disposable fixture configuration is not allowlisted");
+        }
+        return p;
+    }
+
     private void showSession(MachineProfile profile, boolean recoveryBoot) {
         try {
-            profile = recoveryBoot ? machineStore.prepareRecoveryStart(profile) :
+            profile = transientDebugSession ? validateDisposableCoreFixture(profile) :
+                    recoveryBoot ? machineStore.prepareRecoveryStart(profile) :
                     machineStore.prepareNormalStart(profile);
         } catch (IOException error) {
+            transientDebugSession = false;
             Toast.makeText(this, error.getMessage(), Toast.LENGTH_LONG).show();
             return;
         }
         final MachineProfile sessionProfile = profile;
+        properties = null;
         recoverySession = recoveryBoot;
         recoveryGuestShutdownObserved = false;
         long generation = ++sessionGeneration;
@@ -940,9 +891,9 @@ public final class MainActivity extends Activity {
         LinearLayout controls = new LinearLayout(this);
         controls.setGravity(Gravity.CENTER_VERTICAL);
         controls.setPadding(dp(12), dp(8), dp(12), dp(8));
-        controls.setBackground(background(Color.argb(238, 25, 30, 38), 0));
+        controls.setBackground(background(Color.argb(250, 192, 192, 192), 0));
         sessionControls = controls;
-        controls.addView(button("Exit", v -> showHome()), new LinearLayout.LayoutParams(dp(110), dp(44)));
+        controls.addView(button("Exit", v -> confirmSessionAction(false)), new LinearLayout.LayoutParams(dp(110), dp(44)));
         TextView title = text(recoveryBoot ? "Disk check · " + sessionProfile.name :
                 sessionProfile.name, 20, TEXT);
         title.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
@@ -969,8 +920,7 @@ public final class MainActivity extends Activity {
         restartParams.leftMargin = dp(10);
         controls.addView(button("Restart", v -> {
             releasePointerAndShowControls();
-            restartSession(sessionProfile);
-            pause.setText("Pause");
+            confirmSessionAction(true);
         }), restartParams);
         LinearLayout.LayoutParams mediaParams = new LinearLayout.LayoutParams(dp(170), dp(44));
         mediaParams.leftMargin = dp(10);
@@ -978,7 +928,7 @@ public final class MainActivity extends Activity {
         page.addView(guest, new FrameLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         FrameLayout.LayoutParams controlsParams = new FrameLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, dp(60), Gravity.TOP);
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.TOP);
         page.addView(controls, controlsParams);
         setContentView(page);
         guest.requestFocus();
@@ -1001,6 +951,8 @@ public final class MainActivity extends Activity {
     }
 
     private void showDynamicDiagnostic(MachineProfile profile, DynamicCyclePolicy dynamicPolicy) {
+        properties = null;
+        ++sessionGeneration;
         final MachineProfile sessionProfile = profile;
         currentSessionProfile = profile;
         FrameLayout page = new FrameLayout(this);
@@ -1040,9 +992,9 @@ public final class MainActivity extends Activity {
         LinearLayout controls = new LinearLayout(this);
         controls.setGravity(Gravity.CENTER_VERTICAL);
         controls.setPadding(dp(12), dp(8), dp(12), dp(8));
-        controls.setBackground(background(Color.argb(238, 25, 30, 38), 0));
+        controls.setBackground(background(Color.argb(250, 192, 192, 192), 0));
         sessionControls = controls;
-        controls.addView(button("Stop trial", v -> showHome()),
+        controls.addView(button("Stop trial", v -> confirmSessionAction(false)),
                 new LinearLayout.LayoutParams(dp(130), dp(44)));
         TextView title = text(dynamicPolicy.label + " · " + sessionProfile.name, 20, PRIMARY);
         title.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
@@ -1055,11 +1007,11 @@ public final class MainActivity extends Activity {
         page.addView(guest, new FrameLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         page.addView(controls, new FrameLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, dp(60), Gravity.TOP));
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.TOP));
         LinearLayout readiness = new LinearLayout(this);
         readiness.setGravity(Gravity.CENTER_VERTICAL);
         readiness.setPadding(dp(12), dp(8), dp(12), dp(8));
-        readiness.setBackground(background(Color.argb(238, 25, 30, 38), 0));
+        readiness.setBackground(background(Color.argb(250, 192, 192, 192), 0));
         TextView readinessLabel = text("Confirm only after Windows responds", 14, MUTED);
         readiness.addView(readinessLabel, new LinearLayout.LayoutParams(0,
                 ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
@@ -1080,7 +1032,7 @@ public final class MainActivity extends Activity {
         mouseParams.leftMargin = dp(10);
         readiness.addView(mouseReady, mouseParams);
         page.addView(readiness, new FrameLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, dp(60), Gravity.BOTTOM));
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.BOTTOM));
         setContentView(page);
         guest.requestFocus();
         sessionPaused = false;
@@ -1124,6 +1076,26 @@ public final class MainActivity extends Activity {
         intent.addCategory(Intent.CATEGORY_OPENABLE);
         intent.setType("*/*");
         startActivityForResult(intent, CHANGE_MEDIA);
+    }
+
+    private void confirmSessionAction(boolean restart) {
+        if (!sessionActive || hostDialogOpen) return;
+        releasePointerAndShowControls();
+        hostDialogOpen = true;
+        long generation = sessionGeneration;
+        DynamicTrialController controller = dynamicTrial;
+        AlertDialog dialog = new AlertDialog.Builder(this)
+                .setTitle(restart ? "Restart guest?" : "Stop without guest shutdown?")
+                .setMessage(restart ? "Unsaved guest work can be lost. This is not a clean Windows shutdown." :
+                        "For a clean shutdown, cancel and use Start → Shut Down inside Windows. Stopping now may lose unsaved work." +
+                        (dynamicTrial != null ? " This copy will require disk-check recovery." : ""))
+                .setNegativeButton("Cancel", null)
+                .setPositiveButton(restart ? "Restart" : "Stop now", (d, w) -> {
+                    if (!sessionActive || sessionGeneration != generation || dynamicTrial != controller) return;
+                    if (restart) restartSession(currentSessionProfile); else showHome();
+                }).create();
+        dialog.setOnDismissListener(d -> { hostDialogOpen = false; if (sessionActive) releasePointerAndShowControls(); });
+        dialog.show();
     }
 
     private void restartSession(MachineProfile profile) {
@@ -1350,7 +1322,7 @@ public final class MainActivity extends Activity {
     }
 
     @Override public boolean dispatchKeyEvent(KeyEvent event) {
-        if (!isExternalPhysical(event.getDevice())) return super.dispatchKeyEvent(event);
+        if (hostDialogOpen || !isExternalPhysical(event.getDevice())) return super.dispatchKeyEvent(event);
         pushSessionKey(event.getAction(), event.getKeyCode(), event.getScanCode(),
                 event.getRepeatCount(), event.getMetaState(), event.getSource(),
                 deviceHandle(event.getDeviceId()), event.getEventTime() * 1_000_000L);
@@ -1359,6 +1331,7 @@ public final class MainActivity extends Activity {
     }
 
     @Override public boolean dispatchGenericMotionEvent(MotionEvent event) {
+        if (hostDialogOpen) return super.dispatchGenericMotionEvent(event);
         if ((event.getSource() & InputDevice.SOURCE_MOUSE) == InputDevice.SOURCE_MOUSE) {
             if (!isExternalPhysical(event.getDevice())) return super.dispatchGenericMotionEvent(event);
             if (sessionActive) {
@@ -1384,6 +1357,7 @@ public final class MainActivity extends Activity {
     }
 
     @Override public boolean dispatchTouchEvent(MotionEvent event) {
+        if (hostDialogOpen) return super.dispatchTouchEvent(event);
         if (consumingRevealTouch) {
             if (event.getActionMasked() == MotionEvent.ACTION_UP ||
                     event.getActionMasked() == MotionEvent.ACTION_CANCEL) consumingRevealTouch = false;
@@ -1418,12 +1392,15 @@ public final class MainActivity extends Activity {
     }
 
     @Override public void onBackPressed() {
+        if (properties != null) { properties.requestClose(); return; }
+        if (cpuFixtureController != null) { cancelCpuDiagnostic(); showTests(); return; }
         if (sessionActive && revealSessionControls()) return;
         if (sessionActive) {
-            showHome();
+            confirmSessionAction(false);
             return;
         }
-        super.onBackPressed();
+        if (!homeVisible && !copyInProgress) { showHome(); return; }
+        if (!copyInProgress) super.onBackPressed();
     }
 
     @Override protected void onPause() {

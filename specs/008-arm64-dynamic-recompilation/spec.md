@@ -5,6 +5,10 @@
 
 ## Scope and interface
 
+Feature 010 implements the debug settings selector and makes DynRec selection
+persist after verified clean shutdown. Interrupted/failed trials still restore
+Normal and enforce quarantine. All release and stable-machine gates below remain.
+
 Experimental machine Settings offers mutually exclusive `Normal` and
 `Dynamic (experimental)` buttons using the existing selected-button style.
 Selection saves a preference; only Start boots the guest. Normal restores the

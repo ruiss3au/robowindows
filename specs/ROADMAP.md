@@ -5,6 +5,13 @@ specification, plan, tasks, and validation record when work begins.
 
 ## Now
 
+- Deliver Feature 010's classic, touch-friendly host UI, staged machine
+  properties, Normal/DynRec selector and Tests panel. Persist DynRec preference
+  only after clean shutdown; retain experimental-copy-only safety and recovery.
+- DynRec performance investigation is paused by user choice after the clean
+  same-build pair. Clock accuracy, medians and long-term stability remain
+  unverified; do not automatically queue more benchmark or long-gate runs.
+
 - Keep fixed-20k DynRec as the experimental baseline; fixed 30k and bounded
   auto failed audio or overall quality.
 - Diagnose the remaining DynRec workload spikes and audio queue depletion with
@@ -23,8 +30,8 @@ specification, plan, tasks, and validation record when work begins.
 
 ## Next
 
-- If the new matched pair has zero settled underruns, complete Feature 009's
-  three-run diagnostic medians on the copy.
+- Complete the scoped Feature 010 UI smoke checks on the copy. Resume Feature
+  009's clock/median campaign only if the user later requests it.
 - Per the user's 2026-09-09 scope decision, drop further AoE2/audio, ten-cycle,
   pause/resume and 30-minute thermal runs from this campaign. Record them as
   untested/incomplete, not passed; do not automatically queue them afterward.
@@ -41,7 +48,7 @@ specification, plan, tasks, and validation record when work begins.
   This improves host presentation; it does not promise 30 unique game frames per
   second. Defer this feature until the DynRec correctness, audio, stability, and
   performance gates above are satisfied.
-- **Windows 98–style Android interface.** Redesign RoboWindows' own machine
+- **Windows 98–style Android interface — now Feature 010.** Redesign RoboWindows' own machine
   library, settings, dialogs, and session controls to look like a Windows 98
   application, with classic gray panels, beveled buttons, title bars, and period
   typography. Retain usable touch targets, readable text, keyboard/mouse access,

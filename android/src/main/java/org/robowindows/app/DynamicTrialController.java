@@ -15,6 +15,7 @@ final class DynamicTrialController implements DynamicTrialClient.Listener {
     }
 
     private final MachineStore machineStore;
+    private final Context context;
     private final DynamicTrialClient client;
     private final Listener listener;
     private DynamicAttempt attempt;
@@ -33,6 +34,7 @@ final class DynamicTrialController implements DynamicTrialClient.Listener {
     private final Runnable livenessPoll = this::pollLiveness;
 
     DynamicTrialController(Context context, Listener listener) {
+        this.context = context.getApplicationContext();
         machineStore = new MachineStore(context);
         client = new DynamicTrialClient(context, this);
         this.listener = listener;
@@ -53,6 +55,9 @@ final class DynamicTrialController implements DynamicTrialClient.Listener {
     void start(MachineProfile selected, Surface surface, DynamicCyclePolicy dynamicPolicy)
             throws IOException {
         if (attempt != null || finished) throw new IOException("Dynamic trial is already active");
+        if (!BuildConfig.DEBUG || !CpuFixtureGate.passed(context)) {
+            throw new IOException("Run and pass this build's CPU test before a DynRec trial");
+        }
         profile = selected;
         latestSurface = surface;
         attempt = machineStore.prepareDynamicStart(selected, dynamicPolicy);

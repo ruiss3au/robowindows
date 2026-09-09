@@ -52,6 +52,12 @@ javac -d "$classes_dir" \
 java -cp "$classes_dir" org.robowindows.app.DynamicReadinessTest
 
 javac -d "$classes_dir" \
+  "$repo_dir/android/src/main/java/org/robowindows/app/SettingsDraft.java" \
+  "$repo_dir/android/src/main/java/org/robowindows/app/DisposableCoreConfig.java" \
+  "$repo_dir/tests/java/org/robowindows/app/SettingsDraftTest.java"
+java -cp "$classes_dir" org.robowindows.app.SettingsDraftTest
+
+javac -d "$classes_dir" \
   "$repo_dir/android/src/main/java/org/robowindows/app/CpuFixtureResult.java" \
   "$repo_dir/tests/java/org/robowindows/app/CpuFixtureResultTest.java"
 java -cp "$classes_dir" org.robowindows.app.CpuFixtureResultTest
