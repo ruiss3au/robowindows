@@ -295,6 +295,12 @@ CPU work from host scheduling or callback costs. T064 fixes the independently
 proven AV callback type confusion; T065 supplies the missing attribution before
 another execution-policy change. See [timing investigation](timing-investigation.md).
 
+The first T065-instrumented Windows benchmark then completed with zero audio
+underruns/missing frames, zero resynchronizations, correct DynRec residency and
+clean shutdown. All timing records validated. T062 remains open: a same-build
+Normal comparison, independent guest-clock accuracy and separate human quality
+checks are still needed; a single clean capture does not establish a cure.
+
 - [ ] T051 Re-run host tests and `git diff --check`, then build/install the debug APK using
   `scripts/build-android.sh`
 - [ ] T052 Run the complete [quickstart](quickstart.md) on the SM-T500 and archive only

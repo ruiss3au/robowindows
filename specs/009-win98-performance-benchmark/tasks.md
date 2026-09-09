@@ -30,3 +30,10 @@ new complete matched pair: Normal retained zero underruns, while DynRec recorded
 12 underruns and 1,862 missing frames despite balanced fault state and no
 deadline resynchronization. Median repetition remains deferred; no promotion
 claim is available.
+
+After the AV-dispatch correction, one additional DynRec diagnostic run completed
+with zero underruns/missing frames/resynchronizations, 15.07 presented FPS,
+correct decoder residency and verified clean shutdown. This is not yet a new
+matched pair or proof of an intermittent-failure cure: the same-build Normal
+comparison, independent guest-clock measurement and separate human quality
+checks remain outstanding. T005/T006 stay open; see the latest validation entry.

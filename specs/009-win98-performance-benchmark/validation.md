@@ -241,3 +241,58 @@ DynRec still fails zero settled underruns/missing frames and the user separately
 reported somewhat laggy graphics in AoE2. Further work should measure the
 remaining DynRec workload spikes and presentation path before repetition; the
 ten-cycle, pause/resume, thermal, and promotion gates remain open.
+
+## AV-dispatch diagnostic DynRec run — 2026-09-09
+
+Following the shared AV callback correction and experimental timing extension
+in commit `3ac681b`, one fixed-20k DynRec run completed on `incoming - copy`.
+The installed APK SHA-256 was
+`78eaaba73b2db6fb593ef653a9647c4d1d44cb7972dc3e78b39b59b22452d471`.
+Desktop, keyboard and captured-mouse readiness were explicitly confirmed in the
+attempt journal (mask 7) before capture. The tablet stayed awake and foregrounded.
+The 55-second collector retained 53 valid intervals covering 53,480 ms; all
+3,746 calls had matching valid timing-extension records, without CPU-clock errors.
+
+| Metric | DynRec fixed 20k |
+|---|---:|
+| CPU operations/ms | 3,211 |
+| Memory KiB/ms | 12 |
+| Off-screen GDI rectangles/s | 15,031 |
+| Guest phase elapsed | 10,000 / 10,000 / 10,000 ms |
+| Presented FPS | 15.07 |
+| Maximum `retro_run()` / over-budget calls | 36,126 us / 14 |
+| Maximum audio-producer gap | 36,301 us |
+| Maximum scheduler lateness / catch-up calls | 60,697 us / 31 |
+| Deadline resynchronizations | 0 |
+| Audio queue current / min / max | 5,199 / 1,124 / 5,503 frames |
+| Audio production / consumption | 48,025.86 / 48,025.13 frames/s |
+| Audio underruns / missing / dropped frames | 0 / 0 / 0 |
+
+The visible completion dialog was transcribed and passed the strict schema-2
+parser. CPU work was 32,112,640 with integrity `8C017B1D`; memory work was
+127,360 KiB with integrity `AEEBE000`; GDI work was 150,313 rectangles with
+integrity `4D9F3634` and a 99-frame, 9-FPS guest preview. Declared and observed
+decoders remained DynRec. Lifecycle validation passed; saturation, stream errors
+and surface-post failures were zero. Battery temperature rose from 26.5 to
+27.0 degrees C and Android thermal status remained zero at both endpoints.
+The final capture residency sample retained 285/285 completed faults, depth
+zero/high-water two, no wipes, and 43,328/43,328 PageFaultCore entries/returns
+with 218,341 us cumulative time, 703 us maximum, and no slow-10-ms call, double
+fault or reset. Those fault counters were unchanged during the capture.
+
+The user closed the benchmark and shut down through Windows. Postflight verified
+BIOS APM power-off, `guest requested shutdown`, `guest stopped cleanly`, and no
+active-session preference, dynamic-attempt journal or isolated guest process.
+Stable `incoming` was not opened. The final report and bounded observations are
+retained under ignored host artifacts.
+
+This run clears the measured short-capture audio, decoder, presentation and
+lifecycle checks. It does not establish that the intermittent underrun is cured
+or that the AV callback defect caused it. No Normal comparison exists on this
+APK yet. The silent benchmark leaves human audio `not_tested`; readiness checks
+do not replace the complete physical-input procedure. Independent guest/host
+clock accuracy was not measured: three guest-timed ten-second phases cannot
+prove it. The finalizer therefore reports `short_run_quality=fail` for incomplete
+acceptance evidence, not a newly observed audio failure. T005/T006 and Feature
+002 T062 remain open pending a same-build matched pair with the missing quality
+checks; GPU/FPS work and stable promotion remain deferred.

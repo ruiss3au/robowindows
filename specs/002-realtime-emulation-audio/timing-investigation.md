@@ -56,3 +56,32 @@ host tests. T064/T065 are complete; T062 remains open.
 A new guest capture must explicitly confirm desktop, keyboard and captured-mouse
 readiness and independently measure guest elapsed time; the benchmark result
 alone does not establish wall-clock accuracy or human audio quality.
+
+## First instrumented Windows benchmark
+
+The next fixed-20k DynRec run explicitly confirmed all three readiness controls
+before capture and completed with correct decoder residency, 15.07 presented
+FPS, zero underruns/missing/dropped frames, no deadline resynchronizations, and
+verified clean Windows shutdown. The strict guest record and all 53 timing
+extension intervals (3,746 calls) passed validation. Independent guest wall-clock
+accuracy and human audio were not tested. The same-build Normal comparison is
+still outstanding; this is not completion of T062.
+
+Completed calls accumulated 6,891,051 us wall time. The synchronous video
+callback accounted for 4,470,798 us (about 65% of that wall time), maximum
+17,434 us; audio callbacks accumulated 497,724 us, maximum 7,874 us. Process CPU
+within call windows totalled 11,176,391 us, maximum 68,200 us per call, with zero
+clock errors. This includes parallel runner threads and must not be subtracted
+from wall time or labeled DynRec execution cost. Maximum call wall time was
+36,126 us, maximum host gap 25,939 us, and maximum wake lateness 60,742 us;
+the latter includes retained timing debt rather than only OS wakeup delay.
+
+Video callback work is a substantial measured frontend cost in this capture,
+but it is not the asynchronous surface-presenter duration and no underrun
+occurred to attribute. The fault counters remained unchanged during the capture;
+the final PageFaultCore sample was balanced at 43,328 entries/returns with a
+703 us maximum. These data do not justify another instruction-engine change or
+prove that the AV-dispatch correction cured the previous intermittent burst.
+Continue with a same-build matched pair and independent guest-clock validation;
+retain the deferred GPU/FPS roadmap and existing quality gates. Full benchmark
+and shutdown evidence is in Feature 009's validation record.
