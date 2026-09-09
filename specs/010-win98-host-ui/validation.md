@@ -124,3 +124,13 @@ panels, and taskbar content remains visible through the readiness buttons.
 Stop/readiness controls and guest geometry are retained. T008 is complete;
 the user still needs to confirm usability and shut down this visual-check
 session. This is not a new performance or audio acceptance result.
+
+The user subsequently confirmed the overlays were "much better" and reported
+shutting Windows down. Final postflight verified BIOS APM power-down,
+guest-requested shutdown and clean stop for this visual-check session, no
+active-session preference or attempt journal, and no isolated child process.
+Both library rows are stopped; the copy still selects experimental DynRec 20k
+and stable `incoming` remains Normal. The overlay correction is accepted and
+requires no further guest trial. Broader T007 enlarged-text/navigation/dialog
+and explicitly confirmed input checks remain unclaimed; no omitted quality gate
+has been promoted to passed.
