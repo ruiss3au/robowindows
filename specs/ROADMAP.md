@@ -5,21 +5,24 @@ specification, plan, tasks, and validation record when work begins.
 
 ## Now
 
-- Finish fixed-cycle evidence on the experimental Windows 98/AoE2 machine.
-- Keep the stable machine unchanged and available as the fallback.
+- Keep fixed-20k DynRec as the experimental baseline; fixed 30k and bounded
+  auto failed audio or overall quality.
+- Close Feature 008's remaining safety tests and complete the ten-cycle,
+  pause/resume, audio and 30-minute thermal gates on the copy.
 
 ## Next
 
-- Implement [Feature 008](008-arm64-dynamic-recompilation/spec.md): investigate
-  ARM64 dynamic recompilation on an experimental copy, with crash recovery and
-  correctness gates first.
+- Specify a small redistributable Windows 98 benchmark and repeatable AoE2
+  scenario, then compare fixed-20k DynRec with the best sustainable Normal
+  profile.
+- Expose Dynamic only for experimental copies if those correctness,
+  performance and recovery gates pass.
 
 ## Later
 
-- Add a small Windows 98 benchmark and repeatable timer-and-tone workloads.
-- Continue performance work on video presentation, audio scheduling, and host
-  runtime overhead as evidence directs.
-- Complete GitHub publication and release-readiness work.
+- Improve video presentation, audio scheduling and host runtime overhead using
+  benchmark evidence, then retest rejected cycle policies if justified.
+- Complete release-readiness work.
 
 ## Never
 
