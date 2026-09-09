@@ -85,3 +85,21 @@ prove that the AV-dispatch correction cured the previous intermittent burst.
 Continue with a same-build matched pair and independent guest-clock validation;
 retain the deferred GPU/FPS roadmap and existing quality gates. Full benchmark
 and shutdown evidence is in Feature 009's validation record.
+
+## Same-build Normal comparison
+
+Normal fixed-20k subsequently completed with zero underruns/missing frames or
+resynchronizations, 15.07 FPS, correct residency and verified clean shutdown.
+Its 55 valid intervals covered 55,601 ms and 3,894 calls, versus DynRec's
+53,480 ms and 3,746 calls; raw interval totals therefore cover different windows.
+Normal call wall time totalled 2,892,215 us; video callbacks took 1,915,727 us
+(about 66%, maximum 1,862 us), audio callbacks 172,596 us (maximum 387 us).
+Process CPU within calls totalled 3,596,126 us, maximum 35,429 us per call,
+without clock errors. Maximum call wall time was 31,313 us, host gap 21,264 us
+and wake lateness 21,862 us. Normal's minimum queue was 3,094 frames versus
+DynRec's 1,124, so the latter had less observed audio headroom, but neither
+capture reproduced starvation. Callback measurements include elapsed scheduling
+delays and do not alone identify an instruction-engine or presenter defect.
+No new runtime tuning is justified by this pair alone. Independent guest-clock
+validation remains missing; the user dropped the longer acceptance trials from
+the current campaign. Keep the diagnostic/promotion distinction explicit.

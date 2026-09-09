@@ -13,11 +13,11 @@ specification, plan, tasks, and validation record when work begins.
   12 underruns and 1,862 missing audio frames while Normal recorded zero
   ([evidence](009-win98-performance-benchmark/validation.md#post-pagefaultcore-matched-pair--2026-09-09)).
 - The shared AV-dispatch correction and new call/callback timing diagnostics
-  are installed and tested. The first instrumented DynRec benchmark recorded
-  zero underruns/missing frames/resynchronizations and a clean shutdown
-  ([evidence](009-win98-performance-benchmark/validation.md#av-dispatch-diagnostic-dynrec-run--2026-09-09)).
-  Recheck a same-build matched fixed-20k pair with independent guest-clock
-  validation before repeating median runs.
+  are installed and tested. The instrumented same-build Normal/DynRec fixed-20k
+  diagnostic pair recorded zero underruns/missing frames/resynchronizations,
+  correct residency, 15.07 presented FPS and clean shutdowns for both cores
+  ([evidence](009-win98-performance-benchmark/validation.md#av-dispatch-same-build-diagnostic-pair--2026-09-09)).
+  Independent guest-clock validation remains outstanding before median runs.
   Make further runtime corrections only from measured evidence; one clean run
   does not establish that the intermittent failure is cured.
 

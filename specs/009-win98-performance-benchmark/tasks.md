@@ -44,3 +44,10 @@ The user dropped further AoE2/audio, pause/resume, shutdown-cycle and 30-minute
 thermal trials from this campaign. Do not schedule them automatically after the
 comparison or medians. Missing acceptance evidence remains explicitly incomplete;
 this does not block the requested diagnostic run or authorize promotion.
+
+The requested same-build Normal run is now complete with strict guest parsing,
+zero underruns/missing frames/resynchronizations, 15.07 presented FPS, correct
+Normal residency and verified clean shutdown. The diagnostic pair shows nearly
+equal CPU throughput and 4.16 times DynRec GDI throughput. T005/T006 remain open:
+this is one run per core, independent guest-clock validation is still missing,
+and omitted acceptance checks are not passes. Do not queue the dropped tests.

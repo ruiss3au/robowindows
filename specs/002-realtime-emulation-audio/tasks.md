@@ -303,6 +303,12 @@ clean shutdown. All timing records validated. T062 remains open: a same-build
 Normal comparison, independent guest-clock accuracy and separate human quality
 checks are still needed; a single clean capture does not establish a cure.
 
+The same-build Normal comparison subsequently completed with zero underruns,
+missing frames or resynchronizations, 15.07 FPS, correct residency and clean
+shutdown. Both instrumented captures are now available. T062 remains open for
+independent guest-clock validation; the three-run and broader acceptance claims
+remain unsupported. The user-dropped longer tests are not in the execution queue.
+
 - [ ] T051 Re-run host tests and `git diff --check`, then build/install the debug APK using
   `scripts/build-android.sh`
 - [ ] T052 Run the complete [quickstart](quickstart.md) on the SM-T500 and archive only

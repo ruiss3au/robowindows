@@ -296,3 +296,60 @@ prove it. The finalizer therefore reports `short_run_quality=fail` for incomplet
 acceptance evidence, not a newly observed audio failure. T005/T006 and Feature
 002 T062 remain open pending a same-build matched pair with the missing quality
 checks; GPU/FPS work and stable promotion remain deferred.
+
+## AV-dispatch same-build diagnostic pair — 2026-09-09
+
+The subsequent Normal fixed-20k run completed on `incoming - copy`, using the
+same installed APK hash as the instrumented DynRec run above. Before starting,
+device inspection verified no active session, attempt journal or isolated child;
+the copy's settings showed normal CPU, selected 20k cycles and sound enabled.
+No rebuild, reinstall or stable-machine start occurred. The user confirmed a
+settled desktop before the 55-second foreground capture and launched workload v2.
+This is a sequential diagnostic pair on the copy, not three-run medians or a
+claim that both runs began from an identical restored disk snapshot.
+
+| Metric | Normal fixed 20k | DynRec fixed 20k |
+|---|---:|---:|
+| CPU operations/ms | 3,202 | 3,211 |
+| Memory KiB/ms | 10 | 12 |
+| Off-screen GDI rectangles/s | 3,613 | 15,031 |
+| Presented FPS | 15.07 | 15.07 |
+| Maximum `retro_run()` / over-budget calls | 31,313 us / 4 | 36,126 us / 14 |
+| Maximum audio-producer gap | 31,412 us | 36,301 us |
+| Maximum scheduler lateness / catch-up calls | 21,836 us / 16 | 60,697 us / 31 |
+| Deadline resynchronizations | 0 | 0 |
+| Audio queue min / max | 3,094 / 5,646 frames | 1,124 / 5,503 frames |
+| Audio underruns / missing / dropped frames | 0 / 0 / 0 | 0 / 0 / 0 |
+
+Normal retained 55 valid intervals covering 55,601 ms, 3,894 completed calls,
+correct Normal residency, valid lifecycle and matching timing-extension records
+with no CPU-clock errors. Production/consumption were 48,018.90/48,019.86 frames/s;
+the final queue was 5,455 frames. Saturation, stream errors and surface-post
+failures were zero. Battery temperature was 27.5 degrees C at both endpoints,
+with Android thermal status zero. These bounded readings are not a thermal soak.
+
+The visible completion dialog passed strict schema-2 parsing after transcription:
+CPU 10,000 ms, 32,022,528 operations, integrity `60B20D5A`; memory 10,006 ms,
+109,120 KiB, integrity `AEEBE000`; GDI 10,000 ms, 36,132 rectangles, integrity
+`F4EF105C`, preview 99 frames at 9 FPS. Independently replaying the source CPU
+loop for the observed work count confirmed its integrity value. The user then
+closed the benchmark and shut down through Windows. Postflight verified the
+Normal process's BIOS APM request, `guest requested shutdown` and `guest stopped
+cleanly`, with no active-session preference, attempt journal or isolated child.
+The finalized report and bounded observations remain in ignored host artifacts.
+
+For this pair, CPU throughput differs by only 0.28%; the coarse memory result
+is 12 versus 10 KiB/ms and DynRec's off-screen GDI throughput is 4.16 times
+Normal's. Both captures meet the measured zero-underrun/missing-frame/resync,
+decoder, presentation and lifecycle checks and both shut down cleanly. This is
+encouraging diagnostic evidence, not proof that an intermittent failure is cured
+or that GDI throughput increases game or presented FPS.
+
+Independent guest-clock accuracy was not measured. Guest-timed phase lengths
+alone do not satisfy that gate. The silent workload and lack of the full input
+procedure leave human audio and Normal physical-input quality `not_tested`, so
+the conservative finalizer retains `short_run_quality=fail` for incomplete
+acceptance evidence, not a newly observed runtime failure. T062 and T005/T006
+remain open. Per the user's narrowed scope, no further AoE2/audio, pause/resume,
+shutdown-cycle or 30-minute thermal trials are queued. DynRec stays experimental;
+stable `incoming` is untouched and no promotion claim is made.
