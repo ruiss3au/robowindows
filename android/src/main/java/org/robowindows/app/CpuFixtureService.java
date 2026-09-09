@@ -81,6 +81,10 @@ abstract class CpuFixtureService extends Service {
         try {
             String decoder = NativeHost.sessionDecoder();
             liveness = NativeHost.sessionLiveness();
+            android.util.Log.i("RoboWindowsCpuFixture",
+                    "timing mode=" + mode() + " suite=" +
+                    (suite == null ? "legacy" : Integer.toHexString(suite.id)) + " " +
+                    DynamicLiveness.parse(liveness).residencySummary());
             if (started) NativeHost.stopSession();
             started = false;
             String expectedDecoder = "dynamic".equals(mode()) ? "DynRec" : "Normal";

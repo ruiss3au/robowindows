@@ -120,6 +120,16 @@
   make `Needs disk check` atomically restore the journaled Normal fallback before
   native handoff, and device-verify that recovery boots without restarting the
   app while every non-clean exit remains quarantined (FR-024; scenario 11).
+- [x] T041 Add bounded page-fault decoder entry/return and cumulative timing
+  aggregates, reset/sample them on the emulator thread, extend the strict
+  liveness parser tests, and run the disposable Normal/DynRec CPU gate before
+  deciding whether another guarded Windows trial is justified (FR-042;
+  scenario 27).
+- [ ] T042 Reproduce the Windows-only PageFaultCore call amplification in a
+  source-owned disposable workload with a deliberately long handler and nested
+  fault progression. Compare reference, Normal and DynRec results plus bounded
+  aggregates before changing the one-cycle PageFaultCore loop, queue recovery,
+  exception delivery, or DynRec execution (FR-033–038, FR-042).
 
 T030–T034 implement FR-038 and are deferred to GPT Sol. See
 [coverage](expanded-cpu-coverage.md) and [handoff](sol-handoff.md).

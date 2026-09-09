@@ -1,0 +1,115 @@
+diff --git a/src/cpu/paging.cpp b/src/cpu/paging.cpp
+--- a/src/cpu/paging.cpp
++++ b/src/cpu/paging.cpp
+@@ -20,6 +20,7 @@
+ #include <stdlib.h>
+ #include <assert.h>
+ #include <string.h>
++#include <chrono>
+ 
+ #include "dosbox.h"
+ #include "mem.h"
+@@ -129,6 +130,11 @@
+ static unsigned long long robowindows_pf_wipes;
+ static unsigned long long robowindows_pf_recoveries;
+ static Bitu robowindows_pf_high_water;
++static unsigned long long robowindows_pf_core_entries;
++static unsigned long long robowindows_pf_core_returns;
++static unsigned long long robowindows_pf_core_total_us;
++static unsigned long long robowindows_pf_core_max_us;
++static unsigned long long robowindows_pf_core_slow_10ms;
+ 
+ extern "C" __attribute__((visibility("default")))
+ void robowindows_pagefault_diagnostics_reset(void) {
+@@ -137,19 +143,32 @@
+ 	robowindows_pf_wipes = 0;
+ 	robowindows_pf_recoveries = 0;
+ 	robowindows_pf_high_water = pf_queue.used;
++	robowindows_pf_core_entries = 0;
++	robowindows_pf_core_returns = 0;
++	robowindows_pf_core_total_us = 0;
++	robowindows_pf_core_max_us = 0;
++	robowindows_pf_core_slow_10ms = 0;
+ }
+ 
+ extern "C" __attribute__((visibility("default")))
+ void robowindows_pagefault_diagnostics_snapshot(
+ 		unsigned long long *enqueued, unsigned long long *completed,
+ 		unsigned int *depth, unsigned int *high_water,
+-		unsigned long long *wipes, unsigned long long *recoveries) {
++		unsigned long long *wipes, unsigned long long *recoveries,
++		unsigned long long *core_entries, unsigned long long *core_returns,
++		unsigned long long *core_total_us, unsigned long long *core_max_us,
++		unsigned long long *core_slow_10ms) {
+ 	*enqueued = robowindows_pf_enqueued;
+ 	*completed = robowindows_pf_completed;
+ 	*depth = (unsigned int)pf_queue.used;
+ 	*high_water = (unsigned int)robowindows_pf_high_water;
+ 	*wipes = robowindows_pf_wipes;
+ 	*recoveries = robowindows_pf_recoveries;
++	*core_entries = robowindows_pf_core_entries;
++	*core_returns = robowindows_pf_core_returns;
++	*core_total_us = robowindows_pf_core_total_us;
++	*core_max_us = robowindows_pf_core_max_us;
++	*core_slow_10ms = robowindows_pf_core_slow_10ms;
+ }
+ 
+ extern "C" void robowindows_pagefault_diagnostics_wipe_requested(void) {
+@@ -305,14 +324,30 @@
+ }
+ */
+ 
++static Bits robowindows_pagefault_core_return(Bits result,
++		const std::chrono::steady_clock::time_point &started) {
++	const unsigned long long duration_us = static_cast<unsigned long long>(
++		std::chrono::duration_cast<std::chrono::microseconds>(
++			std::chrono::steady_clock::now() - started).count());
++	++robowindows_pf_core_returns;
++	robowindows_pf_core_total_us += duration_us;
++	if (duration_us > robowindows_pf_core_max_us)
++		robowindows_pf_core_max_us = duration_us;
++	if (duration_us >= 10000) ++robowindows_pf_core_slow_10ms;
++	return result;
++}
++
+ static Bits PageFaultCore(void) {
++	++robowindows_pf_core_entries;
++	const std::chrono::steady_clock::time_point started =
++		std::chrono::steady_clock::now();
+ 	CPU_CycleLeft+=CPU_Cycles;
+ 	CPU_Cycles=1;
+ 	Bits ret=CPU_Core_Full_Run();
+ 	CPU_CycleLeft+=CPU_Cycles;
+ 	if (ret<0) E_Exit("Got a dosbox close machine in pagefault core?");
+-	if (ret) 
+-		return ret;
++	if (ret)
++		return robowindows_pagefault_core_return(ret, started);
+ #ifndef C_DBP_PAGE_FAULT_QUEUE_WIPE
+ 	if (!pf_queue.used) E_Exit("PF Core without PF");
+ 	PF_Entry * entry=&pf_queue.entries[pf_queue.used-1];
+@@ -324,19 +359,20 @@
+ 	pentry.load=phys_readd(entry->page_addr);
+ 	if (pentry.block.p && entry->cs == SegValue(cs) && entry->eip==reg_eip) {
+ 		cpu.mpl=entry->mpl;
+-		return -1;
++		return robowindows_pagefault_core_return(-1, started);
+ 	}
+ #ifdef C_DBP_PAGE_FAULT_QUEUE_WIPE
+-	if (DOSBOX_IsWipingPageFaultQueue) return -1;
++	if (DOSBOX_IsWipingPageFaultQueue)
++		return robowindows_pagefault_core_return(-1, started);
+ 	if ((pf_queue.used >= 2 && DBP_PageFaultCycles++ > 5000000) || pf_queue.used > 50)
+ 	{
+ 		LOG(LOG_PAGING,LOG_NORMAL)("Wiping page fault queue after %d queueups", pf_queue.used);
+ 		DOSBOX_WipePageFaultQueue();
+ 		DBP_PageFaultCycles = 0;
+-		return -1;
++		return robowindows_pagefault_core_return(-1, started);
+ 	}
+ #endif
+-	return 0;
++	return robowindows_pagefault_core_return(0, started);
+ }
+ 
+ #if C_DEBUG

@@ -9,6 +9,7 @@ public final class DynamicLivenessTest {
         DynamicLiveness proof = DynamicLiveness.parse("runs=10 frames=2 decoder=DynRec " +
                 "current=Halt dyn=7 normal=1 pf=2 halt=3 other=0 " +
                 "pfenq=12 pfret=9 pfdepth=3 pfmax=4 pfwipe=2 pfrecover=1 " +
+                "pfcent=21 pfcret=20 pfctime=34567 pfctmax=12000 pfcslow=2 " +
                 "pfprep=5 pfdeliver=4 pfgate=3 iret=6 df=1 reset=2");
         require(proof.provesRunning(1000), "exact liveness threshold");
         require(proof.usesDynRec(), "exact dynamic decoder evidence");
@@ -20,6 +21,10 @@ public final class DynamicLivenessTest {
                 proof.pageFaultDepth == 3 && proof.pageFaultHighWater == 4 &&
                 proof.pageFaultWipes == 2 && proof.pageFaultRecoveries == 1,
                 "page-fault lifecycle parsed");
+        require(proof.pageFaultCoreEntries == 21 && proof.pageFaultCoreReturns == 20 &&
+                proof.pageFaultCoreTotalUs == 34567 && proof.pageFaultCoreMaxUs == 12000 &&
+                proof.pageFaultCoreSlow10Ms == 2,
+                "page-fault core timing parsed");
         require(proof.exceptionPageFaultPrepared == 5 &&
                 proof.exceptionPageFaultDelivered == 4 &&
                 proof.exceptionPageFaultGateEntered == 3 &&
@@ -30,6 +35,9 @@ public final class DynamicLivenessTest {
                 "configured and current decoders are summarized");
         require(proof.residencySummary().contains("PFQ 12/9 · Depth 3/4 · Wipe 2/1"),
                 "page-fault lifecycle is summarized");
+        require(proof.residencySummary().contains(
+                "PF core 21/20 · Time 34567/12000 us · Slow10 2"),
+                "page-fault core timing is summarized");
         require(proof.residencySummary().contains(
                 "Exception PF 5/4/3 · IRET 6 · DF 1 · Reset 2"),
                 "exception lifecycle is summarized");
@@ -45,8 +53,13 @@ public final class DynamicLivenessTest {
         require(DynamicLiveness.parse("runs=10 frames=2 pfenq=-1 pfdepth=-2")
                 .pageFaultDepth == 0, "negative page-fault aggregates are clamped");
         require(DynamicLiveness.parse(
-                "pfprep=-1 pfdeliver=-2 pfgate=-3 iret=-4 df=-5 reset=-6 halt=-7")
+                "pfprep=-1 pfdeliver=-2 pfgate=-3 iret=-4 df=-5 reset=-6 halt=-7 " +
+                "pfcent=-8 pfcret=-9 pfctime=-10 pfctmax=-11 pfcslow=-12")
                 .exceptionPageFaultPrepared == 0, "negative exception aggregates are clamped");
+        require(DynamicLiveness.parse("pfcent=-1 pfctime=-2 pfcslow=-3")
+                .pageFaultCoreEntries == 0, "negative page-fault timing is clamped");
+        require(DynamicLiveness.parse("runs=10 frames=2 decoder=DynRec")
+                .pageFaultCoreEntries == 0, "legacy liveness remains parseable");
         require(!DynamicLiveness.parse("runs=10 frames=2 decoder=Normal").usesDynRec(),
                 "normal fallback is detected");
         System.out.println("Dynamic liveness checks passed");

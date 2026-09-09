@@ -21,6 +21,11 @@ final class DynamicLiveness {
     final long pageFaultHighWater;
     final long pageFaultWipes;
     final long pageFaultRecoveries;
+    final long pageFaultCoreEntries;
+    final long pageFaultCoreReturns;
+    final long pageFaultCoreTotalUs;
+    final long pageFaultCoreMaxUs;
+    final long pageFaultCoreSlow10Ms;
     final long exceptionPageFaultPrepared;
     final long exceptionPageFaultDelivered;
     final long exceptionPageFaultGateEntered;
@@ -30,12 +35,12 @@ final class DynamicLiveness {
 
     DynamicLiveness(long runCalls, long publishedFrames) {
         this(runCalls, publishedFrames, "Unknown", "Unknown", 0, 0, 0, 0, 0,
-                0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+                0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
     }
 
     DynamicLiveness(long runCalls, long publishedFrames, String decoder) {
         this(runCalls, publishedFrames, decoder, "Unknown", 0, 0, 0, 0, 0,
-                0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+                0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
     }
 
     DynamicLiveness(long runCalls, long publishedFrames, String decoder,
@@ -43,6 +48,8 @@ final class DynamicLiveness {
             long pageFaultSamples, long haltSamples, long otherSamples, long pageFaultEnqueued,
             long pageFaultCompleted, long pageFaultDepth, long pageFaultHighWater,
             long pageFaultWipes, long pageFaultRecoveries, long exceptionPageFaultPrepared,
+            long pageFaultCoreEntries, long pageFaultCoreReturns, long pageFaultCoreTotalUs,
+            long pageFaultCoreMaxUs, long pageFaultCoreSlow10Ms,
             long exceptionPageFaultDelivered, long exceptionPageFaultGateEntered,
             long exceptionIretExecuted, long exceptionDoubleFaultDelivered, long guestResets) {
         this.runCalls = Math.max(0, runCalls);
@@ -60,6 +67,11 @@ final class DynamicLiveness {
         this.pageFaultHighWater = Math.max(0, pageFaultHighWater);
         this.pageFaultWipes = Math.max(0, pageFaultWipes);
         this.pageFaultRecoveries = Math.max(0, pageFaultRecoveries);
+        this.pageFaultCoreEntries = Math.max(0, pageFaultCoreEntries);
+        this.pageFaultCoreReturns = Math.max(0, pageFaultCoreReturns);
+        this.pageFaultCoreTotalUs = Math.max(0, pageFaultCoreTotalUs);
+        this.pageFaultCoreMaxUs = Math.max(0, pageFaultCoreMaxUs);
+        this.pageFaultCoreSlow10Ms = Math.max(0, pageFaultCoreSlow10Ms);
         this.exceptionPageFaultPrepared = Math.max(0, exceptionPageFaultPrepared);
         this.exceptionPageFaultDelivered = Math.max(0, exceptionPageFaultDelivered);
         this.exceptionPageFaultGateEntered = Math.max(0, exceptionPageFaultGateEntered);
@@ -82,6 +94,11 @@ final class DynamicLiveness {
         long highWater = 0;
         long wipes = 0;
         long recoveries = 0;
+        long coreEntries = 0;
+        long coreReturns = 0;
+        long coreTotalUs = 0;
+        long coreMaxUs = 0;
+        long coreSlow10Ms = 0;
         long prepared = 0;
         long delivered = 0;
         long gateEntered = 0;
@@ -110,6 +127,11 @@ final class DynamicLiveness {
                     if ("pfmax".equals(pair[0])) highWater = Long.parseLong(pair[1]);
                     if ("pfwipe".equals(pair[0])) wipes = Long.parseLong(pair[1]);
                     if ("pfrecover".equals(pair[0])) recoveries = Long.parseLong(pair[1]);
+                    if ("pfcent".equals(pair[0])) coreEntries = Long.parseLong(pair[1]);
+                    if ("pfcret".equals(pair[0])) coreReturns = Long.parseLong(pair[1]);
+                    if ("pfctime".equals(pair[0])) coreTotalUs = Long.parseLong(pair[1]);
+                    if ("pfctmax".equals(pair[0])) coreMaxUs = Long.parseLong(pair[1]);
+                    if ("pfcslow".equals(pair[0])) coreSlow10Ms = Long.parseLong(pair[1]);
                     if ("pfprep".equals(pair[0])) prepared = Long.parseLong(pair[1]);
                     if ("pfdeliver".equals(pair[0])) delivered = Long.parseLong(pair[1]);
                     if ("pfgate".equals(pair[0])) gateEntered = Long.parseLong(pair[1]);
@@ -123,7 +145,8 @@ final class DynamicLiveness {
         }
         return new DynamicLiveness(runs, frames, decoder, current, dyn, normal,
                 pageFault, halt, other, enqueued, completed, depth, highWater, wipes,
-                recoveries, prepared, delivered, gateEntered, iretExecuted, doubleFault, resets);
+                recoveries, prepared, coreEntries, coreReturns, coreTotalUs, coreMaxUs,
+                coreSlow10Ms, delivered, gateEntered, iretExecuted, doubleFault, resets);
     }
 
     boolean provesRunning(long elapsedMs) {
@@ -141,7 +164,10 @@ final class DynamicLiveness {
                 " · Halt " + haltSamples + " · Other " + otherSamples + " · PFQ " + pageFaultEnqueued + "/" +
                 pageFaultCompleted + " · Depth " + pageFaultDepth + "/" +
                 pageFaultHighWater + " · Wipe " + pageFaultWipes + "/" +
-                pageFaultRecoveries + " · Exception PF " + exceptionPageFaultPrepared + "/" +
+                pageFaultRecoveries + " · PF core " + pageFaultCoreEntries + "/" +
+                pageFaultCoreReturns + " · Time " + pageFaultCoreTotalUs + "/" +
+                pageFaultCoreMaxUs + " us · Slow10 " + pageFaultCoreSlow10Ms +
+                " · Exception PF " + exceptionPageFaultPrepared + "/" +
                 exceptionPageFaultDelivered + "/" + exceptionPageFaultGateEntered +
                 " · IRET " + exceptionIretExecuted + " · DF " + exceptionDoubleFaultDelivered +
                 " · Reset " + guestResets;

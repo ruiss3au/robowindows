@@ -745,3 +745,60 @@ The benchmark was not launched and no result was accepted. The user selected
 shut down cleanly. Device inspection found both cards at `Start`, no quarantine,
 no attempt journal and no DynRec worker. Stable `incoming` was not opened. Stop
 further Windows trials until the measured DynRec page-fault path is investigated.
+
+The existing decoder-residency value is a post-`retro_run()` sample, not a timed
+trace of the page-fault handler. The failing interval therefore establishes a
+correlation, not a new page-fault correctness defect: all four prior targeted
+corrections remain covered by the passing expanded gate. The next build will add
+only bounded `PageFaultCore` entry/return and cumulative timing aggregates under
+FR-042. No queue threshold or CPU execution behavior is changed by this
+diagnostic step.
+
+## PageFaultCore timing diagnostic — 2026-09-09
+
+The standalone pinned-core patch adds monotonic cumulative PageFaultCore entry,
+completed-return, total-duration, maximum-duration and at-least-10-ms call
+counters. The emulator thread resets and samples them; the isolated status and
+fixture log expose only the bounded aggregates. Host parser tests cover the new
+fields, negative inputs and legacy records. Host tests, repository hygiene,
+pinned-source reconstruction and the ARM64 debug build passed.
+
+With both machine cards stopped and no isolated runner present, the installed
+APK passed the complete source-owned Normal/DynRec x86 gate. No machine disk was
+opened, and all fixture processes exited. The DynRec fault/retry suite reported
+86 entries, 86 returns, 330 microseconds total, a 31-microsecond maximum and zero
+calls of at least 10 ms; its queue also balanced 2/2 at depth zero without a
+wipe. Normal correctly reported zero PageFaultCore calls because the pinned
+normal core uses its separate exception path. T041 is complete. This passing
+control permits one guarded fixed-20k boot on `incoming - copy` to attribute the
+intermittent Windows-only interval; it does not authorize a benchmark workload,
+stable-machine use, or any execution-path change.
+
+That single guarded boot reproduced the failure before a usable desktop. The
+guest remained on the teal Windows transition screen with an hourglass; the
+benchmark was not launched. At the last complete five-second status sample,
+the decoder was `PageFault`, fault enqueue/return was 190/183 at depth 7 with a
+high-water of 8, and no queue wipe had occurred. PageFaultCore reported
+9,771,585 entries and 9,771,578 completed returns, 2,530,837 microseconds of
+cumulative measured time, a 491,819-microsecond maximum and 67 calls of at least
+10 ms. The visible overlay advanced further to 10,490,698/10,490,691 while the
+same seven nested calls remained active. Schema-3 intervals fell to seven
+completed `retro_run()` calls and seven presented frames per second, with
+roughly 165–168 ms call maxima, repeated deadline resynchronization, an empty
+audio queue and about 48,000 missing audio frames per second.
+
+This is direct evidence that the Windows failure executes inside the
+PageFaultCore path: the entry/return difference tracks the nested queue depth,
+while millions of completed one-cycle decoder calls make no timely progress
+toward resolving those faults. It is not yet evidence for changing the queue
+watchdog or increasing the PageFaultCore cycle allocation. T042 requires a
+source-owned reproduction of that amplification before either behavior changes.
+Further Windows DynRec and benchmark trials remain stopped.
+
+RoboWindows' `Stop trial` ended the isolated child and quarantined only
+`incoming - copy`. The immediate Normal recovery boot ran ScanDisk, reached the
+desktop, and the user shut Windows down through BIOS APM. The core logged
+`guest requested shutdown` followed by `guest stopped cleanly`. Final device
+inspection showed both cards at `Start`, only the main app process, zero dynamic
+attempt journals and zero active-session markers. Stable `incoming` was never
+opened.

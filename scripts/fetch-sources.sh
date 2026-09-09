@@ -81,6 +81,7 @@ while read -r name url commit extra; do
     set -- "$@" "$repo_root/patches/$name/0003-dynrec-stosd-precise-page-fault.patch"
     set -- "$@" "$repo_root/patches/$name/0004-dynrec-precise-string-page-faults.patch"
     set -- "$@" "$repo_root/patches/$name/0005-dynrec-honor-supervisor-write-protect.patch"
+    set -- "$@" "$repo_root/patches/$name/0006-pagefault-core-timing-diagnostics.patch"
   fi
   if [ -n "$(git -C "$target" status --porcelain --untracked-files=normal)" ]; then
     expected_patch_files=dosbox_pure_libretro.cpp

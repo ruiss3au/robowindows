@@ -89,6 +89,11 @@ fallback. Keep migration tests for stable profiles and per-machine clean state.
    double-fault and guest-reset counters plus an allowlisted halted decoder
    class. Use those counters to guide an instruction-level regression before
    changing exception or reset behavior; counters cannot attribute it alone.
+   If a later failure shows sustained PageFault residency without a failing CPU
+   fixture, time the PageFault decoder with cumulative entry/return, total/max
+   duration and fixed 10 ms slow-call aggregates. Carry them through the same
+   bounded liveness record; do not collect per-call or guest-derived data and do
+   not alter execution behavior until a reproducible regression identifies it.
 7. **Minimal correction** — isolate a proven fix under `patches/`; do not change
    guest media, UI ownership, input, audio resources, or stable profiles.
 8. **Experimental UI** — offer one named `Dynamic (experimental)` option only

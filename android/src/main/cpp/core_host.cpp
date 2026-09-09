@@ -31,7 +31,10 @@ extern "C" void robowindows_pagefault_diagnostics_reset(void);
 extern "C" void robowindows_pagefault_diagnostics_snapshot(
         unsigned long long* enqueued, unsigned long long* completed,
         unsigned int* depth, unsigned int* high_water,
-        unsigned long long* wipes, unsigned long long* recoveries);
+        unsigned long long* wipes, unsigned long long* recoveries,
+        unsigned long long* core_entries, unsigned long long* core_returns,
+        unsigned long long* core_total_us, unsigned long long* core_max_us,
+        unsigned long long* core_slow_10ms);
 extern "C" void robowindows_cpu_exception_diagnostics_reset(void);
 extern "C" void robowindows_cpu_exception_diagnostics_snapshot(
         unsigned long long* pf_prepared, unsigned long long* pf_delivered,
@@ -79,6 +82,11 @@ std::atomic<uint32_t> pagefault_depth{0};
 std::atomic<uint32_t> pagefault_high_water{0};
 std::atomic<uint64_t> pagefault_wipes{0};
 std::atomic<uint64_t> pagefault_recoveries{0};
+std::atomic<uint64_t> pagefault_core_entries{0};
+std::atomic<uint64_t> pagefault_core_returns{0};
+std::atomic<uint64_t> pagefault_core_total_us{0};
+std::atomic<uint64_t> pagefault_core_max_us{0};
+std::atomic<uint64_t> pagefault_core_slow_10ms{0};
 std::atomic<uint64_t> exception_pagefault_prepared{0};
 std::atomic<uint64_t> exception_pagefault_delivered{0};
 std::atomic<uint64_t> exception_doublefault_delivered{0};
@@ -227,16 +235,27 @@ void sample_pagefault_diagnostics() {
     unsigned long long completed = 0;
     unsigned long long wipes = 0;
     unsigned long long recoveries = 0;
+    unsigned long long coreEntries = 0;
+    unsigned long long coreReturns = 0;
+    unsigned long long coreTotalUs = 0;
+    unsigned long long coreMaxUs = 0;
+    unsigned long long coreSlow10Ms = 0;
     unsigned int depth = 0;
     unsigned int high_water = 0;
     robowindows_pagefault_diagnostics_snapshot(&enqueued, &completed, &depth,
-            &high_water, &wipes, &recoveries);
+            &high_water, &wipes, &recoveries, &coreEntries, &coreReturns,
+            &coreTotalUs, &coreMaxUs, &coreSlow10Ms);
     pagefault_enqueued.store(enqueued, std::memory_order_relaxed);
     pagefault_completed.store(completed, std::memory_order_relaxed);
     pagefault_depth.store(depth, std::memory_order_relaxed);
     pagefault_high_water.store(high_water, std::memory_order_relaxed);
     pagefault_wipes.store(wipes, std::memory_order_relaxed);
     pagefault_recoveries.store(recoveries, std::memory_order_relaxed);
+    pagefault_core_entries.store(coreEntries, std::memory_order_relaxed);
+    pagefault_core_returns.store(coreReturns, std::memory_order_relaxed);
+    pagefault_core_total_us.store(coreTotalUs, std::memory_order_relaxed);
+    pagefault_core_max_us.store(coreMaxUs, std::memory_order_relaxed);
+    pagefault_core_slow_10ms.store(coreSlow10Ms, std::memory_order_relaxed);
 }
 
 void sample_exception_diagnostics() {
@@ -798,6 +817,11 @@ Java_org_robowindows_app_NativeHost_startSession(JNIEnv* env, jclass, jstring co
     pagefault_high_water = 0;
     pagefault_wipes = 0;
     pagefault_recoveries = 0;
+    pagefault_core_entries = 0;
+    pagefault_core_returns = 0;
+    pagefault_core_total_us = 0;
+    pagefault_core_max_us = 0;
+    pagefault_core_slow_10ms = 0;
     exception_pagefault_prepared = 0;
     exception_pagefault_delivered = 0;
     exception_doublefault_delivered = 0;
@@ -850,10 +874,11 @@ Java_org_robowindows_app_NativeHost_sessionStatus(JNIEnv*, jclass) {
 
 extern "C" JNIEXPORT jstring JNICALL
 Java_org_robowindows_app_NativeHost_sessionLiveness(JNIEnv* env, jclass) {
-    char result[512];
+    char result[768];
     std::snprintf(result, sizeof(result),
             "runs=%llu frames=%llu decoder=%s current=%s dyn=%llu normal=%llu pf=%llu halt=%llu other=%llu "
             "pfenq=%llu pfret=%llu pfdepth=%u pfmax=%u pfwipe=%llu pfrecover=%llu "
+            "pfcent=%llu pfcret=%llu pfctime=%llu pfctmax=%llu pfcslow=%llu "
             "pfprep=%llu pfdeliver=%llu pfgate=%llu iret=%llu df=%llu reset=%llu",
             static_cast<unsigned long long>(liveness_run_calls.load()),
             static_cast<unsigned long long>(liveness_frames_published.load()),
@@ -868,6 +893,11 @@ Java_org_robowindows_app_NativeHost_sessionLiveness(JNIEnv* env, jclass) {
             pagefault_depth.load(), pagefault_high_water.load(),
             static_cast<unsigned long long>(pagefault_wipes.load()),
             static_cast<unsigned long long>(pagefault_recoveries.load()),
+            static_cast<unsigned long long>(pagefault_core_entries.load()),
+            static_cast<unsigned long long>(pagefault_core_returns.load()),
+            static_cast<unsigned long long>(pagefault_core_total_us.load()),
+            static_cast<unsigned long long>(pagefault_core_max_us.load()),
+            static_cast<unsigned long long>(pagefault_core_slow_10ms.load()),
             static_cast<unsigned long long>(exception_pagefault_prepared.load()),
             static_cast<unsigned long long>(exception_pagefault_delivered.load()),
             static_cast<unsigned long long>(exception_pagefault_gate_entered.load()),

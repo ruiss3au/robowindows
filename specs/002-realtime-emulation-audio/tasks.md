@@ -270,6 +270,15 @@ debt to DynRec page-fault activity. The trial stopped, the copy completed its
 required Normal recovery shutdown, and further repetitions are blocked on the
 DynRec hot-path investigation in T063.
 
+The instrumented follow-up reproduced the DynRec-only startup failure and
+measured PageFaultCore directly: roughly 9.8 million completed one-cycle calls,
+a 491.819 ms maximum call and seven nested faults still active at the last
+complete status sample. The disposable expanded x86 gate still passed, and its
+DynRec fault/retry control completed 86/86 PageFaultCore calls with a 31 us
+maximum. T062 and three-run collection remain blocked; the next work is a
+source-owned reproduction of the Windows-only call amplification, not another
+benchmark repetition or shared-scheduler change.
+
 - [ ] T051 Re-run host tests and `git diff --check`, then build/install the debug APK using
   `scripts/build-android.sh`
 - [ ] T052 Run the complete [quickstart](quickstart.md) on the SM-T500 and archive only

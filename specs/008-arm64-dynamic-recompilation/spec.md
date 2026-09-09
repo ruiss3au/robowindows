@@ -252,6 +252,17 @@ resume starts a fresh 30-second window. Failure handling MUST request orderly
 child teardown before disconnecting and MUST never clear the active journal as
 clean.
 
+**FR-042 — Page-fault execution timing:** After a DynRec-only Windows failure
+correlates with sustained `PageFault` residency, the next diagnostic build MUST
+measure the page-fault decoder itself rather than infer its cost from a decoder
+sample taken after `retro_run()`. It MUST expose only cumulative decoder-call
+entries, completed returns, total and maximum monotonic duration, and the count
+of calls lasting at least 10 ms. Counters MUST be reset and sampled on the
+emulator thread and carried through the existing bounded liveness record. They
+MUST NOT include fault addresses, error codes, registers, memory, guest text,
+paths, or per-call records. This instrumentation MUST NOT change page-fault
+queue thresholds, exception flow, DynRec translation, caching, or linking.
+
 ## Success criteria
 
 - **SC-001 — isolation:** attempted starts with stable roles, aliased disks or
@@ -371,6 +382,12 @@ identical to a fixed-cycle trial.
 replying without an emulator-call counter change for 30 seconds, then
 RoboWindows quarantines the attempt, reports the failure, and requests runner
 teardown. A paused trial does not time out, and resume receives a fresh window.
+
+27. Given page-fault timing diagnostics, when a disposable fixture or guarded
+trial runs, then its bounded status distinguishes page-fault decoder entries,
+completed returns, cumulative/maximum duration and calls of at least 10 ms. A
+malformed or negative aggregate is rejected or clamped without exposing any
+guest-derived value, and legacy liveness records remain parseable.
 
 ## Out of Scope
 
