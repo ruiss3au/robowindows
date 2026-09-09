@@ -7,6 +7,12 @@ constexpr uint64_t kUnobservedMinimum = std::numeric_limits<uint64_t>::max();
 void RuntimeTelemetry::reset(RuntimeState initial_state) {
     state_.store(initial_state, std::memory_order_relaxed);
     emulator_run_calls_.store(0, std::memory_order_relaxed);
+    retro_run_max_us_.store(0, std::memory_order_relaxed);
+    retro_run_over_budget_calls_.store(0, std::memory_order_relaxed);
+    audio_producer_gap_max_us_.store(0, std::memory_order_relaxed);
+    scheduler_lateness_max_us_.store(0, std::memory_order_relaxed);
+    scheduler_catchup_calls_.store(0, std::memory_order_relaxed);
+    scheduler_deadline_resyncs_.store(0, std::memory_order_relaxed);
     audio_produced_frames_.store(0, std::memory_order_relaxed);
     audio_consumed_frames_.store(0, std::memory_order_relaxed);
     audio_underrun_callbacks_.store(0, std::memory_order_relaxed);
@@ -21,6 +27,7 @@ void RuntimeTelemetry::reset(RuntimeState initial_state) {
     surface_post_failures_.store(0, std::memory_order_relaxed);
     audio_queue_frames_min_.store(kUnobservedMinimum, std::memory_order_relaxed);
     audio_queue_frames_max_.store(0, std::memory_order_relaxed);
+    audio_queue_frames_current_.store(0, std::memory_order_relaxed);
 }
 
 void RuntimeTelemetry::set_state(RuntimeState state) {
@@ -33,6 +40,29 @@ RuntimeState RuntimeTelemetry::state() const {
 
 void RuntimeTelemetry::add_emulator_run_calls(uint64_t count) {
     emulator_run_calls_.fetch_add(count, std::memory_order_relaxed);
+}
+
+void RuntimeTelemetry::observe_retro_run(uint64_t duration_us, uint64_t budget_us) {
+    update_max(retro_run_max_us_, duration_us);
+    if (duration_us > budget_us) {
+        retro_run_over_budget_calls_.fetch_add(1, std::memory_order_relaxed);
+    }
+}
+
+void RuntimeTelemetry::observe_audio_producer_gap(uint64_t gap_us) {
+    update_max(audio_producer_gap_max_us_, gap_us);
+}
+
+void RuntimeTelemetry::observe_scheduler_lateness(uint64_t lateness_us) {
+    update_max(scheduler_lateness_max_us_, lateness_us);
+}
+
+void RuntimeTelemetry::add_scheduler_catchup_calls(uint64_t count) {
+    scheduler_catchup_calls_.fetch_add(count, std::memory_order_relaxed);
+}
+
+void RuntimeTelemetry::add_scheduler_deadline_resyncs(uint64_t count) {
+    scheduler_deadline_resyncs_.fetch_add(count, std::memory_order_relaxed);
 }
 
 void RuntimeTelemetry::add_audio_produced_frames(uint64_t count) {
@@ -93,6 +123,7 @@ void RuntimeTelemetry::update_max(std::atomic<uint64_t>& target, uint64_t value)
 }
 
 void RuntimeTelemetry::observe_audio_queue_frames(uint64_t frames) {
+    audio_queue_frames_current_.store(frames, std::memory_order_relaxed);
     update_min(audio_queue_frames_min_, frames);
     update_max(audio_queue_frames_max_, frames);
 }
@@ -102,6 +133,17 @@ RuntimeTelemetrySnapshot RuntimeTelemetry::take_snapshot(uint64_t interval_ms) {
     snapshot.interval_ms = interval_ms;
     snapshot.runtime_state = state();
     snapshot.emulator_run_calls = emulator_run_calls_.exchange(0, std::memory_order_relaxed);
+    snapshot.retro_run_max_us = retro_run_max_us_.exchange(0, std::memory_order_relaxed);
+    snapshot.retro_run_over_budget_calls =
+            retro_run_over_budget_calls_.exchange(0, std::memory_order_relaxed);
+    snapshot.audio_producer_gap_max_us =
+            audio_producer_gap_max_us_.exchange(0, std::memory_order_relaxed);
+    snapshot.scheduler_lateness_max_us =
+            scheduler_lateness_max_us_.exchange(0, std::memory_order_relaxed);
+    snapshot.scheduler_catchup_calls =
+            scheduler_catchup_calls_.exchange(0, std::memory_order_relaxed);
+    snapshot.scheduler_deadline_resyncs =
+            scheduler_deadline_resyncs_.exchange(0, std::memory_order_relaxed);
     snapshot.audio_produced_frames =
             audio_produced_frames_.exchange(0, std::memory_order_relaxed);
     snapshot.audio_consumed_frames =
@@ -128,6 +170,8 @@ RuntimeTelemetrySnapshot RuntimeTelemetry::take_snapshot(uint64_t interval_ms) {
     snapshot.audio_queue_frames_min = minimum == kUnobservedMinimum ? 0 : minimum;
     snapshot.audio_queue_frames_max =
             audio_queue_frames_max_.exchange(0, std::memory_order_relaxed);
+    snapshot.audio_queue_frames_current =
+            audio_queue_frames_current_.load(std::memory_order_relaxed);
     return snapshot;
 }
 

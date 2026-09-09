@@ -65,7 +65,7 @@ Transitions:
 | `queueBandMs` | pair | 75–125 for `balanced_100ms` |
 | `maximumCorrection` | ratio | 1%; guest-call pacing only |
 | `maximumDebtMs` | integer | 250 for `balanced_100ms` |
-| `maximumCatchUpCalls` | integer | 20 consecutive calls |
+| `maximumCatchUpCalls` | integer | 20 consecutive calls before a cooperative yield; debt remains retained |
 
 The policy is passed explicitly across the Java, Binder (for isolated DynRec),
 and JNI boundaries. Lifecycle reset returns correction to nominal and the next

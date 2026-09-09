@@ -12,6 +12,12 @@ int main() {
 
     telemetry.set_state(RuntimeState::Foreground);
     telemetry.add_emulator_run_calls(7);
+    telemetry.observe_retro_run(12000, 10000);
+    telemetry.observe_retro_run(8000, 10000);
+    telemetry.observe_audio_producer_gap(25000);
+    telemetry.observe_scheduler_lateness(9000);
+    telemetry.add_scheduler_catchup_calls(2);
+    telemetry.add_scheduler_deadline_resyncs();
     telemetry.add_audio_produced_frames(800);
     telemetry.add_audio_consumed_frames(192);
     telemetry.add_audio_underrun(4);
@@ -31,6 +37,12 @@ int main() {
     assert(first.interval_ms == 1000);
     assert(first.runtime_state == RuntimeState::Foreground);
     assert(first.emulator_run_calls == 7);
+    assert(first.retro_run_max_us == 12000);
+    assert(first.retro_run_over_budget_calls == 1);
+    assert(first.audio_producer_gap_max_us == 25000);
+    assert(first.scheduler_lateness_max_us == 9000);
+    assert(first.scheduler_catchup_calls == 2);
+    assert(first.scheduler_deadline_resyncs == 1);
     assert(first.audio_produced_frames == 800);
     assert(first.audio_consumed_frames == 192);
     assert(first.audio_underrun_callbacks == 1);
@@ -45,12 +57,16 @@ int main() {
     assert(first.surface_post_failures == 2);
     assert(first.audio_queue_frames_min == 25);
     assert(first.audio_queue_frames_max == 150);
+    assert(first.audio_queue_frames_current == 150);
 
     RuntimeTelemetrySnapshot reset_interval = telemetry.take_snapshot(500);
     assert(reset_interval.emulator_run_calls == 0);
     assert(reset_interval.audio_produced_frames == 0);
     assert(reset_interval.audio_queue_frames_min == 0);
     assert(reset_interval.audio_queue_frames_max == 0);
+    assert(reset_interval.audio_queue_frames_current == 150);
+    assert(reset_interval.retro_run_max_us == 0);
+    assert(reset_interval.scheduler_deadline_resyncs == 0);
     assert(reset_interval.runtime_state == RuntimeState::Foreground);
 
     constexpr uint64_t kPerThread = 10000;
@@ -65,6 +81,8 @@ int main() {
     assert(telemetry.take_snapshot(1000).audio_produced_frames == 2 * kPerThread);
 
     telemetry.reset(RuntimeState::Stopped);
-    assert(telemetry.take_snapshot(1000).runtime_state == RuntimeState::Stopped);
+    RuntimeTelemetrySnapshot stopped = telemetry.take_snapshot(1000);
+    assert(stopped.runtime_state == RuntimeState::Stopped);
+    assert(stopped.audio_queue_frames_current == 0);
     return 0;
 }

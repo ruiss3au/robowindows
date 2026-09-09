@@ -125,6 +125,11 @@ public final class DynamicTrialService extends Service {
         if (started) throw new IOException("Dynamic runner already owns a session");
         if (data == null) throw new IOException("Dynamic launch description is missing");
         String dynamicPolicyId = data.getString(DynamicTrialProtocol.DYNAMIC_CYCLE_POLICY);
+        int timingPolicy = data.getInt(DynamicTrialProtocol.RUNTIME_TIMING_POLICY, -1);
+        if (!RuntimeTimingPolicy.isAllowed(timingPolicy) ||
+                timingPolicy != RuntimeTimingPolicy.BALANCED_100_MS) {
+            throw new IOException("Dynamic runner rejects the runtime timing policy");
+        }
         DynamicCyclePolicy dynamicPolicy;
         try {
             dynamicPolicy = DynamicCyclePolicy.fromId(dynamicPolicyId);
@@ -139,7 +144,7 @@ public final class DynamicTrialService extends Service {
                 data.getString(DynamicTrialProtocol.FILES_PATH), dynamicPolicy);
         Surface surface = data.getParcelable(DynamicTrialProtocol.SURFACE_VALUE);
         NativeHost.setSurface(surface);
-        if (!NativeHost.startSession(launch.getPath(), getFilesDir().getPath())) {
+        if (!NativeHost.startSession(launch.getPath(), getFilesDir().getPath(), timingPolicy)) {
             throw new IOException("Dynamic native start failed");
         }
         started = true;

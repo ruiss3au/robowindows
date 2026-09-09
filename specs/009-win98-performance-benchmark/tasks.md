@@ -21,5 +21,9 @@
   tablet trial (FR-002, FR-010; scenarios 1 and 5).
 
 T005 and T006 remain open. The first matched run for each profile is valid
-diagnostic evidence, but both fail the zero-underrun quality gate; repeating the
-known failure is deferred until Feature 002's experimental balanced-100ms slice.
+diagnostic evidence, but both fail the zero-underrun quality gate. Balanced-100ms
+removed those underruns in its first complete pair, while exposing an erroneous
+catch-up-cap resynchronization. After correcting that shared policy, Normal
+passed its short gate but the matched DynRec start failed in Windows Explorer
+before the benchmark. Repetition is deferred to the measured DynRec hot-path
+investigation; no median or promotion claim is available.

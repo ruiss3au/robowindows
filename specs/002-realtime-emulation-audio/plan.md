@@ -98,9 +98,10 @@ existing frontend cadence and 200 ms prebuffer.
 1. Carry the internal timing-policy ID through the ordinary JNI start and the
    isolated DynRec handoff; reject unknown IDs at both boundaries and never infer
    policy from a path or config file.
-2. Use fixed deadlines with at most 250 ms retained debt and 20 consecutive
-   catch-up calls. Clamp larger or persistent debt, record a resynchronization,
-   and make the capture fail quality validation.
+2. Use fixed deadlines with at most 250 ms retained debt and bursts of no more
+   than 20 consecutive catch-up calls. Cooperatively yield between bursts while
+   preserving debt. Clamp only larger debt, record a resynchronization, and make
+   the capture fail quality validation.
 3. Start playback at 100 ms. Pace guest calls at 99%, 100%, or 101% of their
    nominal interval using a 75–125 ms queue band and hysteresis to the 100 ms
    target. Do not transform PCM or fabricate samples.

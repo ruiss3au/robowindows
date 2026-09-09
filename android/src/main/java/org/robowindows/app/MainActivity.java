@@ -985,7 +985,8 @@ public final class MainActivity extends Activity {
         sessionPaused = false;
         requestGuestAudioFocus();
         sessionActive = NativeHost.startSession(sessionProfile.launchPath,
-                getFilesDir().getAbsolutePath());
+                getFilesDir().getAbsolutePath(), RuntimeTimingPolicy.forExperimentalMachine(
+                        sessionProfile.isExperimental()));
         if (!sessionActive) {
             showHome();
             Toast.makeText(this, "This machine could not start.", Toast.LENGTH_LONG).show();

@@ -724,3 +724,24 @@ journal or active-session marker; both `incoming` and `incoming - copy` showed
 `Start`. Stable `incoming` was not opened. A future forced-stop fixture still
 needs to exercise the exact real-card action without an intervening Activity
 restart before T040 is marked complete.
+
+## Balanced scheduler DynRec startup failure — 2026-09-09
+
+After the complete disposable CPU gate and a passing corrected-scheduler Normal
+benchmark on `incoming - copy`, the matched fixed-20k DynRec start failed before
+the workload launched. Windows reported that Explorer performed an illegal
+operation; closing the dialog left the desktop shell absent. The overlay never
+reported Normal execution. During the failure, schema-3 telemetry identified
+extended `PageFault` residency, `retro_run()` calls as long as 105.527 ms,
+scheduler lateness above the 250 ms retained-debt limit, quality-failing deadline
+resynchronizations, and audio starvation. This is a DynRec-only Windows startup
+failure, not evidence against the corrected shared scheduler, because the
+immediately preceding Normal workload recorded no lateness, catch-up, audio or
+lifecycle failure.
+
+The benchmark was not launched and no result was accepted. The user selected
+`Stop trial`; the child exited and the experimental disk alone entered
+`Needs disk check`. Its required Normal recovery boot then reached Windows and
+shut down cleanly. Device inspection found both cards at `Start`, no quarantine,
+no attempt journal and no DynRec worker. Stable `incoming` was not opened. Stop
+further Windows trials until the measured DynRec page-fault path is investigated.

@@ -178,9 +178,10 @@ failure to a measured subsystem without relying only on subjective listening.
   path or exposed as a raw user setting.
 - **FR-022**: The experimental scheduler MUST preserve fixed guest-frame deadlines
   across stalls up to 250 ms and run no more than 20 consecutive catch-up calls
-  without sleeping. Larger debt, or debt that survives that bound, MUST clamp to
-  the current monotonic time and increment a quality-failing resynchronization
-  counter.
+  without a cooperative thread yield. After each bounded burst it MUST retain
+  the deadline debt and yield so other real-time work can run. Only debt larger
+  than 250 ms MUST clamp to the current monotonic time and increment a
+  quality-failing resynchronization counter.
 - **FR-023**: Experimental playback MUST begin at approximately 100 ms of queued
   guest audio. Outside a 75–125 ms band, scheduling MAY apply at most a temporary
   one-percent cadence correction, with hysteresis back to the 100 ms target. It
@@ -252,7 +253,7 @@ failure to a measured subsystem without relying only on subjective listening.
 - The first scheduler candidate is the experimental-only `balanced-100ms` policy:
   a 100 ms target, a 75–125 ms correction band, at most one-percent cadence
   correction, 250 ms maximum retained debt, and 20 maximum consecutive catch-up
-  calls.
+  calls between cooperative thread yields.
 
 ## Explicitly Out of Scope
 

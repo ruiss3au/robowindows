@@ -126,3 +126,70 @@ scheduler and schema-3 telemetry. Stable `incoming` must retain its existing
 runtime path. A new single matched pair must pass audio, timing, presentation,
 decoder, lifecycle, resynchronization, and clean-shutdown gates before the
 remaining median runs or longer acceptance gates resume.
+
+## Balanced-100ms diagnostic pair — 2026-09-09
+
+The first balanced pair used installed debug APK SHA-256
+`24a88e84818c1b4ad47470dbafc8633a0774fccb55150c2fa6a934f4e8799018`
+on `incoming - copy`. Both strict guest records completed in exactly three
+10,000 ms phases, both stayed above 15 presented FPS with correct decoder
+residency, and both Windows sessions shut down cleanly. The benchmark is silent,
+so human audio quality and physical-input quality are recorded as `not_tested`
+rather than inferred from counters.
+
+| Metric | DynRec fixed 20k | Normal fixed 20k |
+|---|---:|---:|
+| CPU operations/ms | 3,221 | 3,218 |
+| Memory KiB/ms | 12 | 10 |
+| Off-screen GDI rectangles/s | 15,091 | 3,621 |
+| Presented FPS | 15.10 | 15.06 |
+| Maximum `retro_run()` | 71,980 us | 64,339 us |
+| Maximum scheduler lateness | 136,852 us | 53,879 us |
+| Catch-up calls | 58 | 23 |
+| Deadline resynchronizations | 1 | 1 |
+| Audio queue maximum | 11,683 frames | 5,485 frames |
+| Audio underruns / missing frames | 0 / 0 | 0 / 0 |
+
+This proves the 100 ms prebuffer/fixed-deadline direction removed the original
+121/19 underruns and 17,088/2,662 missing frames. It also exposed an implementation
+error: the scheduler discarded debt after 20 consecutive calls even though
+neither core approached the specified 250 ms clamp threshold. The relevant
+resynchronization intervals had only 15.522 ms DynRec and 51.805 ms Normal
+lateness. Feature 002 now treats 20 calls as a bounded burst followed by a
+cooperative yield while retaining debt; only debt above 250 ms resynchronizes.
+These two captures remain diagnostic quality failures and do not count toward
+the three-run medians.
+
+## Corrected scheduler recheck and DynRec boot rejection — 2026-09-09
+
+After host tests, repository hygiene, pinned-source verification and the ARM64
+build passed, corrected debug APK SHA-256
+`7fa5fab7096b75c34db3dacf89cf856e6bf3c632392767701bad78cfffbeff45`
+was installed while both machines were stopped. The complete disposable x86
+gate passed in Normal and DynRec, then removed its temporary processes and files.
+
+The new Normal fixed-20k capture completed with a strict schema-2 record: CPU
+elapsed 10,001 ms, 32,163,984 operations and 3,216 ops/ms; memory elapsed
+10,000 ms, 109,376 KiB and 10 KiB/ms; GDI elapsed 10,000 ms, 36,215 rectangles
+and 3,621 rectangles/s; preview remained 99 frames at 9 FPS. Across 55 foreground
+schema-3 intervals it presented 15.08 FPS, produced and consumed approximately
+48 kHz, held 3,720–5,141 queued frames, and recorded zero over-budget calls,
+catch-ups, resynchronizations, underruns, missing frames, drops, stream errors,
+or surface-post failures. Windows shut down cleanly.
+
+The matched DynRec start was rejected before workload launch. Windows displayed
+an Explorer illegal-operation dialog and the shell terminated. Bounded telemetry
+showed configured DynRec with extended `PageFault` residency, `retro_run()` up
+to 105.527 ms, scheduler lateness above 250 ms, repeated legitimate deadline
+resynchronizations, and repeated audio underruns/missing frames during the fault
+episode. This differs from the shared cap defect: the corrected Normal path
+passed, while DynRec alone crossed the specified debt clamp and failed Windows
+startup. No DynRec benchmark result was collected.
+
+The user selected `Stop trial`; RoboWindows stopped the isolated worker and
+marked only `incoming - copy` as `Needs disk check`. The copy then completed its
+Normal recovery boot and clean Windows shutdown. Final device inspection found
+two `Start` actions, no quarantine, no DynRec worker and no attempt journal.
+Stable `incoming` was never opened. Per Feature 002 T063, benchmark/AoE2/median
+and long-gate repetitions stop here pending investigation of the measured DynRec
+page-fault hot path.

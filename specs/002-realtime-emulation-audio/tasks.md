@@ -239,21 +239,21 @@ recoverable; it is not required for completion of the conservative MVP.
 
 ### Experimental balanced-100ms corrective slice
 
-- [ ] T056 [US1] Add deterministic host tests for legacy cadence, on-time
+- [x] T056 [US1] Add deterministic host tests for legacy cadence, on-time
   balanced pacing, short/long stalls, bounded catch-up, 250 ms debt clamping,
   queue hysteresis, and lifecycle reset (FR-021–024).
-- [ ] T057 [US4] Extend telemetry and strict benchmark fixtures to schema 3 with
+- [x] T057 [US4] Extend telemetry and strict benchmark fixtures to schema 3 with
   call duration, producer gap, scheduler, and current/min/max queue evidence;
   make any deadline resynchronization fail quality validation (FR-025).
-- [ ] T058 [US1] Pass the allowlisted timing-policy ID through ordinary JNI and
+- [x] T058 [US1] Pass the allowlisted timing-policy ID through ordinary JNI and
   the isolated DynRec Binder/JNI handoff; select balanced timing only for
   experimental machines under Normal or DynRec (FR-021).
-- [ ] T059 [US1] Implement the balanced 100 ms prebuffer, one-percent queue-band
+- [x] T059 [US1] Implement the balanced 100 ms prebuffer, one-percent queue-band
   hysteresis, fixed deadlines, bounded catch-up, and lifecycle resets without
   PCM transformation or DynRec engine changes (FR-022–024).
-- [ ] T060 Run host tests, repository hygiene, pinned-source verification, and
+- [x] T060 Run host tests, repository hygiene, pinned-source verification, and
   the ARM64 debug build.
-- [ ] T061 With both real machines stopped, install and run the disposable
+- [x] T061 With both real machines stopped, install and run the disposable
   Normal/DynRec x86 gate; do not open either machine disk.
 - [ ] T062 Run one matched Normal-20k/DynRec-20k pair on `incoming - copy` and
   require valid guest results, correct decoder residency, at least 15 FPS,
@@ -262,6 +262,13 @@ recoverable; it is not required for completion of the conservative MVP.
 - [ ] T063 If T062 passes, resume the three-run medians and existing long gates.
   If long calls are DynRec-only, stop trials and investigate its measured hot
   path; if both cores stall similarly, continue in the shared host path.
+
+T062 remains open. The corrected scheduler passed the complete Normal workload,
+but the matched DynRec start failed before the benchmark when Windows Explorer
+reported an illegal operation. Telemetry isolated repeated over-250 ms deadline
+debt to DynRec page-fault activity. The trial stopped, the copy completed its
+required Normal recovery shutdown, and further repetitions are blocked on the
+DynRec hot-path investigation in T063.
 
 - [ ] T051 Re-run host tests and `git diff --check`, then build/install the debug APK using
   `scripts/build-android.sh`

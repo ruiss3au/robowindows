@@ -13,6 +13,11 @@ javac -d "$classes_dir" \
 java -cp "$classes_dir" org.robowindows.app.LaunchConfigTest
 
 javac -d "$classes_dir" \
+  "$repo_dir/android/src/main/java/org/robowindows/app/RuntimeTimingPolicy.java" \
+  "$repo_dir/tests/java/org/robowindows/app/RuntimeTimingPolicyTest.java"
+java -cp "$classes_dir" org.robowindows.app.RuntimeTimingPolicyTest
+
+javac -d "$classes_dir" \
   "$repo_dir/android/src/main/java/org/robowindows/app/BuildIdentity.java" \
   "$repo_dir/tests/java/org/robowindows/app/BuildIdentityTest.java"
 java -cp "$classes_dir" org.robowindows.app.BuildIdentityTest
@@ -86,6 +91,13 @@ g++ -std=c++17 -Wall -Wextra -Werror -pthread \
   "$repo_dir/android/src/main/cpp/runtime_telemetry.cpp" \
   -o "$classes_dir/runtime_telemetry_test"
 "$classes_dir/runtime_telemetry_test"
+
+g++ -std=c++17 -Wall -Wextra -Werror \
+  -I"$repo_dir/android/src/main/cpp" \
+  "$repo_dir/tests/native/realtime_scheduler_test.cpp" \
+  "$repo_dir/android/src/main/cpp/realtime_scheduler.cpp" \
+  -o "$classes_dir/realtime_scheduler_test"
+"$classes_dir/realtime_scheduler_test"
 
 g++ -std=c++17 -Wall -Wextra -Werror -pthread \
   -I"$repo_dir/android/src/main/cpp" \

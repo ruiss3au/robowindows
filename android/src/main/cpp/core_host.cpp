@@ -22,6 +22,7 @@
 #include "audio_ring.h"
 #include "frame_mailbox.h"
 #include "frame_presenter.h"
+#include "realtime_scheduler.h"
 #include "runtime_telemetry.h"
 #include "session_state.h"
 
@@ -107,6 +108,11 @@ AAudioStream* audio_stream = nullptr;
 std::atomic<bool> audio_recovery_requested{false};
 std::atomic<bool> logged_non_silent_audio{false};
 int audio_sample_rate = 48000;
+RuntimeTimingPolicy runtime_timing_policy = RuntimeTimingPolicy::Legacy;
+RealTimeScheduler realtime_scheduler;
+std::atomic<bool> timing_reset_requested{false};
+bool has_audio_producer_time = false;
+std::chrono::steady_clock::time_point last_audio_producer_time;
 RuntimeTelemetry telemetry;
 FrameMailbox frame_mailbox;
 FramePresenter frame_presenter(frame_mailbox, telemetry);
@@ -115,6 +121,16 @@ std::chrono::steady_clock::time_point telemetry_report_time;
 const char* configured_decoder_name();
 const char* runtime_decoder_name();
 
+int64_t steady_now_ns() {
+    return std::chrono::duration_cast<std::chrono::nanoseconds>(
+            std::chrono::steady_clock::now().time_since_epoch()).count();
+}
+
+void reset_timing_state_on_core_thread() {
+    realtime_scheduler.reset(steady_now_ns());
+    has_audio_producer_time = false;
+}
+
 void report_telemetry_if_due() {
     const auto now = std::chrono::steady_clock::now();
     const auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
@@ -122,18 +138,28 @@ void report_telemetry_if_due() {
     if (elapsed < 1000) return;
     RuntimeTelemetrySnapshot snapshot = telemetry.take_snapshot(static_cast<uint64_t>(elapsed));
     __android_log_print(ANDROID_LOG_INFO, "RoboWindowsTelemetry",
-            "schema=2 interval_ms=%llu state=%s audio_state=%s decoder=%s current=%s "
-            "run=%llu audio_produced=%llu "
-            "audio_consumed=%llu queue_min=%llu queue_max=%llu underruns=%llu "
+            "schema=3 interval_ms=%llu state=%s audio_state=%s decoder=%s current=%s "
+            "timing=%s pacing=%s run=%llu retro_max_us=%llu retro_over=%llu "
+            "producer_gap_max_us=%llu scheduler_late_max_us=%llu catchup=%llu resync=%llu "
+            "audio_produced=%llu audio_consumed=%llu queue_current=%llu queue_min=%llu queue_max=%llu underruns=%llu "
             "missing=%llu dropped=%llu saturated=%llu stream_errors=%llu submitted=%llu published=%llu "
             "presented=%llu coalesced=%llu post_failures=%llu",
             static_cast<unsigned long long>(snapshot.interval_ms),
             runtime_state_name(snapshot.runtime_state),
             audio_phase_name(audio_output_state.phase()),
             configured_decoder_name(), runtime_decoder_name(),
+            runtime_timing_policy_name(runtime_timing_policy),
+            pacing_correction_name(realtime_scheduler.correction()),
             static_cast<unsigned long long>(snapshot.emulator_run_calls),
+            static_cast<unsigned long long>(snapshot.retro_run_max_us),
+            static_cast<unsigned long long>(snapshot.retro_run_over_budget_calls),
+            static_cast<unsigned long long>(snapshot.audio_producer_gap_max_us),
+            static_cast<unsigned long long>(snapshot.scheduler_lateness_max_us),
+            static_cast<unsigned long long>(snapshot.scheduler_catchup_calls),
+            static_cast<unsigned long long>(snapshot.scheduler_deadline_resyncs),
             static_cast<unsigned long long>(snapshot.audio_produced_frames),
             static_cast<unsigned long long>(snapshot.audio_consumed_frames),
+            static_cast<unsigned long long>(snapshot.audio_queue_frames_current),
             static_cast<unsigned long long>(snapshot.audio_queue_frames_min),
             static_cast<unsigned long long>(snapshot.audio_queue_frames_max),
             static_cast<unsigned long long>(snapshot.audio_underrun_callbacks),
@@ -379,6 +405,14 @@ void audio_error_callback(AAudioStream*, void*, aaudio_result_t) {
 
 size_t audio_batch(const int16_t* samples, size_t frames) {
     if (!samples) return frames;
+    const auto producer_time = std::chrono::steady_clock::now();
+    if (has_audio_producer_time) {
+        const auto gap_us = std::chrono::duration_cast<std::chrono::microseconds>(
+                producer_time - last_audio_producer_time).count();
+        if (gap_us > 0) telemetry.observe_audio_producer_gap(static_cast<uint64_t>(gap_us));
+    }
+    last_audio_producer_time = producer_time;
+    has_audio_producer_time = true;
     telemetry.add_audio_produced_frames(frames);
     size_t count = frames * 2;
     uint64_t saturated = 0;
@@ -398,7 +432,8 @@ size_t audio_batch(const int16_t* samples, size_t frames) {
     telemetry.add_audio_dropped_frames(pushed.dropped_frames);
     const size_t queued_frames = audio_ring.size();
     telemetry.observe_audio_queue_frames(queued_frames);
-    const size_t prebuffer_frames = static_cast<size_t>(audio_sample_rate) / 5;
+    realtime_scheduler.observe_audio_queue(queued_frames);
+    const size_t prebuffer_frames = realtime_scheduler.prebuffer_frames();
     const bool should_start = audio_stream && queued_frames >= prebuffer_frames &&
             audio_output_state.mark_playing();
     if (should_start) {
@@ -450,6 +485,7 @@ void start_audio(int sample_rate) {
     audio_sample_rate = sample_rate;
     audio_recovery_requested = false;
     audio_ring.clear();
+    telemetry.observe_audio_queue_frames(0);
     audio_output_state.initialize();
     if (!open_audio_stream_locked(sample_rate)) {
         audio_output_state.begin_recovery();
@@ -470,13 +506,17 @@ void suspend_audio() {
         }
     }
     audio_ring.clear();
+    telemetry.observe_audio_queue_frames(0);
+    timing_reset_requested.store(true, std::memory_order_release);
 }
 
 void resume_audio() {
     if (audio_output_state.phase() != AudioPhase::Suspended) return;
     std::lock_guard<std::mutex> control_lock(audio_control_mutex);
     audio_ring.clear();
+    telemetry.observe_audio_queue_frames(0);
     audio_output_state.resume();
+    timing_reset_requested.store(true, std::memory_order_release);
 }
 
 void recover_audio_if_needed() {
@@ -488,8 +528,10 @@ void recover_audio_if_needed() {
         audio_stream = nullptr;
     }
     audio_ring.clear();
+    telemetry.observe_audio_queue_frames(0);
     if (open_audio_stream_locked(audio_sample_rate)) {
         audio_output_state.recovered();
+        timing_reset_requested.store(true, std::memory_order_release);
     }
 }
 
@@ -503,6 +545,7 @@ void stop_audio() {
         audio_stream = nullptr;
     }
     audio_ring.clear();
+    telemetry.observe_audio_queue_frames(0);
 }
 void input_poll() {}
 
@@ -616,24 +659,32 @@ void run_core() {
     start_audio(static_cast<int>(av.timing.sample_rate > 1.0 ? av.timing.sample_rate : 44100.0));
     double fps = av.timing.fps > 1.0 ? av.timing.fps : 60.0;
     requested_run_fps.store(fps, std::memory_order_relaxed);
-    auto frame_time = std::chrono::duration_cast<std::chrono::steady_clock::duration>(
-            std::chrono::duration<double>(1.0 / fps));
-    auto next_frame = std::chrono::steady_clock::now();
+    realtime_scheduler.configure(fps, audio_sample_rate, steady_now_ns());
+    timing_reset_requested = false;
+    has_audio_producer_time = false;
     while (running && !shutdown_requested) {
+        if (timing_reset_requested.exchange(false, std::memory_order_acq_rel)) {
+            reset_timing_state_on_core_thread();
+        }
         if (reset_requested.exchange(false)) {
             {
                 std::lock_guard<std::mutex> lock(input_mutex);
                 keys.fill(false);
                 mouse_buttons = mouse_x = mouse_y = wheel_v = wheel_h = 0;
             }
+            if (runtime_timing_policy == RuntimeTimingPolicy::Balanced100Ms) suspend_audio();
             retro_reset();
+            if (runtime_timing_policy == RuntimeTimingPolicy::Balanced100Ms) {
+                resume_audio();
+                reset_timing_state_on_core_thread();
+                timing_reset_requested = false;
+            }
             __android_log_print(ANDROID_LOG_INFO, "RoboWindowsCore",
                     "guest restart completed");
         }
         if (paused) {
             report_telemetry_if_due();
             std::this_thread::sleep_for(std::chrono::milliseconds(20));
-            next_frame = std::chrono::steady_clock::now();
             continue;
         }
         apply_pending_media();
@@ -641,23 +692,33 @@ void run_core() {
         const double updated_fps = requested_run_fps.load(std::memory_order_relaxed);
         if (std::abs(updated_fps - fps) > 0.001) {
             fps = updated_fps;
-            frame_time = std::chrono::duration_cast<std::chrono::steady_clock::duration>(
-                    std::chrono::duration<double>(1.0 / fps));
-            next_frame = std::chrono::steady_clock::now();
+            realtime_scheduler.configure(fps, audio_sample_rate, steady_now_ns());
+            has_audio_producer_time = false;
             __android_log_print(ANDROID_LOG_INFO, "RoboWindowsCore",
                     "frontend cadence updated fps=%.6f", fps);
         }
+        const auto run_start = std::chrono::steady_clock::now();
         retro_run();
+        const auto run_end = std::chrono::steady_clock::now();
+        const auto run_duration_us = std::chrono::duration_cast<std::chrono::microseconds>(
+                run_end - run_start).count();
+        telemetry.observe_retro_run(static_cast<uint64_t>(std::max<int64_t>(0, run_duration_us)),
+                realtime_scheduler.run_budget_us());
         sample_runtime_decoder();
         sample_pagefault_diagnostics();
         sample_exception_diagnostics();
         telemetry.add_emulator_run_calls();
         ++liveness_run_calls;
+        const SchedulerDecision decision = realtime_scheduler.complete_run(
+                std::chrono::duration_cast<std::chrono::nanoseconds>(
+                        run_end.time_since_epoch()).count());
+        telemetry.observe_scheduler_lateness(decision.lateness_us);
+        if (decision.catch_up) telemetry.add_scheduler_catchup_calls();
+        if (decision.resynchronized) telemetry.add_scheduler_deadline_resyncs();
         report_telemetry_if_due();
-        next_frame += frame_time;
-        const auto now = std::chrono::steady_clock::now();
-        if (next_frame + frame_time < now) next_frame = now;
-        std::this_thread::sleep_until(next_frame);
+        if (decision.yield_thread) std::this_thread::yield();
+        std::this_thread::sleep_until(std::chrono::steady_clock::time_point(
+                std::chrono::nanoseconds(decision.deadline_ns)));
     }
     video_enabled = false;
     telemetry.set_state(RuntimeState::Stopping);
@@ -702,9 +763,10 @@ void CoreInputCancel() {
 
 extern "C" JNIEXPORT jboolean JNICALL
 Java_org_robowindows_app_NativeHost_startSession(JNIEnv* env, jclass, jstring content,
-        jstring files) {
+        jstring files, jint timing_policy_id) {
     std::lock_guard<std::mutex> lock(lifecycle_mutex);
     if (running) return JNI_FALSE;
+    if (!valid_runtime_timing_policy(timing_policy_id)) return JNI_FALSE;
     if (core_thread.joinable()) core_thread.join();
     const char* content_chars = env->GetStringUTFChars(content, nullptr);
     const char* files_chars = env->GetStringUTFChars(files, nullptr);
@@ -742,6 +804,10 @@ Java_org_robowindows_app_NativeHost_startSession(JNIEnv* env, jclass, jstring co
     exception_pagefault_gate_entered = 0;
     exception_iret_executed = 0;
     guest_resets = 0;
+    runtime_timing_policy = static_cast<RuntimeTimingPolicy>(timing_policy_id);
+    realtime_scheduler = RealTimeScheduler(runtime_timing_policy);
+    timing_reset_requested = false;
+    has_audio_producer_time = false;
     telemetry.reset(RuntimeState::Starting);
     telemetry_report_time = std::chrono::steady_clock::now();
     logged_non_silent_audio = false;

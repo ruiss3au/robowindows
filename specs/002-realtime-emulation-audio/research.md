@@ -111,12 +111,19 @@ guest frame and started playback only after 200 ms. Repeating the same capture
 cannot establish a promotable profile.
 
 For experimental machines only, retain fixed guest-frame deadlines through up
-to 250 ms of debt and immediately execute at most 20 catch-up calls. Clamp and
-report larger or persistent debt. Start playback at 100 ms and adjust only the
-host call interval by at most one percent when queue depth exits 75–125 ms,
+to 250 ms of debt and immediately execute catch-up calls in bursts of at most
+20, cooperatively yielding between bursts without discarding the debt. Clamp and
+report only debt larger than 250 ms. Start playback at 100 ms and adjust only
+the host call interval by at most one percent when queue depth exits 75–125 ms,
 returning to nominal at 100 ms. This modest hysteresis targets scheduling jitter
-without changing PCM, hiding an unsustainable guest clock, or allowing an
-unbounded catch-up burst.
+without changing PCM, hiding an unsustainable guest clock, or monopolizing the
+core thread during catch-up.
+
+The first balanced device pair proved why the distinction matters: both Normal
+and DynRec hit the original 20-call discard while maximum lateness remained only
+53.879 ms and 136.852 ms, respectively. Those were shared-host scheduling bursts,
+not 250 ms debt-clamp events. A cooperative yield preserves the observable fixed
+deadline contract while keeping the burst bounded.
 
 Stable machines keep their existing lateness discard and 200 ms prebuffer. The
 policy is an allowlisted ID passed through Java/Binder/JNI, so neither media
