@@ -7,9 +7,13 @@ specification, plan, tasks, and validation record when work begins.
 
 - Keep fixed-20k DynRec as the experimental baseline; fixed 30k and bounded
   auto failed audio or overall quality.
-- Implement and host-validate Feature 002's experimental-only balanced 100 ms
-  scheduler and schema-3 diagnostics under both Normal and DynRec.
-- After its disposable x86 gate, run one new matched fixed-20k pair on the copy.
+- Diagnose the remaining DynRec workload spikes and audio queue depletion with
+  Feature 002's implemented balanced 100 ms scheduler and schema-3 diagnostics.
+  The post-PageFaultCore matched pair completed cleanly, but DynRec recorded
+  12 underruns and 1,862 missing audio frames while Normal recorded zero
+  ([evidence](009-win98-performance-benchmark/validation.md#post-pagefaultcore-matched-pair--2026-09-09)).
+- Make further runtime corrections from measured evidence, then recheck one
+  matched fixed-20k pair on the experimental copy before repeating median runs.
 
 ## Next
 
@@ -21,8 +25,21 @@ specification, plan, tasks, and validation record when work begins.
 
 ## Later
 
-- Optimize a measured DynRec hot path only if schema-3 evidence shows DynRec-only
-  long `retro_run()` calls; otherwise continue with shared host/presentation work.
+- **GPU presentation and higher FPS — after DynRec quality gates pass.** Move
+  host framebuffer scaling and color conversion from the CPU to the GPU using
+  OpenGL ES, then target 30 presented FPS on experimental copies. The current
+  presenter deliberately limits output to about 15 FPS; raising that limit must
+  preserve audio continuity, guest timing, input, and sustained thermal behavior.
+  This improves host presentation; it does not promise 30 unique game frames per
+  second. Defer this feature until the DynRec correctness, audio, stability, and
+  performance gates above are satisfied.
+- **Windows 98–style Android interface.** Redesign RoboWindows' own machine
+  library, settings, dialogs, and session controls to look like a Windows 98
+  application, with classic gray panels, beveled buttons, title bars, and period
+  typography. Retain usable touch targets, readable text, keyboard/mouse access,
+  and clear session/recovery controls. Use project-owned or redistributable
+  assets and keep all visible host UI owned by RoboWindows. Define the numbered
+  feature and visual acceptance criteria when this future design work begins.
 - Complete release-readiness work.
 
 ## Never
