@@ -6,7 +6,7 @@
   from source and package generated media outside Git (FR-001–03).
 - [x] T003 Add strict guest-result parser and host telemetry aggregation tests
   for invalid, incomplete, lifecycle-invalid, and redacted inputs (FR-003–05, 008).
-- [ ] T004 Add the SM-T500 capture/report entry point with core/cycle, FPS,
+- [x] T004 Add the SM-T500 capture/report entry point with core/cycle, FPS,
   audio, decoder, lifecycle and thermal metrics (FR-004–05, 008–09).
 - [ ] T005 Run three matched fixed-20k DynRec captures on `incoming - copy` and
   retain the human audio/input/AoE2 and clean-shutdown evidence separately.
@@ -19,3 +19,7 @@
   off-screen 320×200 GDI work, a calm progress strip capped at ten guest FPS, guest preview
   FPS in the strict result, and a desktop/reference visual check before another
   tablet trial (FR-002, FR-010; scenarios 1 and 5).
+
+T005 and T006 remain open. The first matched run for each profile is valid
+diagnostic evidence, but both fail the zero-underrun quality gate; repeating the
+known failure is deferred until Feature 002's experimental balanced-100ms slice.

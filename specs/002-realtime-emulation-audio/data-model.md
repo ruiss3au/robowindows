@@ -42,6 +42,8 @@ slot being read; the consumer chooses the newest published sequence.
 | `prebufferFrames` | positive integer | Bounded and less than capacity |
 | `sampleRate`, `channels` | integer | Actual host format; stereo currently required |
 | `generation` | monotonic integer | Invalidates stale samples across resume/reopen |
+| `timingPolicy` | enum | `legacy` or allowlisted experimental `balanced_100ms` |
+| `targetFrames` | positive integer | 100 ms at the actual stream rate for `balanced_100ms`; legacy remains 200 ms |
 
 Transitions:
 
@@ -52,6 +54,22 @@ Transitions:
 - `playing → recovering`: AAudio disconnect/error.
 - `recovering → prebuffering`: stream reopened successfully.
 - Any state → `stopped`: terminal session teardown.
+
+## RuntimeTimingPolicy
+
+| Field | Type | Rules |
+|---|---|---|
+| `id` | enum | Internal allowlist: `legacy`, `balanced_100ms` |
+| `experimentalOnly` | boolean | True for `balanced_100ms` |
+| `targetQueueMs` | integer | 100 for `balanced_100ms` |
+| `queueBandMs` | pair | 75–125 for `balanced_100ms` |
+| `maximumCorrection` | ratio | 1%; guest-call pacing only |
+| `maximumDebtMs` | integer | 250 for `balanced_100ms` |
+| `maximumCatchUpCalls` | integer | 20 consecutive calls |
+
+The policy is passed explicitly across the Java, Binder (for isolated DynRec),
+and JNI boundaries. Lifecycle reset returns correction to nominal and the next
+deadline to the current monotonic time.
 
 ## RuntimeTelemetrySnapshot
 
@@ -84,4 +102,3 @@ profile is not automatically retried. This record never owns or mutates guest me
 | `diskClonePostChecksum` | digest | Interpreted by workload write expectations |
 | `metrics` | snapshot series/summary | Contract-compliant and bounded |
 | `result` | enum | `pass`, `fail`, `invalid_environment` |
-

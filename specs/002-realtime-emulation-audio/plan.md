@@ -87,6 +87,38 @@ baseline.
 **Exit**: no callback locks or allocation; ten pause/resume cycles pass; when production
 is real-time, ten reference sounds have zero post-start underruns.
 
+### Phase 2.5: Stabilize experimental real-time scheduling
+
+The first matched fixed-20k benchmark pair showed equivalent CPU throughput and
+real-time video, but 121 DynRec and 19 Normal underruns. Before repeating the
+three-run comparison, add one allowlisted `balanced-100ms` timing policy to
+experimental machines under either CPU core. Stable machines remain on the
+existing frontend cadence and 200 ms prebuffer.
+
+1. Carry the internal timing-policy ID through the ordinary JNI start and the
+   isolated DynRec handoff; reject unknown IDs at both boundaries and never infer
+   policy from a path or config file.
+2. Use fixed deadlines with at most 250 ms retained debt and 20 consecutive
+   catch-up calls. Clamp larger or persistent debt, record a resynchronization,
+   and make the capture fail quality validation.
+3. Start playback at 100 ms. Pace guest calls at 99%, 100%, or 101% of their
+   nominal interval using a 75–125 ms queue band and hysteresis to the 100 ms
+   target. Do not transform PCM or fabricate samples.
+4. Reset deadlines, correction state, gap measurement, queue contents, and
+   prebuffering on pause/focus loss, recovery, guest restart, and session restart.
+5. Extend bounded schema-3 telemetry and its strict capture summarizer before a
+   new device comparison.
+
+**Rollback**: select the legacy timing-policy ID for all launches and remove the
+experimental call-site selection; no guest configuration or media migration is
+required. A schema-3 capture remains diagnostic evidence but cannot promote a
+profile that resynchronized or underrran.
+
+**Exit**: deterministic host tests cover on-time cadence, short and long stalls,
+bounded catch-up, debt clamp, queue hysteresis, lifecycle reset, telemetry reset,
+and unchanged legacy scheduling. Repository, pinned-source, host, Android, and
+disposable device gates pass before a new matched pair.
+
 ### Phase 3: Calibrate a conservative real-time profile
 
 1. Benchmark `normal`/`auto` with explicit fixed cycle candidates on boot, idle, window

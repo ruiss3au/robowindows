@@ -63,3 +63,66 @@ performance evidence. Workload v1 must not run again. T008 replaces it with a
 silent compact window, off-screen 320×200 work, a calm progress strip capped at ten guest FPS,
 and an effective Close path. A desktop/reference visual check is required before
 new media reaches the tablet.
+
+## Workload v2 Windows 98 smoke test — 2026-09-09
+
+The clean committed app build `712be4b3a417` was installed with app data
+preserved while both machines were stopped. Both cards remained at `Start`, and
+the main panel showed no `dirty` suffix. The retired v1 ISO previously staged by
+the project was hash-verified and removed from Android Downloads; reproducible v2
+ISO `c49fb6ff193e76f46f6259eab3b3adb8a193c3d1456f05df7a2687a753433b0b`
+was staged as `RWBENCH-v2-c49fb6ff.ISO`.
+
+The user ran v2 from `D:` on `incoming - copy` under its Normal fallback and
+reported that the live-metrics interface looked excellent. The result screen
+showed `complete=1`: CPU elapsed 10,000 ms, 29,741,056 operations and 2,974
+ops/ms; memory elapsed 10,000 ms, 108,672 KiB and 10 KiB/ms; GDI elapsed 10,004
+ms, 36,219 off-screen 64×64 rectangles and 3,620 rectangles/s; the calm progress
+preview produced 99 updates at 9 FPS. The screenshot is retained only under
+ignored host artifacts.
+
+The user then shut Windows down normally. Device inspection found both cards at
+`Start`, no dynamic-attempt journal, no active-session marker and only the main
+app process. Stable `incoming` was not opened. Because telemetry capture did not
+start before program launch and the run used Normal from `D:`, this is UI and
+Windows 98 compatibility evidence only. It is not one of the three matched
+Normal runs or any DynRec performance result. V2 must be copied to `C:` during a
+clean Normal session before a guarded DynRec run can use it.
+
+## First matched fixed-20k pair — 2026-09-09
+
+The first complete matched pair used app version `0.1.0-dev-debug` with installed
+APK SHA-256
+`725857fc4d8f1afe6794f7d8660ea408baefc338935d53272dbbfebc81866fd1`.
+Both bounded captures ran on the SM-T500 against `incoming - copy`, used workload
+v2, retained complete strict schema-2 guest records, stayed foreground, observed
+the declared decoder throughout, reported no stream or surface-post failures,
+and completed clean Windows shutdowns. Device inspection after each run found
+both cards at `Start`, no active attempt or session residue, and stable
+`incoming` untouched.
+
+| Metric | DynRec fixed 20k | Normal fixed 20k |
+|---|---:|---:|
+| CPU operations/ms | 3,198 | 3,187 |
+| Memory KiB/ms | 12 | 10 |
+| Off-screen GDI rectangles/s | 15,061 | 3,614 |
+| Guest phase elapsed | 10,000 / 10,000 / 10,000 ms | 10,000 / 10,000 / 10,000 ms |
+| Presented FPS | 15.08 | 15.07 |
+| Audio production, frames/s | 47,728.95 | 47,971.87 |
+| Audio underrun callbacks | 121 | 19 |
+| Audio missing frames | 17,088 | 2,662 |
+| Audio drops / stream errors | 0 / 0 | 0 / 0 |
+
+CPU throughput is effectively equal, memory is close at this resolution, and
+DynRec makes the bounded GDI phase about 4.2 times faster. Neither result is
+promotion evidence because the settled audio gate requires zero underruns and
+zero missing frames. T004 is complete because capture, strict result merge,
+decoder/lifecycle validation, thermal collection, and reporting all operated as
+specified. T005 and T006 remain open: one run is not a three-run median, and
+repeating a known scheduling failure would add no promotion evidence.
+
+The next change belongs to Feature 002's experimental-only balanced-100ms
+scheduler and schema-3 telemetry. Stable `incoming` must retain its existing
+runtime path. A new single matched pair must pass audio, timing, presentation,
+decoder, lifecycle, resynchronization, and clean-shutdown gates before the
+remaining median runs or longer acceptance gates resume.

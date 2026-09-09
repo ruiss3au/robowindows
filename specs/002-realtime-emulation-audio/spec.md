@@ -171,6 +171,28 @@ failure to a measured subsystem without relying only on subjective listening.
   compatibility claims.
 - **FR-020**: Debug audio diagnostics MUST distinguish starvation from sample saturation
   using aggregate counters only; they MUST NOT persist or log guest PCM.
+- **FR-021**: Experimental machines MUST use the internal `balanced-100ms` timing
+  policy under both Normal and DynRec execution. Stable machines MUST retain the
+  existing scheduling and 200 ms startup-buffer behavior. The policy MUST be
+  selected from a product-owned allowlist and MUST NOT be inferred from a media
+  path or exposed as a raw user setting.
+- **FR-022**: The experimental scheduler MUST preserve fixed guest-frame deadlines
+  across stalls up to 250 ms and run no more than 20 consecutive catch-up calls
+  without sleeping. Larger debt, or debt that survives that bound, MUST clamp to
+  the current monotonic time and increment a quality-failing resynchronization
+  counter.
+- **FR-023**: Experimental playback MUST begin at approximately 100 ms of queued
+  guest audio. Outside a 75–125 ms band, scheduling MAY apply at most a temporary
+  one-percent cadence correction, with hysteresis back to the 100 ms target. It
+  MUST NOT resample, stretch, mute, repeat, or fabricate guest audio.
+- **FR-024**: Pause, audio-focus loss, stream recovery, guest restart, and session
+  restart MUST clear queued audio, return playback to prebuffering, and reset
+  cadence correction, catch-up state, deadline state, and audio-producer-gap state.
+- **FR-025**: Debug telemetry schema 3 MUST report the current timing-policy ID,
+  maximum `retro_run()` duration and over-budget call count, maximum audio-producer
+  gap, maximum scheduler lateness, catch-up calls, deadline resynchronizations, and
+  current/minimum/maximum audio queue depth. Any resynchronization invalidates the
+  affected quality capture.
 
 ### Key Entities
 
@@ -209,6 +231,10 @@ failure to a measured subsystem without relying only on subjective listening.
   settled five-minute window without progressive audio breakup or application termination.
 - **SC-009**: A redistributable DOS timer-and-tone workload meets SC-001–SC-005 on the
   SM-T500 before the feature is described as supporting both DOS and Windows-family guests.
+- **SC-010**: In a matched foreground fixed-20k Normal/DynRec benchmark pair on the
+  experimental copy, each profile presents at least 15 FPS, keeps independent guest
+  timing within 5%, reports zero settled underruns and missing frames, reports zero
+  deadline resynchronizations and lifecycle errors, and shuts down cleanly.
 
 ## Assumptions
 
@@ -223,6 +249,10 @@ failure to a measured subsystem without relying only on subjective listening.
   source and writes only timer/result values; proprietary system files are not redistributed.
 - Optimized execution may require an upstream-core patch, but the specification does not
   mandate a particular implementation.
+- The first scheduler candidate is the experimental-only `balanced-100ms` policy:
+  a 100 ms target, a 75–125 ms correction band, at most one-percent cadence
+  correction, 250 ms maximum retained debt, and 20 maximum consecutive catch-up
+  calls.
 
 ## Explicitly Out of Scope
 

@@ -102,6 +102,37 @@ paths, product keys, or disk contents. Debug builds may export a finite session 
 release builds keep only health data needed for recovery. Paused/background intervals are
 tagged and excluded from performance rates.
 
+## Decision: Add an experimental balanced 100 ms fixed-deadline policy
+
+The first matched fixed-20k benchmark pair produced equivalent CPU throughput
+and at least 15 presented FPS, but both cores underrran: 121 callbacks under
+DynRec and 19 under Normal. The shared frontend discarded lateness beyond one
+guest frame and started playback only after 200 ms. Repeating the same capture
+cannot establish a promotable profile.
+
+For experimental machines only, retain fixed guest-frame deadlines through up
+to 250 ms of debt and immediately execute at most 20 catch-up calls. Clamp and
+report larger or persistent debt. Start playback at 100 ms and adjust only the
+host call interval by at most one percent when queue depth exits 75–125 ms,
+returning to nominal at 100 ms. This modest hysteresis targets scheduling jitter
+without changing PCM, hiding an unsustainable guest clock, or allowing an
+unbounded catch-up burst.
+
+Stable machines keep their existing lateness discard and 200 ms prebuffer. The
+policy is an allowlisted ID passed through Java/Binder/JNI, so neither media
+names nor generated DOSBox configuration become hidden controls.
+
+**Alternatives rejected**:
+
+- Repeating the known-failing three-run comparison before changing scheduling:
+  it adds no promotion evidence while settled underruns remain nonzero.
+- Increasing the queue alone: it raises latency and cannot expose or recover
+  discarded host timing debt.
+- Resampling, time stretching, silence insertion outside an actual underrun, or
+  fabricated audio: each can conceal incorrect guest time or alter guest sound.
+- DynRec engine/cache/linker changes before call-duration evidence: the Normal
+  run also underruns, so the current evidence points first to shared scheduling.
+
 ## Evidence already established
 
 - Target: Samsung SM-T500 (`arm64-v8a`) connected by ADB.

@@ -237,6 +237,32 @@ recoverable; it is not required for completion of the conservative MVP.
 
 ## Phase 8: Final convergence
 
+### Experimental balanced-100ms corrective slice
+
+- [ ] T056 [US1] Add deterministic host tests for legacy cadence, on-time
+  balanced pacing, short/long stalls, bounded catch-up, 250 ms debt clamping,
+  queue hysteresis, and lifecycle reset (FR-021–024).
+- [ ] T057 [US4] Extend telemetry and strict benchmark fixtures to schema 3 with
+  call duration, producer gap, scheduler, and current/min/max queue evidence;
+  make any deadline resynchronization fail quality validation (FR-025).
+- [ ] T058 [US1] Pass the allowlisted timing-policy ID through ordinary JNI and
+  the isolated DynRec Binder/JNI handoff; select balanced timing only for
+  experimental machines under Normal or DynRec (FR-021).
+- [ ] T059 [US1] Implement the balanced 100 ms prebuffer, one-percent queue-band
+  hysteresis, fixed deadlines, bounded catch-up, and lifecycle resets without
+  PCM transformation or DynRec engine changes (FR-022–024).
+- [ ] T060 Run host tests, repository hygiene, pinned-source verification, and
+  the ARM64 debug build.
+- [ ] T061 With both real machines stopped, install and run the disposable
+  Normal/DynRec x86 gate; do not open either machine disk.
+- [ ] T062 Run one matched Normal-20k/DynRec-20k pair on `incoming - copy` and
+  require valid guest results, correct decoder residency, at least 15 FPS,
+  guest timing within 5%, zero settled underruns/missing frames, zero deadline
+  resynchronizations/lifecycle errors, and clean shutdown.
+- [ ] T063 If T062 passes, resume the three-run medians and existing long gates.
+  If long calls are DynRec-only, stop trials and investigate its measured hot
+  path; if both cores stall similarly, continue in the shared host path.
+
 - [ ] T051 Re-run host tests and `git diff --check`, then build/install the debug APK using
   `scripts/build-android.sh`
 - [ ] T052 Run the complete [quickstart](quickstart.md) on the SM-T500 and archive only
@@ -261,6 +287,9 @@ recoverable; it is not required for completion of the conservative MVP.
   uses completed audio/video counters.
 - US3 recovery-state work can proceed after the foundation. Dynrec diagnosis starts only on
   a verified clone and does not block the conservative MVP.
+- T056–T059 precede another benchmark repetition. T060 precedes any installation,
+  and T061 requires both user machines stopped. T062 alone decides whether T063
+  may resume three-run collection.
 - Final convergence requires all non-optional tasks and either a validated or explicitly
   rejected/hidden result for T047–T050.
 
