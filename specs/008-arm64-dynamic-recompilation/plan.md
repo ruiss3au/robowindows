@@ -181,6 +181,16 @@ profile and recovery contract defined here.
 
 ## Verification and rollback gates
 
+On 2026-09-09 the user narrowed the current campaign to benchmark diagnostics,
+declining further AoE2/audio, pause/resume, ten-cycle and 30-minute thermal runs
+because of manual effort. These checks are removed from the active queue, not
+marked passed or waived for release. The risk is unmeasured sustained audio,
+lifecycle and thermal stability; contain it by retaining experimental-copy-only
+access and making no promotion claim. The full campaign was declined for now;
+revisit its missing gates before any later promotion request. Normal shutdown
+and stopped-state verification still apply to every actual guest run. See
+Feature 009's user-selected diagnostic scope for the execution decision.
+
 Use fault injection at each journal/config publication boundary, including full
 storage and malformed records. Assert native load was never called when a gate
 failed. Use independent stable-role fixture hashes for isolation, not a real guest

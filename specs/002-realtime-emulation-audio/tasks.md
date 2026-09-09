@@ -259,7 +259,9 @@ recoverable; it is not required for completion of the conservative MVP.
   require valid guest results, correct decoder residency, at least 15 FPS,
   guest timing within 5%, zero settled underruns/missing frames, zero deadline
   resynchronizations/lifecycle errors, and clean shutdown.
-- [ ] T063 If T062 passes, resume the three-run medians and existing long gates.
+- [ ] T063 If T062 passes, resume the three-run medians. The user dropped new
+  AoE2/audio, pause/resume, ten-cycle and 30-minute thermal runs from the current
+  campaign on 2026-09-09; do not schedule these automatically or mark them passed.
   If long calls are DynRec-only, stop trials and investigate its measured hot
   path; if both cores stall similarly, continue in the shared host path.
 - [x] T064 Isolate AV timing callback dispatch and reject invalid cadence with

@@ -1,5 +1,11 @@
 # Tasks: ARM64 Dynamic Recompilation
 
+**Current campaign scope (user decision, 2026-09-09):** further AoE2/audio,
+pause/resume, ten start/shutdown cycles and the 30-minute thermal run are dropped
+from the execution queue. Their portions of T009/T010 remain incomplete, not
+passed. Continue the requested Normal/DynRec benchmark diagnostics; do not infer
+promotion eligibility or automatically resume the omitted tests.
+
 - [ ] T001 Test the execution contract: full fallback migration, per-machine
   clean provenance, prepared/executing/running/closed-clean/needs-check/blocked
   states, late crash, stale callback, pause, hang and user Exit (FR-002–006, 018–021).

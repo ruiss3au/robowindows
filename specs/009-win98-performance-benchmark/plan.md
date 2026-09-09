@@ -26,6 +26,23 @@ not alter a machine, disk, execution selection, or existing DynRec patches.
 
 ## Build and debug strategy
 
+### User-selected diagnostic scope — 2026-09-09
+
+The user requested the same-build Normal fixed-20k comparison but dropped new
+AoE2/audio trials, pause/resume repetitions, ten shutdown cycles and the
+30-minute thermal run because of the manual effort. Remove those runs from the
+current execution queue; retain their acceptance status as untested/incomplete,
+not passed. Existing observations remain valid only for their recorded scope.
+The alternative of completing the full acceptance campaign now was declined.
+Consequently this milestone provides diagnostic subsystem comparisons only,
+not a supported-DynRec or sustained-stability claim. Three-run collection remains
+conditional on the short comparison; it cannot waive the missing release gates.
+Keep DynRec experimental and stable `incoming` untouched. Each actual benchmark
+session still requires orderly Windows shutdown and stopped-state verification;
+dropping repeated shutdown tests does not permit unsafe guest termination.
+Independent guest-clock validation remains in scope. Revisit the omitted gates
+only if a later request seeks promotion or broader compatibility claims.
+
 - Pin GNU binutils 2.40 and xorriso 1.5.4; build a PE32 GUI executable requiring
   only Windows 98-era KERNEL32, USER32 and GDI32 APIs.
 - Emit the executable, ISO, SHA-256 manifest, linker map and disassembly under

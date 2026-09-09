@@ -17,17 +17,19 @@ specification, plan, tasks, and validation record when work begins.
   zero underruns/missing frames/resynchronizations and a clean shutdown
   ([evidence](009-win98-performance-benchmark/validation.md#av-dispatch-diagnostic-dynrec-run--2026-09-09)).
   Recheck a same-build matched fixed-20k pair with independent guest-clock
-  validation and separate human quality checks before repeating median runs.
+  validation before repeating median runs.
   Make further runtime corrections only from measured evidence; one clean run
   does not establish that the intermittent failure is cured.
 
 ## Next
 
 - If the new matched pair has zero settled underruns, complete Feature 009's
-  three-run medians, then the AoE2/audio, ten-cycle, pause/resume, and 30-minute
-  thermal gates on the copy.
-- Expose Dynamic only for experimental copies if those correctness,
-  performance and recovery gates pass.
+  three-run diagnostic medians on the copy.
+- Per the user's 2026-09-09 scope decision, drop further AoE2/audio, ten-cycle,
+  pause/resume and 30-minute thermal runs from this campaign. Record them as
+  untested/incomplete, not passed; do not automatically queue them afterward.
+  Keep DynRec experimental and make no promotion or sustained-stability claim.
+  Orderly Windows shutdown is still required after each actual benchmark run.
 
 ## Later
 

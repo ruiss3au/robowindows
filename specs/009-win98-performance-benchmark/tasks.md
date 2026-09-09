@@ -13,7 +13,8 @@
 - [ ] T006 Run three matched captures at the highest Normal profile meeting the
   same quality gates; compare medians without opening or changing `incoming`.
 - [ ] T007 Complete the separate ten-cycle and 30-minute thermal gates before any
-  promotion decision (Feature 008 T009–T011).
+  promotion decision (Feature 008 T009–T011). **Out of the current work scope by
+  user request, 2026-09-09; untested, not passed.**
 - [x] T008 Retire workload v1 after its full-window GDI loop stalled Windows 98.
   Implement workload v2 as a compact, closable, silent utility with phase text,
   off-screen 320×200 GDI work, a calm progress strip capped at ten guest FPS, guest preview
@@ -37,3 +38,9 @@ correct decoder residency and verified clean shutdown. This is not yet a new
 matched pair or proof of an intermittent-failure cure: the same-build Normal
 comparison, independent guest-clock measurement and separate human quality
 checks remain outstanding. T005/T006 stay open; see the latest validation entry.
+
+Current scope update: run the same-build Normal fixed-20k diagnostic comparison.
+The user dropped further AoE2/audio, pause/resume, shutdown-cycle and 30-minute
+thermal trials from this campaign. Do not schedule them automatically after the
+comparison or medians. Missing acceptance evidence remains explicitly incomplete;
+this does not block the requested diagnostic run or authorize promotion.
