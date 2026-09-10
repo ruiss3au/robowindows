@@ -259,3 +259,20 @@ retains the user-selected DynRec fixed-20k/GPU configuration, generation 31.
 No guest force-stop, restore, reinstall, additional trial or push was performed.
 T010 is complete as a failed diagnostic with clean teardown; T008's quality
 acceptance remains open. Further Windows repetitions are not queued.
+
+## Worker-instrumented desktop check — 2026-09-10
+
+T011 repeated only the authorized desktop check on the already verified worker
+diagnostic APK, preserving experimental DynRec fixed-20k/GPU generation 31 and
+stable Normal/Software generation 1. The complete 40,358-ms desktop window held
+29.76 presented FPS without graphics errors, but recorded 837 underruns, 124,189
+missing frames and ten deadline resets. The check ended early for failure.
+Overloaded intervals predominantly waited for a CPU-busy emulation worker;
+frontend mixing was small. Translation/fallback event counts do not identify a
+function-level cause. Workload actions and human sound quality were not confirmed.
+
+Normal Windows shutdown was verified at 10:19:58.873, followed by absent runner,
+active marker and recovery journal and clean, unchanged profiles. T011 is complete
+as diagnostic evidence; T008 remains open. See the [full timing evidence and
+limits](../002-realtime-emulation-audio/worker-diagnostics.md#instrumented-windows-desktop-capture--2026-09-10).
+No new runtime change, reinstall, additional Windows trial or promotion is implied.

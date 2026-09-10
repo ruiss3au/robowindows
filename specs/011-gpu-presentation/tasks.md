@@ -24,3 +24,11 @@
   shutdown and unchanged stable-machine state. No AoE2 or longer campaign.
   Ended early for recurring underruns/deadline resets; shutdown was clean.
   Completion records the diagnostic failure, not a full-duration quality pass.
+- [x] T011 Run the separately authorized instrumented DynRec fixed-20k/GPU
+  desktop-only capture on the experimental copy using the verified worker-timing
+  APK. Mark explicit desktop readiness, capture ordinary window activity for up
+  to three minutes (early failure stop allowed), validate diagnostic intervals,
+  distinguish overlapping worker/frontend costs, and verify normal guest shutdown.
+  Preserve stable-machine settings; no AoE2, benchmark or promotion claim.
+  Failed audio/timing again; worker CPU and frontend wait dominate overloaded
+  intervals. Ended early with clean shutdown; counts do not isolate a function.

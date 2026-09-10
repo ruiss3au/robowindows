@@ -74,11 +74,14 @@ specification, plan, tasks, and validation record when work begins.
 - Internal worker timing and translation/interpreter-fallback counters are
   installed and validated (Feature 002 T072 / patch 0009). Legacy probe, enabled
   full x86 gate and unchanged Normal/DynRec stress pair pass with zero quality
-  errors; tablet synthetic calibration stays below 11 us per slice. Next, only
-  with separate user coordination, capture the failing Windows desktop workload
-  to distinguish worker CPU, frontend wait/mix and fallback/translation activity.
-  Do not infer the Windows cause from passing disposable counters or tune the
-  engine/buffers speculatively ([evidence](002-realtime-emulation-audio/worker-diagnostics.md)).
+  errors; tablet synthetic calibration stays below 11 us per slice. The authorized
+  instrumented Windows desktop capture then reproduced underruns with clean
+  shutdown. In overloaded intervals, worker wait was about 96% of frontend call
+  wall and worker CPU about 97% of elapsed time; frontend mixing was small.
+  Next, review worker paths offline and design bounded function/phase attribution
+  or a source-owned reproduction. Translation/fallback counts do not yet isolate
+  a costly function. No speculative engine/buffer tuning or further Windows run
+  is queued ([evidence](002-realtime-emulation-audio/worker-diagnostics.md#instrumented-windows-desktop-capture--2026-09-10)).
 - Use the completed UI and address specific reported issues. Resume Feature
   009's clock/median campaign only if the user later requests it; no new guest
   trial is queued by completing the UI milestone.

@@ -62,3 +62,15 @@ Ask for normal in-guest shutdown afterward and verify runner/journal cleanup.
 On a guest failure, stop the workload and coordinate safe shutdown or the existing
 quarantine path; never force-stop a live Windows guest. This narrow check does
 not resolve the earlier Normal/AoE2 starvation or promote either feature.
+
+After the bounded worker diagnostics passed host, legacy, full x86 and unchanged
+Normal/DynRec stress gates, the user authorized one instrumented repeat of the
+desktop-only check (2026-09-10). Use the already installed, verified diagnostic
+APK and existing experimental DynRec fixed-20k/GPU settings; no reinstall or
+runtime tuning. Capture worker/calibration records alongside frontend telemetry
+before boot, mark explicit desktop readiness, and request the same ordinary
+window-opening workload for up to three minutes. End early if recurring failure
+already supplies diagnostic evidence. Coordinate normal Windows shutdown and
+verify both machines remain clean. Interpret worker CPU, wall, frontend wait and
+mix as overlapping measurements, and fallback counters as events, not durations.
+This authorizes one attribution capture, not engine changes or a longer campaign.
