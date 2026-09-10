@@ -15,12 +15,21 @@ constexpr uint64_t kHighQueueMs = 125;
 RealTimeScheduler::RealTimeScheduler(RuntimeTimingPolicy policy) : policy_(policy) {}
 
 void RealTimeScheduler::configure(double frames_per_second, int sample_rate, int64_t now_ns) {
+    set_frame_interval(frames_per_second);
+    if (sample_rate > 0) sample_rate_ = sample_rate;
+    reset(now_ns);
+}
+
+void RealTimeScheduler::update_frame_rate(double frames_per_second, int64_t now_ns) {
+    set_frame_interval(frames_per_second);
+    if (policy_ == RuntimeTimingPolicy::Legacy) reset(now_ns);
+}
+
+void RealTimeScheduler::set_frame_interval(double frames_per_second) {
     if (std::isfinite(frames_per_second) && frames_per_second > 1.0) {
         base_interval_ns_ = std::max<int64_t>(1,
                 static_cast<int64_t>(kNanosecondsPerSecond / frames_per_second));
     }
-    if (sample_rate > 0) sample_rate_ = sample_rate;
-    reset(now_ns);
 }
 
 void RealTimeScheduler::reset(int64_t now_ns) {

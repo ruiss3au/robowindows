@@ -270,6 +270,12 @@ recoverable; it is not required for completion of the conservative MVP.
 - [x] T065 Add experimental-only bounded call/callback/process-CPU timing,
   reset and parser tests, then host/pinned/build checks and the disposable
   Normal/DynRec device gate before the next measured trial (FR-027).
+- [x] T066 Reproduce live-refresh deadline/diagnostic resets; preserve experimental
+  debt, queue correction, catch-up limits and producer-gap continuity across
+  refresh changes, with unchanged legacy/lifecycle behavior (FR-028).
+- [x] T067 Run host, hygiene, pinned-source and Android build checks, then guarded
+  disposable Normal/DynRec tests. Record scope and unresolved Windows underruns;
+  do not start either Windows machine for this corrective slice.
 
 T062 remains open. The corrected scheduler passed the complete Normal workload,
 but the matched DynRec start failed before the benchmark when Windows Explorer

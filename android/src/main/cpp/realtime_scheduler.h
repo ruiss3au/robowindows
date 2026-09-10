@@ -27,6 +27,8 @@ public:
     explicit RealTimeScheduler(RuntimeTimingPolicy policy = RuntimeTimingPolicy::Legacy);
 
     void configure(double frames_per_second, int sample_rate, int64_t now_ns);
+    // Live AV updates preserve experimental timing debt; they are not lifecycle resets.
+    void update_frame_rate(double frames_per_second, int64_t now_ns);
     void reset(int64_t now_ns);
     void observe_audio_queue(size_t frames);
     SchedulerDecision complete_run(int64_t now_ns);
@@ -38,6 +40,7 @@ public:
     unsigned consecutive_catch_up_calls() const;
 
 private:
+    void set_frame_interval(double frames_per_second);
     int64_t paced_interval_ns() const;
 
     RuntimeTimingPolicy policy_;

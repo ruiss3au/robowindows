@@ -106,6 +106,11 @@ diagnostic calls than schema-3 run calls. Historical captures without the
 extension remain readable as `timing_diagnostics=unavailable`; partial, malformed,
 or mismatched extensions are rejected. Diagnostic records contain no guest data.
 
+Live guest refresh-rate changes are not lifecycle resets: retain call totals and
+producer-gap history across them. Builds before the FR-028 correction also reset
+diagnostics on refresh updates, so their partial intervals must not be treated
+as complete attribution of the corresponding telemetry interval.
+
 Records MUST NOT contain PCM, framebuffer data, guest-visible text, media filenames or
 paths, disk contents, registration data, or Android input contents. Normal reporting is at
 most once per second plus lifecycle and terminal events. Release builds disable interval

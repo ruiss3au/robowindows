@@ -742,9 +742,9 @@ void run_core() {
         const double updated_fps = requested_run_fps.load(std::memory_order_relaxed);
         if (std::abs(updated_fps - fps) > 0.001) {
             fps = updated_fps;
-            realtime_scheduler.configure(fps, audio_sample_rate, steady_now_ns());
-            run_diagnostics.reset();
-            has_audio_producer_time = false;
+            realtime_scheduler.update_frame_rate(fps, steady_now_ns());
+            // A display-mode change is not a lifecycle interruption. Keep debt,
+            // in-flight diagnostic totals and producer-gap history observable.
             __android_log_print(ANDROID_LOG_INFO, "RoboWindowsCore",
                     "frontend cadence updated fps=%.6f", fps);
         }

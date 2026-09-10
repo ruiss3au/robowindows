@@ -122,6 +122,22 @@ disposable device gates pass before a new matched pair.
 
 ### Phase 3: Calibrate a conservative real-time profile
 
+The 2026-09-10 Normal Windows GPU and Software captures both reproduced
+starvation. Their longest sustained bursts spend nearly the entire interval
+inside emulator calls, not host sleeps or synchronous AV callbacks; the current
+aggregates cannot isolate worker CPU work from scheduling delays. Do not retune
+cycles, buffers or the instruction engine from these measurements alone.
+
+Fix the independently proven refresh-change reset defect first (FR-028): add a
+cadence-update operation separate from lifecycle `configure`/`reset`, preserving
+experimental deadlines/correction/burst state while retaining legacy behavior.
+Do not reset call diagnostics or producer-gap history on live refresh changes.
+Host regressions must exercise positive debt, repeated small refresh changes,
+clamping after a change, queue hysteresis, burst limits and lifecycle reset.
+Run host/pinned/build checks and disposable tests without opening Windows disks.
+Rollback reverts this call-site/helper change only. This is a targeted debt and
+measurement correction, not proof that every observed underrun is cured.
+
 Before the next benchmark, isolate informational libretro callbacks from AV
 timing dispatch in a host-testable helper (FR-026). A recorded startup advertised
 an implausibly large FPS with zero sample rate; the existing grouped switch

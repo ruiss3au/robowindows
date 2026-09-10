@@ -41,3 +41,11 @@ Rollback selects Software or disables GPU via a forward fix. No metadata downgra
 guest disk restore, CPU-engine change or scheduler/audio change. Unknown policies
 are rejected at runtime boundaries. Saved GPU preference survives runtime fallback;
 the next explicit session start may try it again. No automatic restart or push.
+
+After the Normal Windows GPU audio/timing failure, the user authorized one
+three-minute Normal fixed-20k Software comparison on the same experimental copy
+and installed APK (2026-09-10). Change only presentation through stopped-machine
+properties, wait for desktop readiness, and ask the user to repeat the previous
+workload. Capture aggregate telemetry and verify orderly Windows shutdown.
+Unconfirmed workload equivalence limits causal conclusions. Keep DynRec Windows
+testing on hold; this comparison does not authorize runtime changes or more runs.

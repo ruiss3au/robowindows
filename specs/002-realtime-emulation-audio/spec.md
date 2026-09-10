@@ -206,6 +206,12 @@ failure to a measured subsystem without relying only on subjective listening.
   Failed CPU-clock reads must be counted. Measurements must reset at lifecycle
   timing resets and must not change scheduling, PCM, the CPU engine, or the
   presentation cap. No per-call or guest-content logs are permitted.
+- **FR-028**: A valid guest refresh-rate change during experimental execution MUST
+  update the nominal call interval without resetting outstanding deadline debt,
+  queue correction, catch-up burst state, producer-gap continuity or the current
+  diagnostic interval. Only lifecycle resets may clear those states. Legacy
+  refresh changes retain their existing deadline-reset behavior. Debt exceeding
+  250 ms after a refresh change still MUST be counted as a resynchronization.
 
 ### Key Entities
 

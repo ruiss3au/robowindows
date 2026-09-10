@@ -103,3 +103,83 @@ delays and do not alone identify an instruction-engine or presenter defect.
 No new runtime tuning is justified by this pair alone. Independent guest-clock
 validation remains missing; the user dropped the longer acceptance trials from
 the current campaign. Keep the diagnostic/promotion distinction explicit.
+
+## Shared Normal Windows stalls and refresh-debt correction — 2026-09-10
+
+Feature 011's same-build Normal fixed-20k GPU and Software Windows captures both
+failed audio/timing acceptance and shut down cleanly. GPU recorded 605 underruns,
+89,086 missing frames and seven resynchronizations; Software recorded 454,
+68,844 and five respectively. Their user workloads are not confirmed equivalent.
+The failures are not GPU-exclusive, and differing counts do not establish that
+either presenter causes them. Detailed capture evidence remains in Feature 011.
+
+Several bad intervals spent nearly the entire second inside `retro_run()`:
+Software at tablet time 08:06:07.554 recorded 41 calls, 998,360 us call wall time,
+1,346,477 us process CPU, 23,088 us synchronous video callbacks, 1,772 us audio
+callbacks and maximum host gap 680 us. It had 129 underruns and one deadline
+resynchronization. GPU at 07:23:25.716 likewise recorded 38 calls, 1,018,125 us
+wall time in a 1,019-ms interval, 19,691 us video callbacks and 1,838 us audio
+callbacks. These are not predominantly frontend sleeping or callback-copy
+intervals. Process CPU includes other threads; the worker hot path remains
+unidentified. Repeated roughly 28-ms calls exceed the roughly 14-ms guest-frame
+budget, so merely increasing the buffer is not a demonstrated sustainable fix.
+
+Source inspection found an independent host defect: the live advertised-FPS
+update called the lifecycle `configure()` operation, discarding deadline debt,
+pacing correction and catch-up history, and also reset diagnostics and producer
+gap history without a lifecycle interruption. In the Software interval at
+08:06:19.619, telemetry counted 64 calls but diagnostics retained only 10 following
+the refresh update at 08:06:19.484. The same loss occurred in GPU captures.
+
+FR-028 separates live cadence updates from lifecycle resets. Experimental
+updates change only the nominal interval, retaining debt/correction/catch-up
+state, complete diagnostic totals and producer-gap continuity. Legacy timing
+keeps its old deadline-reset behavior; actual lifecycle transitions still reset
+all the relevant state. No CPU engine, PCM, queue target, presentation policy,
+upstream source or dependency pin changes are involved.
+
+The host regression reproduces the old silent loss of 230 ms of debt during a
+refresh update and verifies that the corrected path counts a later 251-ms debt
+as a resynchronization. It also covers retained queue hysteresis, bounded bursts
+across repeated updates, rate changes, invalid rates, diagnostic continuity and
+unchanged legacy/lifecycle behavior. This repairs a proven debt/measurement
+defect, not all the sustained long-call bursts; Windows underruns remain
+unresolved until measured otherwise. More visible debt after correction is not
+to be hidden by weakening the quality gate.
+
+### Corrective-slice verification
+
+Full host suite (including eight-suite QEMU reference), repository hygiene,
+diff whitespace, pinned-source verification and Android debug build passed.
+Build label `57a4bed59d23+dirty`; installed APK matched host SHA-256
+`79d5f1b23cf722b0c3f6e5c265c7a1c9b9321177c0971290fd13e48466053f25`.
+Installation followed checks for clean Windows shutdown provenance, no active
+session, no isolated runner and no recovery journal. Disposable core/lifecycle
+checks with a real surface and the full legacy-plus-eight-suite Normal/DynRec
+x86 gate passed.
+
+The existing source-owned timer/tone fixture was unchanged (SHA-256
+`8643f9d97386905e71f74e9aee74c3a936701dd3471dfdb48423715abac4b76a`).
+Both runs used fixed-20k, balanced 100 ms and GPU presentation, foreground on
+SM-T500/API 36. These are regression tests, not reproductions of Windows load.
+
+| Core | Settled ms | Presented FPS | Presenter CPU us/post | Host ms | Guest ms |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Normal | 108,349 | 29.76 | 1,435.64 | 122,019 | 121,605 |
+| DynRec | 108,344 | 29.78 | 1,335.04 | 122,009 | 121,605 |
+
+Both strict quality reports passed with correct residency and zero settled
+underruns, missing/dropped frames, stream errors, deadline resynchronizations,
+post failures, graphics errors/fallbacks and presenter clock errors. Guest time
+was within 0.4% of host time. The entire captures also had zero audio/timing
+failure counters. No claims about physical speaker quality or Windows load
+follow from this fixture. Live refresh/debt interactions are covered by the
+deterministic host tests, not by a heavy Windows trial on this build.
+
+Postflight found no active-session marker, isolated runner or recovery journal.
+Both real machines retained clean shutdown provenance: stable `incoming`
+Normal/Software generation 1; experimental copy Normal/Software generation 30.
+No Windows machine was booted, no machine setting changed, and no push performed.
+T066/T067 are complete; Windows starvation and the older qualification gates
+remain open. The next investigation needs attribution of the sustained worker
+stalls and a confirmed reproducible workload, not another blind acceptance run.

@@ -5,11 +5,29 @@ specification, plan, tasks, and validation record when work begins.
 
 ## Now
 
+- Shared audio investigation: Feature 002's live-refresh correction is installed
+  and verified. Refresh changes no longer silently discard experimental timing
+  debt or diagnostic intervals; legacy cadence and the 100 ms queue target are
+  unchanged. Host/build, disposable core/x86 and Normal/DynRec timer/tone checks
+  passed. Windows long-call starvation remains unresolved: attribute the worker
+  stalls with a confirmed workload before more acceptance trials
+  ([investigation](002-realtime-emulation-audio/timing-investigation.md#shared-normal-windows-stalls-and-refresh-debt-correction--2026-09-10)).
+
 - Feature 011 GPU presentation is implemented as an independent experimental-copy-only
   feature, with Software/GPU selection independent of Normal/DynRec. Disposable
   graphics/lifecycle and all four short timer/tone checks passed: GPU approximately
   29.8 presented FPS versus Software 15.1, zero settled audio/scheduling/graphics
-  errors, and guest timing within 0.5%. Real Windows GPU smoke remains pending.
+  errors, and guest timing within 0.5%. Normal Windows GPU smoke sustained 29.78
+  presented FPS without graphics failures, but failed audio/timing acceptance
+  (605 underruns, 89,086 missing frames, seven resynchronizations). Windows shut
+  down cleanly. Hold the DynRec Windows smoke pending diagnosis; these results
+  do not establish that GPU presentation caused the timing failure
+  ([evidence](011-gpu-presentation/validation.md#windows-gpu-smoke--normal-settled-capture)).
+  The authorized Normal/Software comparison also failed (15.09 FPS, 454 underruns,
+  68,844 missing frames, five resynchronizations). Failure is not GPU-exclusive;
+  workload equivalence is unconfirmed, so differing counts do not establish
+  causality. Software-session clean Windows shutdown was verified
+  ([comparison](011-gpu-presentation/validation.md#windows-software-comparison--completed-capture)).
   Short targeted validation replaces the previous dependency on full DynRec
   qualification; it does not promote DynRec or establish thermal stability.
 

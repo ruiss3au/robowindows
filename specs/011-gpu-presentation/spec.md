@@ -1,6 +1,7 @@
 # Feature 011: Experimental GPU presentation
 
-**Status:** Implemented; disposable acceptance passed, Windows smoke pending (2026-09-10)
+**Status:** Implemented; disposable acceptance passed, Normal Windows smoke failed
+audio/timing acceptance; DynRec Windows smoke on hold (2026-09-10)
 
 - **FR-001:** Offer Software · 15 FPS and GPU · 30 FPS (experimental) in a
   Display properties tab, independently of Normal/DynRec. GPU is diagnostic-build,
