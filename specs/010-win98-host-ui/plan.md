@@ -1,7 +1,7 @@
 # Implementation and rollback
 
 Use existing Java Android Views with shared drawable/widget helpers; no new UI
-framework, fonts, raster assets or dependencies. Gray #C0C0C0, navy #000080,
+framework, fonts or dependencies. Gray #C0C0C0, navy #000080,
 white inset fields and system typography apply across host screens. Retain
 landscape orientation and use scrolling for content that exceeds the viewport.
 
@@ -70,3 +70,17 @@ draft. Register the platform `OnBackInvokedCallback` on API 33+ and share the
 existing navigation decision with the legacy callback. Retain IME/dialog Back
 handling and test the real system event, not only direct method invocation.
 This follows the [Android 16 Back behavior change](https://developer.android.com/about/versions/16/behavior-changes-16#predictive-back).
+
+## Pause milestone and launcher identity — 2026-09-10
+
+Add one original generated raster launcher asset for FR-012, with an adaptive
+background/foreground wrapper and legacy fallback. Keep the mark comfortably
+inside Android launcher masks and record artwork provenance. This narrow branding
+addition is the exception to the original no-raster UI approach; no UI framework
+or dependency is needed. Rollback removes only the icon resources/manifest links.
+Document outstanding runtime/qualification work as paused by user choice, not
+passed. Do not add diagnostic infrastructure or start another guest campaign.
+Run host tests, repository checks and the Android build; verify host navigation
+and launcher packaging. Install only after verifying both guests clean/stopped,
+preserving app data and all profiles. Any physical visual check needs an unlocked
+tablet; never boot a real guest to validate a launcher icon.

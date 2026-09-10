@@ -3,6 +3,16 @@
 This is the short priority list. Each item gets its own numbered feature
 specification, plan, tasks, and validation record when work begins.
 
+## Paused for practical use — 2026-09-10
+
+The user chose to wrap up and use the current app. The investigation suggestions
+below are parked context, **not an active execution queue**. No new metrics,
+pressure fixtures, Windows trials, median collection or long tests should start
+automatically. Keep GPU and DynRec experimental; preserve existing selections and
+the stable Normal/Software machine. The launcher-icon milestone adds no runtime
+tuning. See the [practical-use handoff](../docs/current-handoff.md) for settings,
+known limitations and the explicit unfinished-work list. Resume only when asked.
+
 ## Now
 
 - DynRec REP cycle accounting is corrected in isolated patch 0008. All 18

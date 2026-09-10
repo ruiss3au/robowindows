@@ -7,4 +7,5 @@
     <color name="rw_text">#000000</color>
     <color name="rw_text_muted">#454545</color>
     <color name="rw_guest">#080A0D</color>
+    <color name="rw_launcher_background">#061B50</color>
 </resources>

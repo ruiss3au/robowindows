@@ -41,6 +41,10 @@
 - **FR-011:** Android Back, including the modern system Back callback, honors
   dirty-properties confirmation and guest reveal/stop confirmation. It must not
   silently abandon drafts or stop a guest by bypassing the host navigation flow.
+- **FR-012:** The installed app has an original, recognizable retro-computer
+  launcher icon under the existing RoboWindows label. Supply a legacy fallback
+  and adaptive launcher resource with mask-safe artwork. Do not use Microsoft or
+  DOSBox branding, add permissions, change machine defaults or auto-start guests.
 
 Acceptance includes dirty Cancel, save failure, repeated mode changes, two-copy
 target selection, clean preference persistence, crash recovery, disabled-state

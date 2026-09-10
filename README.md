@@ -37,6 +37,9 @@ misrepresented as directly bootable machine disks.
 
 ## Run Windows
 
+For the current usable features, CPU/GPU settings and intentionally paused
+performance work, see the [practical-use handoff](docs/current-handoff.md).
+
 RoboWindows does not include Windows, installation media, product keys, or
 drivers. Use only media you are licensed to use. Keep the tablet unlocked and
 RoboWindows in the foreground while importing large files.

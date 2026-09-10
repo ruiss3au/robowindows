@@ -1,5 +1,48 @@
 # Validation — 2026-09-09
 
+## Launcher and pause wrap-up — 2026-09-10
+
+FR-012/T012 adds original generated retro-computer artwork with legacy and
+adaptive launcher resources, both manifest icon attributes and no new permission
+or dependency. [Artwork provenance and prompt](../../docs/app-icon.md) are tracked;
+the PNG is the intentional product asset, not a captured guest screenshot.
+The built-in image-generation skill supplied the artwork. Runtime/native sources,
+CPU/cache policy, audio scheduling and presentation behavior are unchanged.
+
+Android debug build passed; APK SHA-256 is
+`e50ae096019128e8b80bf56c3f6de8fa57fbf2b57b6ca7528da92870df41e432`,
+source label `91dda65f6498+dirty`. Installed APK readback matched exactly.
+The complete host suite passed after repairing a reproduced pre-existing SIGPIPE
+false failure in benchmark tooling (Feature 003 T015). Repository hygiene,
+whitespace and pinned-source checks passed. No extra device CPU, benchmark,
+pressure fixture or Windows performance campaign was run for a resource change.
+
+Installation used the existing data-preserving debug installer only after
+verifying clean profiles, no active-session marker, isolated runner or recovery
+journal. The unlocked/awake SM-T500 displayed the new mark without clipping in
+its circular app-drawer mask; tapping it opened the host library, not a guest.
+Machines and the stopped copy's General/CPU/Display properties rendered; Normal
+20k and GPU were visibly selected, with a clean draft's Apply disabled. Properties
+were closed with Cancel, without selecting or saving changes. About was inspected
+and closed with Android Back. Tests displayed the retained CPU capability pass
+without running a fixture; Back returned to Machines. This is a host-navigation/icon smoke, not renewed
+guest compatibility, audio quality or thermal acceptance.
+
+Postflight verified stable `incoming` Normal/Software generation 1 and the copy
+`win98 dynrec exp` Normal/GPU fixed-20k generation 32, both clean/stopped and
+unchanged from this milestone's preflight. The user had selected Normal before
+this work; the previous generation-31 DynRec evidence is historical. No guest
+disk was opened and no guest was booted or stopped by the agent. Ignored local
+evidence is `artifacts/wrapup-*` (host logs, UI dumps and screenshots).
+
+T013 records the user's decision to pause in the roadmap and
+[practical-use handoff](../../docs/current-handoff.md). Unfinished audio/cache
+attribution, guest clock/medians, experimental promotion and dropped manual/thermal
+gates remain explicitly incomplete. No further investigation is automatically
+queued. Local commits only; no push or release qualification is implied.
+
+## Original UI implementation evidence
+
 The complete host suite (including eight-suite QEMU reference parity), repository
 hygiene, diff whitespace, pinned-source verification and Android debug build
 passed. New host checks cover draft dirty/reverted/applied baselines, eligibility

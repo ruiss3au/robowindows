@@ -18,3 +18,8 @@
   and update the roadmap without claiming omitted guest quality gates passed.
 - [x] T011 Route modern Android Back through dirty-draft and session guards;
   verify system Back on the tablet with no real guest disk in the dialog test.
+- [x] T012 Add original mask-safe launcher artwork and legacy/adaptive resources
+  (FR-012); verify packaging, host tests, hygiene and Android build. Check stopped
+  state before installation and preserve profiles; record actual device/UI scope.
+- [x] T013 Record a practical-use handoff and paused unfinished work in the
+  roadmap. No further diagnostics, automatic guest trials or promotion is queued.

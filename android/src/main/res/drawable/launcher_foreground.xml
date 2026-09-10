@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Extra padding keeps the original artwork inside circular launcher masks. -->
+<inset xmlns:android="http://schemas.android.com/apk/res/android"
+    android:inset="10%">
+    <bitmap android:src="@drawable/robowindows_launcher" android:gravity="fill" />
+</inset>
