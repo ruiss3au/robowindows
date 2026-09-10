@@ -1,5 +1,19 @@
 # Feature Specification: Auto-Hiding Session Controls and Relative Mouse Capture
 
+## 1.0 Alpha session parity — 2026-09-10
+
+FR-001–010 apply equally to ordinary Normal and DynRec starts: identical Exit,
+machine title, Pause/Resume, Restart, Change media and optional counter controls.
+Both use the same four-second timeout and Back/top-edge reveal; pause, focus
+loss, capture failure and host dialogs retain controls. No persistent bottom
+readiness bar in ordinary DynRec sessions. Explicit debug diagnostic launches
+may retain readiness evidence controls; hidden controls never disable watchdogs.
+Change media must target the originating session only, use document-mediated
+app-private imports and route DynRec operations to its isolated process. Failed,
+cancelled or stale imports must not change another session or force guest exit.
+Restart clears manual pause and stale media requests, releases input and resets
+UI/child progress bookkeeping while preserving the active journal.
+
 **Feature**: `004-session-controls-and-mouse-capture`
 
 **Created**: 2026-09-05
@@ -94,4 +108,3 @@ the Android cursor reaching a display edge and stalling the Windows pointer.
 - Mouse sensitivity scaling or acceleration.
 - Automatic recapture on focus return or pointer movement.
 - Touchscreen control of the guest beyond the release gesture.
-

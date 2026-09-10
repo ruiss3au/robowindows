@@ -1,5 +1,11 @@
 # Practical-use handoff — 2026-09-10
 
+[RoboWindows 1.0 Alpha](alpha-1.0.md) is installed, with shared auto-hiding
+Normal/DynRec controls. Host tests, both APK builds and the disposable SM-T500
+storage/input/core smoke test passed; the visible alpha label was verified.
+Both real machines remain stopped and unchanged. Native DynRec media/toolbar
+interaction acceptance remains pending; see the handoff before further device work.
+
 Performance investigation remains **paused by user choice**. The subsequent
 opt-in promotion makes DynRec fixed-20k and GPU available on ordinary machines
 and in release builds without claiming unfinished quality gates passed. No

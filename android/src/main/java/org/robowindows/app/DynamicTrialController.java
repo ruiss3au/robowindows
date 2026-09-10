@@ -12,6 +12,7 @@ import java.io.IOException;
 final class DynamicTrialController implements DynamicTrialClient.Listener {
     interface Listener {
         void onStatus(int status, String error, String residency);
+        default void onMediaError(String error) {}
     }
 
     private final MachineStore machineStore;
@@ -133,7 +134,23 @@ final class DynamicTrialController implements DynamicTrialClient.Listener {
     void restart() throws IOException {
         if (!childStarted) throw new IOException("Dynamic runner is still starting");
         client.restart();
+        guestShutdownObserved = false;
+        startedAtMillis = SystemClock.elapsedRealtime();
+        pausedMillis = 0;
+        pausedAtMillis = desiredPaused ? startedAtMillis : -1;
+        progressWatchdog = new DynamicProgressWatchdog(startedAtMillis);
+        progressWatchdog.setPaused(desiredPaused, startedAtMillis);
+        if (desiredPaused) client.setPaused(true);
     }
+
+    void changeMedia(String path) throws IOException {
+        if (!childStarted || finished || attempt == null) throw new IOException("The media session is unavailable");
+        String owned = machineStore.validateDynamicMedia(profile.id, attempt.attemptId,
+                attempt.generation, attempt.dynamicCyclePolicy, path).getPath();
+        client.changeMedia(owned);
+    }
+
+    @Override public void onMediaError(String error) { listener.onMediaError(error); }
 
     int readinessMask() {
         return attempt == null ? 0 : attempt.readinessMask;

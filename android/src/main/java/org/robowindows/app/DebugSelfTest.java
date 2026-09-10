@@ -244,11 +244,12 @@ final class DebugSelfTest {
             require(!isolated.hasInterruptedSession(), "orderly session marker cleanup");
             File isoInput = new File(testRoot, "tools.iso");
             writeBytes(isoInput, new byte[]{5, 6, 7, 8});
+            int priorAttachments = isolated.load().get(0).mediaAssets.size();
             isolated.importAdditionalMedia(Uri.fromFile(isoInput), imported.id);
             MachineProfile reloaded = isolated.load().get(0);
-            require(reloaded.mediaAssets.size() == 1 &&
-                    reloaded.mediaAssets.get(0).name.equals("tools.iso") &&
-                    !reloaded.mediaAssets.get(0).sha256.isEmpty(), "attached ISO provenance");
+            require(reloaded.mediaAssets.size() == priorAttachments + 1 &&
+                    reloaded.mediaAssets.get(priorAttachments).name.equals("tools.iso") &&
+                    !reloaded.mediaAssets.get(priorAttachments).sha256.isEmpty(), "attached ISO provenance");
             context.getSharedPreferences("machine_store_debug_probe", Context.MODE_PRIVATE)
                     .edit().clear().commit();
             deleteTree(testRoot);
@@ -383,6 +384,19 @@ final class DebugSelfTest {
         second = store.saveSettings(second, secondDraft, true);
         require(!store.load().get(1).isDynamicSelected() && second.isDynamicSelected() &&
                 !second.id.equals(p.id), "two-copy selection changes only the explicit target");
+        require(!new File(second.runtimePath).getParentFile().getName().equals(second.id),
+                "copy fixture exercises distinct profile and disk directory IDs");
+        DynamicAttempt copyAttempt = store.markDynamicRunning(store.prepareDynamicStart(second));
+        File copyMediaSource = new File(new File(second.runtimePath).getParentFile(), "copy-media.iso");
+        writeBytes(copyMediaSource, new byte[]{1, 2, 3, 4});
+        File copyAttachment = store.importSessionMedia(Uri.fromFile(copyMediaSource), second);
+        File checkedCopyAttachment = store.validateDynamicMedia(second.id, copyAttempt.attemptId,
+                second.configurationGeneration, copyAttempt.dynamicCyclePolicy, copyAttachment.getPath());
+        require(store.validateDynamicMediaInChild(second.id, copyAttempt.attemptId,
+                second.configurationGeneration, copyAttempt.dynamicCyclePolicy,
+                checkedCopyAttachment.getPath()).equals(copyAttachment.getCanonicalFile()),
+                "copied profile accepts its own imported media across the child boundary");
+        store.closeDynamicAttemptCleanly(copyAttempt);
         store.deleteMachine(second);
         require(stableProfile.equals(store.load().get(0).toJson().toString()) &&
                 stableConfig.equals(readText(new File(stable.launchPath))), "settings preserve stable fixture");
@@ -412,9 +426,26 @@ final class DebugSelfTest {
         require(store.validateDynamicChildHandoff(ordinary.id, attempt.attemptId,
                 ordinary.configurationGeneration).id.equals(ordinary.id), "ordinary child handoff");
         attempt = store.markDynamicRunning(attempt);
+        File source = new File(new File(diskPath).getParentFile(), "alpha-media-probe.iso");
+        writeBytes(source, new byte[]{9, 8, 7, 6});
+        long generation = ordinary.configurationGeneration;
+        File attachment = store.importSessionMedia(Uri.fromFile(source), ordinary);
+        require(store.load().get(0).configurationGeneration == generation, "live attachment preserves journal generation");
+        require(store.validateDynamicMedia(ordinary.id, attempt.attemptId, generation,
+                attempt.dynamicCyclePolicy, attachment.getPath()).equals(attachment.getCanonicalFile()), "parent validates registered attachment");
+        require(store.validateDynamicMediaInChild(ordinary.id, attempt.attemptId, generation,
+                attempt.dynamicCyclePolicy, attachment.getCanonicalPath()).equals(attachment.getCanonicalFile()), "child validates attachment ownership");
+        boolean rejectedMedia = false;
+        try { store.validateDynamicMediaInChild(ordinary.id, attempt.attemptId, generation,
+                attempt.dynamicCyclePolicy, diskPath); } catch (IOException expected) { rejectedMedia = true; }
+        require(rejectedMedia, "child rejects guest disk as changeable media");
         store.closeDynamicAttemptCleanly(attempt);
         ordinary = store.load().get(0);
         require(ordinary.isDynamicSelected() && store.hasCleanGuestShutdown(ordinary.id), "ordinary clean preference");
+        rejectedMedia = false;
+        try { store.importSessionMedia(Uri.fromFile(source), ordinary); }
+        catch (IOException expected) { rejectedMedia = true; }
+        require(rejectedMedia, "ended DynRec session cannot register media");
         attempt = store.markDynamicRunning(store.prepareDynamicStart(ordinary));
         store.quarantineDynamicAttempt(attempt);
         store.recoverDynamicAttempts();
@@ -423,6 +454,12 @@ final class DebugSelfTest {
         MachineProfile recovery = store.prepareRecoveryStart(ordinary);
         store.closeRecoveryAfterCleanShutdown(recovery);
         ordinary = store.load().get(0);
+        store.markSessionStarted(ordinary.id);
+        generation = ordinary.configurationGeneration;
+        store.importSessionMedia(Uri.fromFile(source), ordinary);
+        require(store.load().get(0).configurationGeneration == generation, "live Normal attachment retains generation");
+        store.markSessionStopped();
+        store.markGuestShutdown(ordinary.id);
         require(!store.requiresDynamicMediaCheck(ordinary) && !ordinary.isExperimental() &&
                 ordinary.presentationMode == 1 && diskPath.equals(ordinary.runtimePath) &&
                 readFirstByte(new File(diskPath)) == diskByte, "ordinary recovery preserves disk and GPU preference");

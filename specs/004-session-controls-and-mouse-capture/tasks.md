@@ -1,5 +1,12 @@
 # Tasks: Session Controls and Mouse Capture
 
+- [ ] T010 Share normal/DynRec toolbar, auto-hide/reveal and pause/restart state;
+  retain readiness only in explicit diagnostic sessions.
+- [ ] T011 Route session-bound imported media through the isolated DynRec bridge
+  with owned-path validation and nonfatal errors; test stale/invalid requests.
+- [ ] T012 Run host/hygiene/pins and both builds; record device acceptance or
+  disconnected-device limitation without touching real guests.
+
 - [x] T001 Specify observable overlay, timeout, capture, release, and lifecycle behavior.
 - [x] T002 Define the session input contract and rollback approach.
 - [x] T003 Add host-testable session UI/capture state transitions.

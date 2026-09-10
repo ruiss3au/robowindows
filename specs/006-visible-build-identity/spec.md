@@ -1,5 +1,13 @@
 # Feature Specification: Visible Build Identity
 
+## RoboWindows 1.0 Alpha — 2026-09-10
+
+FR-006: This milestone uses versionName 1.0-alpha and versionCode 2 (higher than
+the previous code 1). Debug keeps its existing package ID and -debug suffix for
+data-preserving updates. Library and About retain source revision/dirty markers.
+The alpha designation does not certify unfinished Windows/audio/thermal gates.
+No release publication, signing-key creation, Git tag or push is implied.
+
 **Feature**: `006-visible-build-identity`
 
 **Created**: 2026-09-06

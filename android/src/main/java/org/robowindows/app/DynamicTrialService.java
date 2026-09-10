@@ -24,6 +24,9 @@ public final class DynamicTrialService extends Service {
     private Messenger client;
     private boolean started;
     private boolean processExitScheduled;
+    private MachineProfile activeProfile;
+    private String activeAttemptId;
+    private String activeCyclePolicy;
 
     private final Messenger messenger = new Messenger(new Handler(message -> {
         handle(message);
@@ -112,6 +115,18 @@ public final class DynamicTrialService extends Service {
                         throw new IOException("Dynamic runner could not restart the active trial");
                     }
                     break;
+                case DynamicTrialProtocol.CHANGE_MEDIA:
+                    try {
+                        requireStarted();
+                        File media = new MachineStore(this).validateDynamicMediaInChild(activeProfile.id,
+                                activeAttemptId, activeProfile.configurationGeneration, activeCyclePolicy,
+                                data.getString(DynamicTrialProtocol.MEDIA_PATH));
+                        if (!NativeHost.changeMedia(media.getPath())) throw new IOException("Media change rejected");
+                    } catch (IOException | RuntimeException error) {
+                        sendStatus(null, "The selected media could not be mounted. The guest is still running.");
+                        return;
+                    }
+                    break;
                 default:
                     throw new IOException("Unsupported dynamic runner command");
             }
@@ -156,6 +171,9 @@ public final class DynamicTrialService extends Service {
             throw new IOException("Dynamic native start failed");
         }
         started = true;
+        activeProfile = profile;
+        activeAttemptId = data.getString(DynamicTrialProtocol.ATTEMPT_ID);
+        activeCyclePolicy = dynamicPolicy.id;
     }
 
     private File validatedDynamicLaunch(MachineProfile profile, String launchPath, String filesPath,
@@ -207,6 +225,10 @@ public final class DynamicTrialService extends Service {
     }
 
     private void sendStatus(String error) {
+        sendStatus(error, null);
+    }
+
+    private void sendStatus(String error, String mediaError) {
         if (client == null) return;
         Message reply = Message.obtain();
         reply.what = DynamicTrialProtocol.STATUS;
@@ -216,6 +238,7 @@ public final class DynamicTrialService extends Service {
         if (started) data.putString(DynamicTrialProtocol.LIVENESS, NativeHost.sessionLiveness());
         if (started) data.putInt(DynamicTrialProtocol.PRESENTATION_STATUS, NativeHost.sessionPresentation());
         if (error != null) data.putString(DynamicTrialProtocol.ERROR, error);
+        if (mediaError != null) data.putString(DynamicTrialProtocol.MEDIA_ERROR, mediaError);
         reply.setData(data);
         try {
             client.send(reply);

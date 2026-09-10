@@ -1,5 +1,8 @@
 # Tasks: Visible Build Identity
 
+- [x] T007 Mark RoboWindows 1.0 Alpha, increment versionCode, preserve package IDs,
+  test labels and APK metadata, and document remaining qualification limits.
+
 - [x] T001 Specify visible version/revision and dirty-build behavior.
 - [x] T002 Document build discovery, override, fallback, and rollback.
 - [x] T003 Generate a safe source revision in the Android build.

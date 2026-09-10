@@ -19,6 +19,7 @@ import java.io.IOException;
 final class DynamicTrialClient {
     interface Listener {
         void onDynamicStatus(int status, String error, String liveness);
+        default void onMediaError(String error) {}
     }
 
     private final Context context;
@@ -36,6 +37,8 @@ final class DynamicTrialClient {
         replies = new Messenger(new Handler(Looper.getMainLooper(), message -> {
             if (message.what == DynamicTrialProtocol.STATUS) {
                 Bundle data = message.getData();
+                String mediaError = data.getString(DynamicTrialProtocol.MEDIA_ERROR);
+                if (mediaError != null) listener.onMediaError(mediaError);
                 presentationStatus = data.getInt(DynamicTrialProtocol.PRESENTATION_STATUS, 0);
                 listener.onDynamicStatus(data.getInt(DynamicTrialProtocol.STATUS_VALUE,
                         NativeHost.SESSION_STOPPED), data.getString(DynamicTrialProtocol.ERROR),
@@ -144,6 +147,12 @@ final class DynamicTrialClient {
 
     void restart() throws IOException {
         send(DynamicTrialProtocol.RESTART, new Bundle());
+    }
+
+    void changeMedia(String path) throws IOException {
+        Bundle data = new Bundle();
+        data.putString(DynamicTrialProtocol.MEDIA_PATH, path);
+        send(DynamicTrialProtocol.CHANGE_MEDIA, data);
     }
 
     private void send(int what, Bundle data) throws IOException {

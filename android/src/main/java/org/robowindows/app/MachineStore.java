@@ -668,6 +668,15 @@ final class MachineStore {
     }
 
     File importAdditionalMedia(Uri source, String machineId) throws IOException {
+        return importAdditionalMedia(source, machineId, null);
+    }
+
+    File importSessionMedia(Uri source, MachineProfile selected) throws IOException {
+        validateActiveMediaOwner(selected.id, selected.configurationGeneration);
+        return importAdditionalMedia(source, selected.id, selected.configurationGeneration);
+    }
+
+    private File importAdditionalMedia(Uri source, String machineId, Long activeGeneration) throws IOException {
         String displayName = queryDisplayName(source);
         String extension = extension(displayName);
         if (!LaunchConfig.supportsMedia(extension)) throw new IOException("Unsupported media");
@@ -721,7 +730,7 @@ final class MachineStore {
         }
         try {
             recordMedia(machineId, new MediaAsset(displayName, imported.getAbsolutePath(),
-                    runtime.getAbsolutePath(), hex(digest.digest()), System.currentTimeMillis()));
+                    runtime.getAbsolutePath(), hex(digest.digest()), System.currentTimeMillis()), activeGeneration);
         } catch (IOException error) {
             if (!runtime.equals(imported)) runtime.delete();
             imported.delete();
@@ -1038,7 +1047,8 @@ final class MachineStore {
         return new File(new File(profile.mediaPath).getParentFile(), "cdboot.img");
     }
 
-    private void recordMedia(String machineId, MediaAsset asset) throws IOException {
+    private synchronized void recordMedia(String machineId, MediaAsset asset, Long activeGeneration) throws IOException {
+        if (activeGeneration != null) validateActiveMediaOwner(machineId, activeGeneration);
         List<MachineProfile> profiles = load();
         for (int i = 0; i < profiles.size(); i++) {
             MachineProfile profile = profiles.get(i);
@@ -1050,11 +1060,42 @@ final class MachineStore {
                     profile.launchPath, profile.memoryMb, profile.cpuCore, profile.soundEnabled,
                     profile.createdAt, profile.lastBootedAt, assets, profile.role,
                     profile.fixedCycles, profile.lastKnownSafeCycles,
-                    profile.selectedExecution, profile.configurationGeneration + 1, profile.presentationMode));
+                    profile.selectedExecution, profile.configurationGeneration + (activeGeneration == null ? 1 : 0), profile.presentationMode));
             if (!save(profiles)) throw new IOException("Cannot save media metadata");
             return;
         }
         throw new IOException("Machine profile is unavailable");
+    }
+
+    private synchronized MachineProfile validateActiveMediaOwner(String machineId, long generation)
+            throws IOException {
+        MachineProfile profile = requireProfile(machineId, generation);
+        validateWritableOwnership(profile);
+        if (profile.isDynamicSelected()) {
+            DynamicAttempt attempt = DynamicAttempt.read(dynamicAttemptFile(profile));
+            return validateDynamicChildHandoff(machineId, attempt.attemptId, generation, attempt.dynamicCyclePolicy);
+        }
+        if (!machineId.equals(context.getSharedPreferences(preferencesName, Context.MODE_PRIVATE)
+                .getString(ACTIVE_SESSION, null))) {
+            throw new IOException("The media session has ended");
+        }
+        return profile;
+    }
+
+    synchronized File validateDynamicMedia(String machineId, String attemptId, long generation,
+            String policyId, String path) throws IOException {
+        MachineProfile profile = validateDynamicChildHandoff(machineId, attemptId, generation, policyId);
+        String[] registered = new String[profile.mediaAssets.size()];
+        for (int i = 0; i < registered.length; i++) registered[i] = profile.mediaAssets.get(i).runtimePath;
+        return OwnedMediaPath.require(new File(filesRoot, "machines/" + profile.id + "/media"), path, registered);
+    }
+
+    /** The non-exported child cannot observe new parent SharedPreferences entries reliably. */
+    synchronized File validateDynamicMediaInChild(String machineId, String attemptId, long generation,
+            String policyId, String path) throws IOException {
+        MachineProfile profile = validateDynamicChildHandoff(machineId, attemptId, generation, policyId);
+        // Parent checks registration before sending; child independently checks durable attempt and ownership.
+        return OwnedMediaPath.requireWithin(new File(filesRoot, "machines/" + profile.id + "/media"), path);
     }
 
     private void writeProfileLaunchConfig(MachineProfile profile, boolean bootInstaller)

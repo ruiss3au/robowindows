@@ -1,5 +1,14 @@
 # Feature 010: Classic host UI and CPU settings
 
+## 1.0 Alpha toolbar amendment — 2026-09-10
+
+Supersedes FR-008/009/013's persistent DynRec diagnostic controls for ordinary
+machine launches: Normal and DynRec share the same translucent auto-hiding
+toolbar, Pause/Resume, Restart, Change media, Exit and optional counters. Ordinary
+DynRec has no readiness bar. Explicit debug diagnostics may retain that bar;
+removing it from ordinary UI neither records readiness nor weakens crash recovery.
+See Feature 004 T010–012 and Feature 006 T007.
+
 ## Opt-in modes and optional counters amendment — 2026-09-10
 
 Supersedes FR-004's debug/copy restriction and experimental/trial mode labels:

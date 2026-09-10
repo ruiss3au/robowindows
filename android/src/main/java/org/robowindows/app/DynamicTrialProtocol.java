@@ -27,6 +27,8 @@ final class DynamicTrialProtocol {
     static final String PAUSED = "paused";
     static final String STATUS_VALUE = "status";
     static final String ERROR = "error";
+    static final String MEDIA_PATH = "mediaPath";
+    static final String MEDIA_ERROR = "mediaError";
     static final String LIVENESS = "liveness";
     static final String ACTION = "action";
     static final String KEY_CODE = "keyCode";

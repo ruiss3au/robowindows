@@ -1,5 +1,11 @@
 # Dynamic execution safety contract
 
+The 1.0 Alpha toolbar amendment routes media changes through the isolated child
+as well as pause/restart/input. Only registered, canonical files in the active
+machine's media directory are accepted. Invalid media requests report a nonfatal
+error; bridge failure still quarantines. Ordinary UI hides diagnostic readiness
+buttons without granting readiness evidence or changing journal safety rules.
+
 The 2026-09-10 opt-in amendment in the feature specification supersedes role/build
 restrictions for fixed-20k only. Every durable-state, ownership, capability and
 recovery rule below applies to ordinary machines as well as experimental copies.

@@ -3,6 +3,15 @@
 This is the short priority list. Each item gets its own numbered feature
 specification, plan, tasks, and validation record when work begins.
 
+## 1.0 Alpha controls — 2026-09-10
+
+Shared Normal/DynRec toolbar and isolated media routing are implemented; host
+tests and both alpha builds passed. The update is installed; disposable device
+storage/input/core smoke tests and visible alpha identity passed. Native DynRec
+media/toolbar interaction acceptance remains pending. See the
+[alpha handoff](../docs/alpha-1.0.md). This does not
+restart parked performance campaigns or authorize file cleanup/publication.
+
 ## Opt-in promotion and practical use — 2026-09-10
 
 The user chose to wrap up and use the current app. The investigation suggestions

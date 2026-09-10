@@ -20,6 +20,11 @@ constitution and each numbered feature record.
 
 ## Status
 
+The current source milestone is **RoboWindows 1.0 Alpha**. See the
+[alpha handoff and validation status](docs/alpha-1.0.md) for shared Normal/DynRec
+controls, installation status and known limitations. Alpha is not a qualified
+stable release; existing machine defaults remain conservative and opt-in.
+
 An ARM64 debug APK is built reproducibly and exercised on the SM-T500. The app
 currently provides a machines-first RoboWindows UI, app-private disk import and
 writable clones, DOS/Windows-family profiles, compatibility presets, direct

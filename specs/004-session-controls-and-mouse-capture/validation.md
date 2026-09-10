@@ -1,5 +1,16 @@
 # Validation Record
 
+## 1.0 Alpha parity — 2026-09-10
+
+Shared-toolbar implementation, host state/path/picker tests and both builds pass.
+After the user freed storage, the alpha update installed and the disposable
+SM-T500 storage/input/core smoke test passed, including presented frames,
+pause/resume, Normal media change, restart and clean stop. Device findings fixed
+canonical Android storage aliases and copied-profile import-directory validation;
+host and device regressions passed. T010/011 implementation is present; native
+DynRec media/toolbar interaction acceptance remains pending. Real profiles were
+clean/stopped and unchanged. See the [alpha evidence](../../docs/alpha-1.0.md).
+
 ## 2026-09-05 — Host and Android build
 
 - `scripts/test-host.sh`: passed. The new state checks cover startup visibility,

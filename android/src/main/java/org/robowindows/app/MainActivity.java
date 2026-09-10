@@ -90,6 +90,12 @@ public final class MainActivity extends Activity {
     private TextView diagnosticStats;
     private TextView livePerformanceCounters;
     private PerformanceDisplayPreferences performanceDisplay;
+    private boolean diagnosticSession;
+    private Button sessionPauseButton;
+    private Button sessionMediaButton;
+    private final SessionMediaRequest mediaRequest = new SessionMediaRequest();
+    private boolean mediaImportInProgress;
+    private boolean consumingControlTouch;
     private LinearLayout diagnosticDevices;
     private final HashMap<Integer, Integer> deviceHandles = new HashMap<>();
     private int nextDeviceHandle = 1;
@@ -109,10 +115,7 @@ public final class MainActivity extends Activity {
         if (focusChange == AudioManager.AUDIOFOCUS_GAIN) {
             audioFocusPaused = false;
             if (!appPaused && !sessionPaused) {
-                sessionUiState.resume(android.os.SystemClock.uptimeMillis());
-                syncSessionControls();
-                scheduleControlsHide();
-                setActiveSessionPaused(false);
+                refreshSessionPause();
             }
         } else if (focusChange == AudioManager.AUDIOFOCUS_LOSS ||
                 focusChange == AudioManager.AUDIOFOCUS_LOSS_TRANSIENT ||
@@ -828,6 +831,13 @@ public final class MainActivity extends Activity {
 
     @Override protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
+        if (requestCode == CHANGE_MEDIA) {
+            boolean current = mediaRequest.consume(sessionGeneration, sessionActive);
+            if (current && resultCode == RESULT_OK && data != null && data.getData() != null) {
+                importSessionMedia(data.getData());
+            }
+            return;
+        }
         if (resultCode != RESULT_OK || data == null) return;
         Uri uri = data.getData();
         if (uri == null) return;
@@ -840,19 +850,6 @@ public final class MainActivity extends Activity {
                 showSettings(profile);
             } catch (IOException error) {
                 Toast.makeText(this, error.getMessage(), Toast.LENGTH_LONG).show();
-            }
-            return;
-        }
-        if (requestCode == CHANGE_MEDIA && currentSessionProfile != null) {
-            try {
-                java.io.File media = machineStore.importAdditionalMedia(uri, currentSessionProfile.id);
-                if (!NativeHost.changeMedia(media.getAbsolutePath())) {
-                    Toast.makeText(this, "The running machine could not change media.",
-                            Toast.LENGTH_LONG).show();
-                }
-            } catch (IOException error) {
-                Toast.makeText(this, "The selected media could not be imported.",
-                        Toast.LENGTH_LONG).show();
             }
             return;
         }
@@ -878,7 +875,7 @@ public final class MainActivity extends Activity {
                 String reason = machineStore.dynamicUnavailable(p, CpuFixtureGate.passed(this));
                 if (reason != null) { new AlertDialog.Builder(this).setTitle("DynRec unavailable")
                         .setMessage(reason).setPositiveButton("OK", null).show(); return; }
-                showDynamicDiagnostic(p, DynamicCyclePolicy.FIXED_20K);
+                showDynamicSession(p, DynamicCyclePolicy.FIXED_20K, false);
             } else showSession(p);
             return;
         }
@@ -915,6 +912,10 @@ public final class MainActivity extends Activity {
     }
 
     private void showSession(MachineProfile profile, boolean recoveryBoot) {
+        if (mediaImportInProgress) {
+            Toast.makeText(this, "Wait for the media import to finish.", Toast.LENGTH_LONG).show();
+            return;
+        }
         try {
             profile = transientDebugSession ? validateDisposableCoreFixture(profile) :
                     recoveryBoot ? machineStore.prepareRecoveryStart(profile) :
@@ -929,6 +930,7 @@ public final class MainActivity extends Activity {
                 BuildConfig.DEBUG, sessionProfile.isExperimental(), recoveryBoot);
         properties = null;
         recoverySession = recoveryBoot;
+        diagnosticSession = false;
         presentationFallbackNotified = false;
         recoveryGuestShutdownObserved = false;
         long generation = ++sessionGeneration;
@@ -938,44 +940,8 @@ public final class MainActivity extends Activity {
         GuestDisplayView guest = new GuestDisplayView(this, this::deviceHandle,
                 presentationPolicy == PresentationPolicy.SOFTWARE);
         sessionGuest = guest;
-        LinearLayout controls = new LinearLayout(this);
-        controls.setGravity(Gravity.CENTER_VERTICAL);
-        controls.setPadding(dp(12), dp(8), dp(12), dp(8));
-        sessionControls = controls;
-        controls.addView(button("Exit", v -> confirmSessionAction(false)), new LinearLayout.LayoutParams(dp(110), dp(44)));
-        TextView title = text(recoveryBoot ? "Disk check · " + sessionProfile.name :
-                sessionProfile.name, 20, TEXT);
-        title.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
-        LinearLayout.LayoutParams sessionTitleParams = new LinearLayout.LayoutParams(0,
-                ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
-        sessionTitleParams.leftMargin = dp(16);
-        controls.addView(title, sessionTitleParams);
-        Button pause = button("Pause", null);
-        pause.setOnClickListener(v -> {
-            sessionPaused = !sessionPaused;
-            releasePointerCaptureAndCancel();
-            if (sessionPaused) {
-                sessionUiState.pause(android.os.SystemClock.uptimeMillis());
-            } else {
-                sessionUiState.resume(android.os.SystemClock.uptimeMillis());
-                scheduleControlsHide();
-            }
-            setActiveSessionPaused(sessionPaused);
-            pause.setText(sessionPaused ? "Resume" : "Pause");
-            syncSessionControls();
-        });
-        controls.addView(pause, new LinearLayout.LayoutParams(dp(130), dp(44)));
-        LinearLayout.LayoutParams restartParams = new LinearLayout.LayoutParams(dp(130), dp(44));
-        restartParams.leftMargin = dp(10);
-        controls.addView(button("Restart", v -> {
-            releasePointerAndShowControls();
-            confirmSessionAction(true);
-        }), restartParams);
-        LinearLayout.LayoutParams mediaParams = new LinearLayout.LayoutParams(dp(170), dp(44));
-        mediaParams.leftMargin = dp(10);
-        controls.addView(button("Change media", v -> pickSessionMedia()), mediaParams);
-        addCounterControl(controls);
-        ClassicUi.sessionOverlay(controls);
+        LinearLayout controls = createSessionControls(recoveryBoot ? "Disk check · " + sessionProfile.name :
+                sessionProfile.name, null);
         page.addView(guest, new FrameLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         FrameLayout.LayoutParams controlsParams = new FrameLayout.LayoutParams(
@@ -1002,6 +968,16 @@ public final class MainActivity extends Activity {
     }
 
     private void showDynamicDiagnostic(MachineProfile profile, DynamicCyclePolicy dynamicPolicy) {
+        showDynamicSession(profile, dynamicPolicy, true);
+    }
+
+    private void showDynamicSession(MachineProfile profile, DynamicCyclePolicy dynamicPolicy,
+            boolean diagnostic) {
+        if (mediaImportInProgress) {
+            Toast.makeText(this, "Wait for the media import to finish.", Toast.LENGTH_LONG).show();
+            return;
+        }
+        diagnosticSession = diagnostic;
         presentationFallbackNotified = false;
         properties = null;
         ++sessionGeneration;
@@ -1013,16 +989,21 @@ public final class MainActivity extends Activity {
         livePerformanceCounters = decoderResidency;
         decoderResidency.setVisibility(performanceDisplay.visible() ? View.VISIBLE : View.GONE);
         DynamicTrialController controller = new DynamicTrialController(this,
-                (status, error, residency) -> {
-            if (residency != null && performanceDisplay.visible()) decoderResidency.setText(residency +
-                    (dynamicTrial != null && dynamicTrial.presentationStatus() == -1 ?
-                            " · GPU unavailable: Software · 15 FPS" : ""));
-            if (dynamicTrial != null) reportPresentationFallback(dynamicTrial.presentationStatus());
-            if (error != null) {
-                Toast.makeText(this, error, Toast.LENGTH_LONG).show();
-                showHome();
-            } else if (status == NativeHost.SESSION_STOPPED) {
-                showHome();
+                new DynamicTrialController.Listener() {
+            @Override public void onStatus(int status, String error, String residency) {
+                if (residency != null && performanceDisplay.visible()) decoderResidency.setText(residency +
+                        (dynamicTrial != null && dynamicTrial.presentationStatus() == -1 ?
+                                " · GPU unavailable: Software · 15 FPS" : ""));
+                if (dynamicTrial != null) reportPresentationFallback(dynamicTrial.presentationStatus());
+                if (error != null) {
+                    Toast.makeText(MainActivity.this, error, Toast.LENGTH_LONG).show();
+                    showHome();
+                } else if (status == NativeHost.SESSION_STOPPED) {
+                    showHome();
+                }
+            }
+            @Override public void onMediaError(String error) {
+                if (sessionActive) Toast.makeText(MainActivity.this, error, Toast.LENGTH_LONG).show();
             }
         });
         dynamicTrial = controller;
@@ -1047,26 +1028,35 @@ public final class MainActivity extends Activity {
                     }
                 }, false);
         sessionGuest = guest;
-        LinearLayout controls = new LinearLayout(this);
-        controls.setGravity(Gravity.CENTER_VERTICAL);
-        controls.setPadding(dp(12), dp(8), dp(12), dp(8));
-        sessionControls = controls;
-        controls.addView(button("Exit", v -> confirmSessionAction(false)),
-                new LinearLayout.LayoutParams(dp(130), dp(44)));
-        TextView title = text(dynamicPolicy.label + " · " + sessionProfile.name, 20, PRIMARY);
-        title.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
-        LinearLayout diagnosticLabels = new LinearLayout(this);
-        diagnosticLabels.setOrientation(LinearLayout.VERTICAL);
-        diagnosticLabels.addView(title);
-        diagnosticLabels.addView(decoderResidency);
-        controls.addView(diagnosticLabels, new LinearLayout.LayoutParams(0,
-                ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
-        addCounterControl(controls);
-        ClassicUi.sessionOverlay(controls);
+        LinearLayout controls = createSessionControls(diagnostic ? dynamicPolicy.label + " · " + sessionProfile.name :
+                sessionProfile.name, decoderResidency);
         page.addView(guest, new FrameLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         page.addView(controls, new FrameLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.TOP));
+        if (diagnostic) page.addView(createReadinessControls(controller), new FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.BOTTOM));
+        setContentView(page);
+        guest.requestFocus();
+        sessionPaused = false;
+        sessionActive = true;
+        sessionUiState.start(android.os.SystemClock.uptimeMillis());
+        syncSessionControls();
+        scheduleControlsHide();
+        requestGuestAudioFocus();
+        guest.post(() -> {
+            if (!sessionActive || dynamicTrial != controller) return;
+            try {
+                controller.start(sessionProfile, guest.getHolder().getSurface(), dynamicPolicy);
+                setActiveSessionPaused(sessionPaused);
+            } catch (IOException error) {
+                Toast.makeText(this, error.getMessage(), Toast.LENGTH_LONG).show();
+                showHome();
+            }
+        });
+    }
+
+    private LinearLayout createReadinessControls(DynamicTrialController controller) {
         LinearLayout readiness = new LinearLayout(this);
         readiness.setGravity(Gravity.CENTER_VERTICAL);
         readiness.setPadding(dp(12), dp(8), dp(12), dp(8));
@@ -1090,26 +1080,57 @@ public final class MainActivity extends Activity {
         mouseParams.leftMargin = dp(10);
         readiness.addView(mouseReady, mouseParams);
         ClassicUi.sessionOverlay(readiness);
-        page.addView(readiness, new FrameLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.BOTTOM));
-        setContentView(page);
-        guest.requestFocus();
-        sessionPaused = false;
-        sessionActive = true;
-        sessionUiState.start(android.os.SystemClock.uptimeMillis());
-        syncSessionControls();
-        // A diagnostic must always leave its explicit stop control visible.
-        requestGuestAudioFocus();
-        guest.post(() -> {
-            if (!sessionActive || dynamicTrial != controller) return;
-            try {
-                controller.start(sessionProfile, guest.getHolder().getSurface(), dynamicPolicy);
-                if (audioFocusPaused) controller.setPaused(true);
-            } catch (IOException error) {
-                Toast.makeText(this, error.getMessage(), Toast.LENGTH_LONG).show();
-                showHome();
-            }
+        return readiness;
+    }
+
+    private LinearLayout createSessionControls(String name, TextView counters) {
+        LinearLayout controls = new LinearLayout(this);
+        controls.setGravity(Gravity.CENTER_VERTICAL);
+        controls.setPadding(dp(12), dp(8), dp(12), dp(8));
+        sessionControls = controls;
+        controls.addView(button("Exit", v -> confirmSessionAction(false)),
+                new LinearLayout.LayoutParams(dp(110), dp(48)));
+        LinearLayout labels = new LinearLayout(this);
+        labels.setOrientation(LinearLayout.VERTICAL);
+        TextView title = text(name, 20, TEXT);
+        title.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+        labels.addView(title);
+        if (counters != null) labels.addView(counters);
+        LinearLayout.LayoutParams labelParams = new LinearLayout.LayoutParams(0, -2, 1f);
+        labelParams.leftMargin = dp(16);
+        controls.addView(labels, labelParams);
+        sessionPauseButton = button("Pause", v -> {
+            sessionPaused = !sessionPaused;
+            releasePointerCaptureAndCancel();
+            refreshSessionPause();
         });
+        controls.addView(sessionPauseButton, new LinearLayout.LayoutParams(dp(130), dp(48)));
+        LinearLayout.LayoutParams restartParams = new LinearLayout.LayoutParams(dp(130), dp(48));
+        restartParams.leftMargin = dp(10);
+        controls.addView(button("Restart", v -> confirmSessionAction(true)), restartParams);
+        LinearLayout.LayoutParams mediaParams = new LinearLayout.LayoutParams(dp(170), dp(48));
+        mediaParams.leftMargin = dp(10);
+        sessionMediaButton = button("Change media", v -> pickSessionMedia());
+        controls.addView(sessionMediaButton, mediaParams);
+        addCounterControl(controls);
+        ClassicUi.sessionOverlay(controls);
+        return controls;
+    }
+
+    private boolean mustPauseSession() {
+        return sessionPaused || appPaused || audioFocusPaused || hostDialogOpen ||
+                mediaImportInProgress || !hasWindowFocus();
+    }
+
+    private void refreshSessionPause() {
+        if (!sessionActive) return;
+        if (mustPauseSession()) sessionUiState.pause(android.os.SystemClock.uptimeMillis());
+        else {
+            sessionUiState.resume(android.os.SystemClock.uptimeMillis());
+            scheduleControlsHide();
+        }
+        setActiveSessionPaused(mustPauseSession());
+        syncSessionControls();
     }
 
     private void addCounterControl(LinearLayout controls) {
@@ -1152,14 +1173,51 @@ public final class MainActivity extends Activity {
     }
 
     private void pickSessionMedia() {
+        if (!sessionActive || currentSessionProfile == null || mediaImportInProgress) return;
+        releasePointerAndShowControls();
+        mediaRequest.begin(sessionGeneration);
         Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
         intent.addCategory(Intent.CATEGORY_OPENABLE);
         intent.setType("*/*");
         startActivityForResult(intent, CHANGE_MEDIA);
     }
 
+    private void importSessionMedia(Uri uri) {
+        if (!sessionActive || currentSessionProfile == null || mediaImportInProgress) return;
+        final MachineProfile selected = currentSessionProfile;
+        final long generation = sessionGeneration;
+        mediaImportInProgress = true;
+        refreshSessionPause();
+        Toast.makeText(this, "Importing media…", Toast.LENGTH_SHORT).show();
+        new Thread(() -> {
+            java.io.File imported = null;
+            try { imported = machineStore.importSessionMedia(uri, selected); }
+            catch (IOException | RuntimeException error) { /* Report bounded product-owned text below. */ }
+            final java.io.File media = imported;
+            handler.post(() -> {
+                mediaImportInProgress = false;
+                if (!sessionActive || sessionGeneration != generation || isDestroyed()) return;
+                if (media == null) {
+                    Toast.makeText(this, "Media could not be imported. Check free space and try again.", Toast.LENGTH_LONG).show();
+                } else {
+                    try {
+                        if (dynamicTrial != null) dynamicTrial.changeMedia(media.getAbsolutePath());
+                        else if (!NativeHost.changeMedia(media.getAbsolutePath())) throw new IOException("Media rejected");
+                    } catch (IOException error) {
+                        Toast.makeText(this, "The selected media could not be mounted.", Toast.LENGTH_LONG).show();
+                    }
+                }
+                refreshSessionPause();
+            });
+        }, "session-media-import").start();
+    }
+
     private void confirmSessionAction(boolean restart) {
         if (!sessionActive || hostDialogOpen) return;
+        if (restart && mediaImportInProgress) {
+            Toast.makeText(this, "Wait for the media import to finish before restarting.", Toast.LENGTH_LONG).show();
+            return;
+        }
         releasePointerAndShowControls();
         hostDialogOpen = true;
         long generation = sessionGeneration;
@@ -1168,17 +1226,22 @@ public final class MainActivity extends Activity {
                 .setTitle(restart ? "Restart guest?" : "Stop without guest shutdown?")
                 .setMessage(restart ? "Unsaved guest work can be lost. This is not a clean Windows shutdown." :
                         "For a clean shutdown, cancel and use Start → Shut Down inside Windows. Stopping now may lose unsaved work." +
-                        (dynamicTrial != null ? " This copy will require disk-check recovery." : ""))
+                        (dynamicTrial != null ? " This machine will require disk-check recovery." : ""))
                 .setNegativeButton("Cancel", null)
                 .setPositiveButton(restart ? "Restart" : "Stop now", (d, w) -> {
                     if (!sessionActive || sessionGeneration != generation || dynamicTrial != controller) return;
                     if (restart) restartSession(currentSessionProfile); else showHome();
                 }).create();
-        dialog.setOnDismissListener(d -> { hostDialogOpen = false; if (sessionActive) releasePointerAndShowControls(); });
+        dialog.setOnDismissListener(d -> {
+            hostDialogOpen = false;
+            if (sessionActive) { releasePointerAndShowControls(); refreshSessionPause(); }
+        });
         dialog.show();
     }
 
     private void restartSession(MachineProfile profile) {
+        mediaRequest.clear();
+        releasePointerCaptureAndCancel();
         sessionPaused = false;
         currentSessionProfile = profile;
         if (dynamicTrial != null) {
@@ -1186,6 +1249,7 @@ public final class MainActivity extends Activity {
         } else if (!NativeHost.restartSession()) {
             Toast.makeText(this, "This machine could not restart.", Toast.LENGTH_LONG).show();
         }
+        refreshSessionPause();
     }
 
     private void confirmSessionStarted(MachineProfile profile, long generation) {
@@ -1237,6 +1301,7 @@ public final class MainActivity extends Activity {
 
     private void stopActiveSession() {
         ++sessionGeneration;
+        mediaRequest.clear();
         releasePointerCaptureAndCancel();
         sessionUiState.exit();
         handler.removeCallbacks(hideSessionControls);
@@ -1265,7 +1330,11 @@ public final class MainActivity extends Activity {
         currentSessionProfile = null;
         sessionGuest = null;
         sessionControls = null;
+        sessionPauseButton = null;
+        sessionMediaButton = null;
+        diagnosticSession = false;
         consumingRevealTouch = false;
+        consumingControlTouch = false;
         transientDebugSession = false;
         recoverySession = false;
         recoveryGuestShutdownObserved = false;
@@ -1372,8 +1441,9 @@ public final class MainActivity extends Activity {
     }
 
     private void setActiveSessionPaused(boolean paused) {
-        if (!runDynamicCommand(controller -> controller.setPaused(paused))) {
-            NativeHost.setPaused(paused);
+        boolean effective = paused || mustPauseSession();
+        if (!runDynamicCommand(controller -> controller.setPaused(effective))) {
+            NativeHost.setPaused(effective);
         }
     }
 
@@ -1410,7 +1480,8 @@ public final class MainActivity extends Activity {
     }
 
     @Override public boolean dispatchKeyEvent(KeyEvent event) {
-        if (hostDialogOpen || !isExternalPhysical(event.getDevice())) return super.dispatchKeyEvent(event);
+        if (hostDialogOpen || (sessionControls != null && sessionControls.hasFocus()) ||
+                !isExternalPhysical(event.getDevice())) return super.dispatchKeyEvent(event);
         pushSessionKey(event.getAction(), event.getKeyCode(), event.getScanCode(),
                 event.getRepeatCount(), event.getMetaState(), event.getSource(),
                 deviceHandle(event.getDeviceId()), event.getEventTime() * 1_000_000L);
@@ -1425,7 +1496,7 @@ public final class MainActivity extends Activity {
             if (sessionActive) {
                 if (!pointerCaptured && event.getActionMasked() == MotionEvent.ACTION_BUTTON_PRESS &&
                         isInside(event, sessionGuest) &&
-                        (!sessionUiState.areControlsVisible() || !isInside(event, sessionControls))) {
+                        !isInside(event, sessionControls)) {
                     requestSessionPointerCapture();
                     return true;
                 }
@@ -1446,6 +1517,13 @@ public final class MainActivity extends Activity {
 
     @Override public boolean dispatchTouchEvent(MotionEvent event) {
         if (hostDialogOpen) return super.dispatchTouchEvent(event);
+        if (sessionActive && event.getActionMasked() == MotionEvent.ACTION_DOWN &&
+                isInside(event, sessionControls)) consumingControlTouch = true;
+        if (consumingControlTouch) {
+            if (event.getActionMasked() == MotionEvent.ACTION_UP ||
+                    event.getActionMasked() == MotionEvent.ACTION_CANCEL) consumingControlTouch = false;
+            return super.dispatchTouchEvent(event);
+        }
         if (consumingRevealTouch) {
             if (event.getActionMasked() == MotionEvent.ACTION_UP ||
                     event.getActionMasked() == MotionEvent.ACTION_CANCEL) consumingRevealTouch = false;
@@ -1508,18 +1586,7 @@ public final class MainActivity extends Activity {
         super.onResume();
         appPaused = false;
         if (sessionActive) requestGuestAudioFocus();
-        if (sessionActive) {
-            if (sessionPaused || audioFocusPaused) {
-                sessionUiState.pause(android.os.SystemClock.uptimeMillis());
-            } else {
-                sessionUiState.resume(android.os.SystemClock.uptimeMillis());
-                scheduleControlsHide();
-            }
-            syncSessionControls();
-        }
-        if (sessionActive && !sessionPaused && !audioFocusPaused) {
-            setActiveSessionPaused(false);
-        }
+        refreshSessionPause();
     }
 
     @Override protected void onDestroy() {
@@ -1543,10 +1610,7 @@ public final class MainActivity extends Activity {
             syncSessionControls();
             setActiveSessionPaused(true);
         } else if (!appPaused && !sessionPaused && !audioFocusPaused) {
-            sessionUiState.resume(android.os.SystemClock.uptimeMillis());
-            syncSessionControls();
-            scheduleControlsHide();
-            setActiveSessionPaused(false);
+            refreshSessionPause();
         }
     }
 
@@ -1606,12 +1670,14 @@ public final class MainActivity extends Activity {
 
     private void scheduleControlsHide() {
         handler.removeCallbacks(hideSessionControls);
-        if (dynamicTrial != null) return;
+        if (diagnosticSession) return;
         handler.postDelayed(hideSessionControls, SessionUiState.CONTROLS_VISIBLE_MS);
     }
 
     private void syncSessionControls() {
-        if (sessionControls != null) sessionControls.setVisibility(dynamicTrial != null ||
+        if (sessionPauseButton != null) sessionPauseButton.setText(sessionPaused ? "Resume" : "Pause");
+        if (sessionMediaButton != null) sessionMediaButton.setEnabled(!mediaImportInProgress);
+        if (sessionControls != null) sessionControls.setVisibility(diagnosticSession || mustPauseSession() ||
                 sessionUiState.areControlsVisible() ? View.VISIBLE : View.GONE);
     }
 }

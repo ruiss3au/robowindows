@@ -6,6 +6,10 @@ public final class BuildIdentityTest {
     }
 
     public static void main(String[] args) {
+        require(BuildIdentity.label("1.0-alpha-debug", "abc123def456")
+                        .equals("v1.0-alpha-debug · abc123def456"), "debug alpha identity");
+        require(BuildIdentity.label("1.0-alpha", "abc123def456+dirty")
+                        .equals("v1.0-alpha · abc123def456+dirty"), "release alpha keeps dirty identity");
         require(BuildIdentity.label("0.1.0-dev-debug", "abc123def456")
                         .equals("v0.1.0-dev-debug · abc123def456"),
                 "clean build identity is malformed");

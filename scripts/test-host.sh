@@ -28,6 +28,13 @@ javac -d "$classes_dir" \
 java -cp "$classes_dir" org.robowindows.app.SessionUiStateTest
 
 javac -d "$classes_dir" \
+  "$repo_dir/android/src/main/java/org/robowindows/app/SessionMediaRequest.java" \
+  "$repo_dir/android/src/main/java/org/robowindows/app/OwnedMediaPath.java" \
+  "$repo_dir/tests/java/org/robowindows/app/SessionMediaTest.java"
+java -cp "$classes_dir" org.robowindows.app.SessionMediaTest
+bash "$repo_dir/tests/scripts/check-session-controls.sh"
+
+javac -d "$classes_dir" \
   "$repo_dir/android/src/main/java/org/robowindows/app/DynamicAttemptState.java" \
   "$repo_dir/tests/java/org/robowindows/app/DynamicAttemptStateTest.java"
 java -cp "$classes_dir" org.robowindows.app.DynamicAttemptStateTest

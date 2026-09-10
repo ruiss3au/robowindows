@@ -1,5 +1,14 @@
 # Validation Record
 
+## 1.0 Alpha — 2026-09-10
+
+Host alpha-label tests and both APK manifest checks passed: versionCode 2,
+`1.0-alpha-debug` / `1.0-alpha`, unchanged package IDs and dirty provenance.
+After user storage cleanup, the tablet received versionCode 2 through a
+data-preserving update. The Machines UI hierarchy shows
+`v1.0-alpha-debug · 4cd374c6f1ca+dirty`; both machine names and settings remain
+unchanged. No real guest was booted. See [handoff](../../docs/alpha-1.0.md).
+
 ## 2026-09-06 — Host, build, and SM-T500
 
 - `scripts/test-host.sh`, `scripts/check-repository.sh`, and `git diff --check`
