@@ -283,10 +283,12 @@ recoverable; it is not required for completion of the conservative MVP.
   results; retain Windows/game root-cause uncertainty and stopped machine state.
   Normal passed; DynRec reproduced severe starvation and failed phase/timer
   validation. Completion records the diagnostic finding, not a quality pass.
-- [ ] T070 Specify and regress the demonstrated DynRec REP element-cycle accounting
+- [x] T070 Specify and regress the demonstrated DynRec REP element-cycle accounting
   defect under Feature 008 before a minimal isolated patch. Preserve precise
   memory-fault progress, zero-count and exhausted-budget behavior; require the
   full x86 gate and the unchanged stress fixture before another Windows trial.
+  Feature 008 T045/T046 passed all 18 helper regressions, the complete x86 gate
+  and unchanged Normal/DynRec stress pair; Windows/AoE2 remains unverified.
 
 T062 remains open. The corrected scheduler passed the complete Normal workload,
 but the matched DynRec start failed before the benchmark when Windows Explorer

@@ -5,13 +5,13 @@ specification, plan, tasks, and validation record when work begins.
 
 ## Now
 
-- The new disposable phased stress fixture passes under Normal but reproduces
-  severe DynRec starvation during sustained memory work. An actual-helper host
-  probe demonstrates missing REP element-cycle charges for repeats fitting in
-  the budget. Next: specify/test a minimal accounting correction with fault
-  precision and full x86/stress gates. This is not yet an explanation of the
-  earlier Normal/AoE2 failures; keep Windows trials paused
-  ([finding](002-realtime-emulation-audio/timing-investigation.md#phased-stress-reproduction-and-rep-accounting-finding)).
+- DynRec REP cycle accounting is corrected in isolated patch 0008. All 18
+  actual-helper regressions, the full x86 gate and the unchanged Normal/DynRec
+  stress pair pass. DynRec's maximum call fell from 352 ms to 19 ms, with zero
+  audio errors/resynchronizations and 29.77 presented FPS. This closes the
+  disposable memory-work regression, not the earlier Normal/AoE2 failures.
+  Keep Windows trials paused pending a separately coordinated next step
+  ([evidence](008-arm64-dynamic-recompilation/rep-cycle-accounting.md)).
 
 - Shared audio investigation: Feature 002's live-refresh correction is installed
   and verified. Refresh changes no longer silently discard experimental timing

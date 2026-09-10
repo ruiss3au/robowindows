@@ -296,6 +296,20 @@ least three times, and keep the maximum inclusive call below 50 ms. The fixed
 synchronous nested-fault work. Failure rolls back the slice patch and blocks
 Windows trials.
 
+**FR-045 — REP element cycle accounting:** DynRec MOVS/LODS/STOS helpers MUST
+charge one cycle per completed element for all byte/word/dword operand and
+16/32-bit address variants, including repeats that fit inside the remaining
+budget. Zero count or nonpositive budget MUST perform no memory access or
+register progress. Faults MUST preserve the completed prefix, remaining count,
+precise exception handoff and retry behavior, charging only completed elements.
+Forward/backward address wrapping MUST remain correct without signed-shift
+undefined behavior. Preserve generated opcode overhead and all Normal-core,
+queue, scheduler, cache and linking policies. Before another Windows trial,
+require host regressions, the complete disposable x86 gate and the unchanged
+Feature 002 phased stress image in Normal and DynRec, with valid guest time,
+zero settled audio errors/resynchronizations and the existing presentation gate.
+A failure blocks Windows trials and requires attribution, not buffer retuning.
+
 ## Success criteria
 
 - **SC-001 — isolation:** attempted starts with stable roles, aliased disks or
@@ -436,6 +450,14 @@ and returns balance, entries fall by at least 16 times from the recorded
 1,049,545-call baseline, cumulative duration falls by at least three times from
 444,155 microseconds, and the maximum inclusive call remains below 50 ms. An
 `iret` boundary or nested-fault mismatch rejects the correction.
+
+30. Given the REP accounting correction, when every extracted helper executes
+4,096 elements with 20,000 cycles available, then exactly 4,096 element cycles
+are charged. Faults charge only the completed prefix and retry only the suffix;
+zero count and exhausted budgets access no memory. The unchanged disposable
+stress image then completes all phases in Normal and DynRec within 5% of host
+time, passes the existing GPU presentation gate and reports zero settled audio
+errors or deadline resynchronizations. Full x86 parity remains mandatory.
 
 ## Out of Scope
 

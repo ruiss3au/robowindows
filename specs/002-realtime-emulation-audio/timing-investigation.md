@@ -261,3 +261,22 @@ Postflight found no fixture/isolated process, active-session marker, recovery
 journal or remaining presentation cache directory. Both Windows machines retained
 clean provenance and unchanged selection/generation: stable Normal/Software 1,
 experimental copy Normal/Software 30. Neither Windows machine was booted.
+
+## REP correction verified — 2026-09-10
+
+Feature 008 FR-045 / T045–T046 implemented isolated patch 0008 after all 18
+production MOVS/LODS/STOS helpers failed explicit element-cycle assertions. The
+corrected helpers pass budget/fault/retry/wrapping tests under fail-fast UBSan.
+Full host/reference checks, pinned-source reconstruction, hygiene, Android
+build, stopped installation and the complete disposable x86 gate passed.
+
+The unchanged fixed-20k/GPU stress image now passes in both modes: Normal 29.76
+presented FPS and DynRec 29.77, with guest time within 0.4% and all phases valid.
+Both entire captures have zero underruns, missing frames, deadline resets or
+graphics/stream errors. DynRec's maximum emulator call fell from 351,528 us to
+18,935 us. See [build identity, exact metrics and cleanup evidence](../008-arm64-dynamic-recompilation/rep-cycle-accounting.md).
+
+This closes T070 and the reproduced DynRec memory-work failure. It does not
+explain the earlier Normal/Windows/AoE2 starvation or qualify sustained audio.
+Both real machines remain stopped, clean and unchanged; no Windows run or push
+was performed and no further guest trial is automatically queued.

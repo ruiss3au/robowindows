@@ -1,0 +1,405 @@
+From: RoboWindows contributors
+Subject: [PATCH] dynrec: charge completed REP elements in bounded string helpers
+
+Against DOSBox Pure 7f6e8fb7385fa446d1444d671063268520bf9b54 after patches
+0001-0007. GPL-2.0-or-later, matching the upstream source.
+
+Reserve cycles even when the repeat fits the available budget. Refund the
+faulting and unexecuted elements before the existing precise exception handoff.
+Reject nonpositive budgets before unsigned conversion, and scale backwards
+indices without shifting negative signed values. Generated instruction overhead,
+Normal execution, exception delivery, cache and linking remain unchanged.
+
+Regression: tests/native/string_helpers_test.cpp extracts all 18 actual helpers.
+The unchanged source-owned stress image supplies the device before/after gate.
+
+--- a/src/cpu/core_dynrec/operators.h
++++ b/src/cpu/core_dynrec/operators.h
+@@ -1647,9 +1647,11 @@
+ static Bit16u DRC_CALL_CONV dynrec_movsb_word(Bit16u count,Bit16s add_index,PhysPt si_base,PhysPt di_base) DRC_FC;
+ static Bit16u DRC_CALL_CONV dynrec_movsb_word(Bit16u count,Bit16s add_index,PhysPt si_base,PhysPt di_base) {
+ 	dynrec_string_exception=0;
++	if (CPU_Cycles<=0) return count;
+ 	Bit16u count_left;
+ 	if (count<(Bitu)CPU_Cycles) {
+ 		count_left=0;
++		CPU_Cycles-=count;
+ 	} else {
+ 		count_left=(Bit16u)(count-CPU_Cycles);
+ 		count=(Bit16u)CPU_Cycles;
+@@ -1658,6 +1660,7 @@
+ 	for (;count>0;count--) {
+ 		Bit8u value;
+ 		if (mem_readb_checked(si_base+reg_si,&value) || mem_writeb_checked(di_base+reg_di,value)) {
++			CPU_Cycles+=count; // Refund the faulting and unexecuted elements.
+ 			dynrec_string_exception=1;
+ 			return (Bit16u)(count+count_left);
+ 		}
+@@ -1670,9 +1673,11 @@
+ static Bit32u DRC_CALL_CONV dynrec_movsb_dword(Bit32u count,Bit32s add_index,PhysPt si_base,PhysPt di_base) DRC_FC;
+ static Bit32u DRC_CALL_CONV dynrec_movsb_dword(Bit32u count,Bit32s add_index,PhysPt si_base,PhysPt di_base) {
+ 	dynrec_string_exception=0;
++	if (CPU_Cycles<=0) return count;
+ 	Bit32u count_left;
+ 	if (count<(Bitu)CPU_Cycles) {
+ 		count_left=0;
++		CPU_Cycles-=count;
+ 	} else {
+ 		count_left=count-CPU_Cycles;
+ 		count=CPU_Cycles;
+@@ -1681,6 +1686,7 @@
+ 	for (;count>0;count--) {
+ 		Bit8u value;
+ 		if (mem_readb_checked(si_base+reg_esi,&value) || mem_writeb_checked(di_base+reg_edi,value)) {
++			CPU_Cycles+=count; // Refund the faulting and unexecuted elements.
+ 			dynrec_string_exception=1;
+ 			return count+count_left;
+ 		}
+@@ -1693,18 +1699,21 @@
+ static Bit16u DRC_CALL_CONV dynrec_movsw_word(Bit16u count,Bit16s add_index,PhysPt si_base,PhysPt di_base) DRC_FC;
+ static Bit16u DRC_CALL_CONV dynrec_movsw_word(Bit16u count,Bit16s add_index,PhysPt si_base,PhysPt di_base) {
+ 	dynrec_string_exception=0;
++	if (CPU_Cycles<=0) return count;
+ 	Bit16u count_left;
+ 	if (count<(Bitu)CPU_Cycles) {
+ 		count_left=0;
++		CPU_Cycles-=count;
+ 	} else {
+ 		count_left=(Bit16u)(count-CPU_Cycles);
+ 		count=(Bit16u)CPU_Cycles;
+ 		CPU_Cycles=0;
+ 	}
+-	add_index<<=1;
++	add_index*=2;
+ 	for (;count>0;count--) {
+ 		Bit16u value;
+ 		if (mem_readw_checked(si_base+reg_si,&value) || mem_writew_checked(di_base+reg_di,value)) {
++			CPU_Cycles+=count; // Refund the faulting and unexecuted elements.
+ 			dynrec_string_exception=1;
+ 			return (Bit16u)(count+count_left);
+ 		}
+@@ -1717,18 +1726,21 @@
+ static Bit32u DRC_CALL_CONV dynrec_movsw_dword(Bit32u count,Bit32s add_index,PhysPt si_base,PhysPt di_base) DRC_FC;
+ static Bit32u DRC_CALL_CONV dynrec_movsw_dword(Bit32u count,Bit32s add_index,PhysPt si_base,PhysPt di_base) {
+ 	dynrec_string_exception=0;
++	if (CPU_Cycles<=0) return count;
+ 	Bit32u count_left;
+ 	if (count<(Bitu)CPU_Cycles) {
+ 		count_left=0;
++		CPU_Cycles-=count;
+ 	} else {
+ 		count_left=count-CPU_Cycles;
+ 		count=CPU_Cycles;
+ 		CPU_Cycles=0;
+ 	}
+-	add_index<<=1;
++	add_index*=2;
+ 	for (;count>0;count--) {
+ 		Bit16u value;
+ 		if (mem_readw_checked(si_base+reg_esi,&value) || mem_writew_checked(di_base+reg_edi,value)) {
++			CPU_Cycles+=count; // Refund the faulting and unexecuted elements.
+ 			dynrec_string_exception=1;
+ 			return count+count_left;
+ 		}
+@@ -1741,18 +1753,21 @@
+ static Bit16u DRC_CALL_CONV dynrec_movsd_word(Bit16u count,Bit16s add_index,PhysPt si_base,PhysPt di_base) DRC_FC;
+ static Bit16u DRC_CALL_CONV dynrec_movsd_word(Bit16u count,Bit16s add_index,PhysPt si_base,PhysPt di_base) {
+ 	dynrec_string_exception=0;
++	if (CPU_Cycles<=0) return count;
+ 	Bit16u count_left;
+ 	if (count<(Bitu)CPU_Cycles) {
+ 		count_left=0;
++		CPU_Cycles-=count;
+ 	} else {
+ 		count_left=(Bit16u)(count-CPU_Cycles);
+ 		count=(Bit16u)CPU_Cycles;
+ 		CPU_Cycles=0;
+ 	}
+-	add_index<<=2;
++	add_index*=4;
+ 	for (;count>0;count--) {
+ 		Bit32u value;
+ 		if (mem_readd_checked(si_base+reg_si,&value) || mem_writed_checked(di_base+reg_di,value)) {
++			CPU_Cycles+=count; // Refund the faulting and unexecuted elements.
+ 			dynrec_string_exception=1;
+ 			return (Bit16u)(count+count_left);
+ 		}
+@@ -1765,18 +1780,21 @@
+ static Bit32u DRC_CALL_CONV dynrec_movsd_dword(Bit32u count,Bit32s add_index,PhysPt si_base,PhysPt di_base) DRC_FC;
+ static Bit32u DRC_CALL_CONV dynrec_movsd_dword(Bit32u count,Bit32s add_index,PhysPt si_base,PhysPt di_base) {
+ 	dynrec_string_exception=0;
++	if (CPU_Cycles<=0) return count;
+ 	Bit32u count_left;
+ 	if (count<(Bitu)CPU_Cycles) {
+ 		count_left=0;
++		CPU_Cycles-=count;
+ 	} else {
+ 		count_left=count-CPU_Cycles;
+ 		count=CPU_Cycles;
+ 		CPU_Cycles=0;
+ 	}
+-	add_index<<=2;
++	add_index*=4;
+ 	for (;count>0;count--) {
+ 		Bit32u value;
+ 		if (mem_readd_checked(si_base+reg_esi,&value) || mem_writed_checked(di_base+reg_edi,value)) {
++			CPU_Cycles+=count; // Refund the faulting and unexecuted elements.
+ 			dynrec_string_exception=1;
+ 			return count+count_left;
+ 		}
+@@ -1790,9 +1808,11 @@
+ static Bit16u DRC_CALL_CONV dynrec_lodsb_word(Bit16u count,Bit16s add_index,PhysPt si_base) DRC_FC;
+ static Bit16u DRC_CALL_CONV dynrec_lodsb_word(Bit16u count,Bit16s add_index,PhysPt si_base) {
+ 	dynrec_string_exception=0;
++	if (CPU_Cycles<=0) return count;
+ 	Bit16u count_left;
+ 	if (count<(Bitu)CPU_Cycles) {
+ 		count_left=0;
++		CPU_Cycles-=count;
+ 	} else {
+ 		count_left=(Bit16u)(count-CPU_Cycles);
+ 		count=(Bit16u)CPU_Cycles;
+@@ -1801,6 +1821,7 @@
+ 	for (;count>0;count--) {
+ 		Bit8u value;
+ 		if (mem_readb_checked(si_base+reg_si,&value)) {
++			CPU_Cycles+=count; // Refund the faulting and unexecuted elements.
+ 			dynrec_string_exception=1;
+ 			return (Bit16u)(count+count_left);
+ 		}
+@@ -1813,9 +1834,11 @@
+ static Bit32u DRC_CALL_CONV dynrec_lodsb_dword(Bit32u count,Bit32s add_index,PhysPt si_base) DRC_FC;
+ static Bit32u DRC_CALL_CONV dynrec_lodsb_dword(Bit32u count,Bit32s add_index,PhysPt si_base) {
+ 	dynrec_string_exception=0;
++	if (CPU_Cycles<=0) return count;
+ 	Bit32u count_left;
+ 	if (count<(Bitu)CPU_Cycles) {
+ 		count_left=0;
++		CPU_Cycles-=count;
+ 	} else {
+ 		count_left=count-CPU_Cycles;
+ 		count=CPU_Cycles;
+@@ -1824,6 +1847,7 @@
+ 	for (;count>0;count--) {
+ 		Bit8u value;
+ 		if (mem_readb_checked(si_base+reg_esi,&value)) {
++			CPU_Cycles+=count; // Refund the faulting and unexecuted elements.
+ 			dynrec_string_exception=1;
+ 			return count+count_left;
+ 		}
+@@ -1836,18 +1860,21 @@
+ static Bit16u DRC_CALL_CONV dynrec_lodsw_word(Bit16u count,Bit16s add_index,PhysPt si_base) DRC_FC;
+ static Bit16u DRC_CALL_CONV dynrec_lodsw_word(Bit16u count,Bit16s add_index,PhysPt si_base) {
+ 	dynrec_string_exception=0;
++	if (CPU_Cycles<=0) return count;
+ 	Bit16u count_left;
+ 	if (count<(Bitu)CPU_Cycles) {
+ 		count_left=0;
++		CPU_Cycles-=count;
+ 	} else {
+ 		count_left=(Bit16u)(count-CPU_Cycles);
+ 		count=(Bit16u)CPU_Cycles;
+ 		CPU_Cycles=0;
+ 	}
+-	add_index<<=1;
++	add_index*=2;
+ 	for (;count>0;count--) {
+ 		Bit16u value;
+ 		if (mem_readw_checked(si_base+reg_si,&value)) {
++			CPU_Cycles+=count; // Refund the faulting and unexecuted elements.
+ 			dynrec_string_exception=1;
+ 			return (Bit16u)(count+count_left);
+ 		}
+@@ -1860,18 +1887,21 @@
+ static Bit32u DRC_CALL_CONV dynrec_lodsw_dword(Bit32u count,Bit32s add_index,PhysPt si_base) DRC_FC;
+ static Bit32u DRC_CALL_CONV dynrec_lodsw_dword(Bit32u count,Bit32s add_index,PhysPt si_base) {
+ 	dynrec_string_exception=0;
++	if (CPU_Cycles<=0) return count;
+ 	Bit32u count_left;
+ 	if (count<(Bitu)CPU_Cycles) {
+ 		count_left=0;
++		CPU_Cycles-=count;
+ 	} else {
+ 		count_left=count-CPU_Cycles;
+ 		count=CPU_Cycles;
+ 		CPU_Cycles=0;
+ 	}
+-	add_index<<=1;
++	add_index*=2;
+ 	for (;count>0;count--) {
+ 		Bit16u value;
+ 		if (mem_readw_checked(si_base+reg_esi,&value)) {
++			CPU_Cycles+=count; // Refund the faulting and unexecuted elements.
+ 			dynrec_string_exception=1;
+ 			return count+count_left;
+ 		}
+@@ -1884,18 +1914,21 @@
+ static Bit16u DRC_CALL_CONV dynrec_lodsd_word(Bit16u count,Bit16s add_index,PhysPt si_base) DRC_FC;
+ static Bit16u DRC_CALL_CONV dynrec_lodsd_word(Bit16u count,Bit16s add_index,PhysPt si_base) {
+ 	dynrec_string_exception=0;
++	if (CPU_Cycles<=0) return count;
+ 	Bit16u count_left;
+ 	if (count<(Bitu)CPU_Cycles) {
+ 		count_left=0;
++		CPU_Cycles-=count;
+ 	} else {
+ 		count_left=(Bit16u)(count-CPU_Cycles);
+ 		count=(Bit16u)CPU_Cycles;
+ 		CPU_Cycles=0;
+ 	}
+-	add_index<<=2;
++	add_index*=4;
+ 	for (;count>0;count--) {
+ 		Bit32u value;
+ 		if (mem_readd_checked(si_base+reg_si,&value)) {
++			CPU_Cycles+=count; // Refund the faulting and unexecuted elements.
+ 			dynrec_string_exception=1;
+ 			return (Bit16u)(count+count_left);
+ 		}
+@@ -1908,18 +1941,21 @@
+ static Bit32u DRC_CALL_CONV dynrec_lodsd_dword(Bit32u count,Bit32s add_index,PhysPt si_base) DRC_FC;
+ static Bit32u DRC_CALL_CONV dynrec_lodsd_dword(Bit32u count,Bit32s add_index,PhysPt si_base) {
+ 	dynrec_string_exception=0;
++	if (CPU_Cycles<=0) return count;
+ 	Bit32u count_left;
+ 	if (count<(Bitu)CPU_Cycles) {
+ 		count_left=0;
++		CPU_Cycles-=count;
+ 	} else {
+ 		count_left=count-CPU_Cycles;
+ 		count=CPU_Cycles;
+ 		CPU_Cycles=0;
+ 	}
+-	add_index<<=2;
++	add_index*=4;
+ 	for (;count>0;count--) {
+ 		Bit32u value;
+ 		if (mem_readd_checked(si_base+reg_esi,&value)) {
++			CPU_Cycles+=count; // Refund the faulting and unexecuted elements.
+ 			dynrec_string_exception=1;
+ 			return count+count_left;
+ 		}
+@@ -1933,9 +1969,11 @@
+ static Bit16u DRC_CALL_CONV dynrec_stosb_word(Bit16u count,Bit16s add_index,PhysPt di_base) DRC_FC;
+ static Bit16u DRC_CALL_CONV dynrec_stosb_word(Bit16u count,Bit16s add_index,PhysPt di_base) {
+ 	dynrec_string_exception=0;
++	if (CPU_Cycles<=0) return count;
+ 	Bit16u count_left;
+ 	if (count<(Bitu)CPU_Cycles) {
+ 		count_left=0;
++		CPU_Cycles-=count;
+ 	} else {
+ 		count_left=(Bit16u)(count-CPU_Cycles);
+ 		count=(Bit16u)CPU_Cycles;
+@@ -1943,6 +1981,7 @@
+ 	}
+ 	for (;count>0;count--) {
+ 		if (mem_writeb_checked(di_base+reg_di,reg_al)) {
++			CPU_Cycles+=count; // Refund the faulting and unexecuted elements.
+ 			dynrec_string_exception=1;
+ 			return (Bit16u)(count+count_left);
+ 		}
+@@ -1954,9 +1993,11 @@
+ static Bit32u DRC_CALL_CONV dynrec_stosb_dword(Bit32u count,Bit32s add_index,PhysPt di_base) DRC_FC;
+ static Bit32u DRC_CALL_CONV dynrec_stosb_dword(Bit32u count,Bit32s add_index,PhysPt di_base) {
+ 	dynrec_string_exception=0;
++	if (CPU_Cycles<=0) return count;
+ 	Bit32u count_left;
+ 	if (count<(Bitu)CPU_Cycles) {
+ 		count_left=0;
++		CPU_Cycles-=count;
+ 	} else {
+ 		count_left=count-CPU_Cycles;
+ 		count=CPU_Cycles;
+@@ -1964,6 +2005,7 @@
+ 	}
+ 	for (;count>0;count--) {
+ 		if (mem_writeb_checked(di_base+reg_edi,reg_al)) {
++			CPU_Cycles+=count; // Refund the faulting and unexecuted elements.
+ 			dynrec_string_exception=1;
+ 			return count+count_left;
+ 		}
+@@ -1975,17 +2017,20 @@
+ static Bit16u DRC_CALL_CONV dynrec_stosw_word(Bit16u count,Bit16s add_index,PhysPt di_base) DRC_FC;
+ static Bit16u DRC_CALL_CONV dynrec_stosw_word(Bit16u count,Bit16s add_index,PhysPt di_base) {
+ 	dynrec_string_exception=0;
++	if (CPU_Cycles<=0) return count;
+ 	Bit16u count_left;
+ 	if (count<(Bitu)CPU_Cycles) {
+ 		count_left=0;
++		CPU_Cycles-=count;
+ 	} else {
+ 		count_left=(Bit16u)(count-CPU_Cycles);
+ 		count=(Bit16u)CPU_Cycles;
+ 		CPU_Cycles=0;
+ 	}
+-	add_index<<=1;
++	add_index*=2;
+ 	for (;count>0;count--) {
+ 		if (mem_writew_checked(di_base+reg_di,reg_ax)) {
++			CPU_Cycles+=count; // Refund the faulting and unexecuted elements.
+ 			dynrec_string_exception=1;
+ 			return (Bit16u)(count+count_left);
+ 		}
+@@ -1997,17 +2042,20 @@
+ static Bit32u DRC_CALL_CONV dynrec_stosw_dword(Bit32u count,Bit32s add_index,PhysPt di_base) DRC_FC;
+ static Bit32u DRC_CALL_CONV dynrec_stosw_dword(Bit32u count,Bit32s add_index,PhysPt di_base) {
+ 	dynrec_string_exception=0;
++	if (CPU_Cycles<=0) return count;
+ 	Bit32u count_left;
+ 	if (count<(Bitu)CPU_Cycles) {
+ 		count_left=0;
++		CPU_Cycles-=count;
+ 	} else {
+ 		count_left=count-CPU_Cycles;
+ 		count=CPU_Cycles;
+ 		CPU_Cycles=0;
+ 	}
+-	add_index<<=1;
++	add_index*=2;
+ 	for (;count>0;count--) {
+ 		if (mem_writew_checked(di_base+reg_edi,reg_ax)) {
++			CPU_Cycles+=count; // Refund the faulting and unexecuted elements.
+ 			dynrec_string_exception=1;
+ 			return count+count_left;
+ 		}
+@@ -2019,9 +2067,11 @@
+ static Bit16u DRC_CALL_CONV dynrec_stosd_word(Bit16u count,Bit16s add_index,PhysPt di_base) DRC_FC;
+ static Bit16u DRC_CALL_CONV dynrec_stosd_word(Bit16u count,Bit16s add_index,PhysPt di_base) {
+ 	dynrec_string_exception=0;
++	if (CPU_Cycles<=0) return count;
+ 	Bit16u count_left;
+ 	if (count<(Bitu)CPU_Cycles) {
+ 		count_left=0;
++		CPU_Cycles-=count;
+ 	} else {
+ 		count_left=(Bit16u)(count-CPU_Cycles);
+ 		count=(Bit16u)CPU_Cycles;
+@@ -2030,6 +2080,7 @@
+ 	add_index*=4;
+ 	for (;count>0;count--) {
+ 		if (mem_writed_checked(di_base+reg_di,reg_eax)) {
++			CPU_Cycles+=count; // Refund the faulting and unexecuted elements.
+ 			dynrec_string_exception=1;
+ 			return (Bit16u)(count+count_left);
+ 		}
+@@ -2041,9 +2092,11 @@
+ static Bit32u DRC_CALL_CONV dynrec_stosd_dword(Bit32u count,Bit32s add_index,PhysPt di_base) DRC_FC;
+ static Bit32u DRC_CALL_CONV dynrec_stosd_dword(Bit32u count,Bit32s add_index,PhysPt di_base) {
+ 	dynrec_string_exception=0;
++	if (CPU_Cycles<=0) return count;
+ 	Bit32u count_left;
+ 	if (count<(Bitu)CPU_Cycles) {
+ 		count_left=0;
++		CPU_Cycles-=count;
+ 	} else {
+ 		count_left=count-CPU_Cycles;
+ 		count=CPU_Cycles;
+@@ -2052,6 +2105,7 @@
+ 	add_index*=4;
+ 	for (;count>0;count--) {
+ 		if (mem_writed_checked(di_base+reg_edi,reg_eax)) {
++			CPU_Cycles+=count; // Refund the faulting and unexecuted elements.
+ 			dynrec_string_exception=1;
+ 			return count+count_left;
+ 		}

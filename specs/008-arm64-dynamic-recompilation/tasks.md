@@ -148,6 +148,17 @@ promotion eligibility or automatically resume the omitted tests.
   queues, and an in-guest clean shutdown. Stop and quarantine on any hang or
   guest failure; do not start the benchmark or open stable `incoming`.
 
+- [x] T045 Reproduce missing REP element charges in extracted production helpers
+  for all 18 MOVS/LODS/STOS variants, then add isolated patch 0008 with bounded
+  cycle reservation/refund, exhausted-budget guards and defined backward scaling.
+  Cover fault prefixes/retries and address wrapping under UBSan (FR-045).
+- [x] T046 Verify pins, host tests, hygiene, Android build and stopped-only
+  install; rerun the complete disposable x86 gate and unchanged Normal/DynRec
+  fixed-20k GPU stress pair. Record exact evidence and clean fixture teardown;
+  do not boot Windows or claim the Normal/AoE2 problem resolved (FR-045).
+  See [REP correction evidence](rep-cycle-accounting.md) for failing host
+  assertions and the passing unchanged disposable stress comparison.
+
 T030–T034 implement FR-038 and are deferred to GPT Sol. See
 [coverage](expanded-cpu-coverage.md) and [handoff](sol-handoff.md).
 

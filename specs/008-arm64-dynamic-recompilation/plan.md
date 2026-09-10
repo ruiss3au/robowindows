@@ -166,6 +166,27 @@ Disable the experimental profile and restore its last-known-safe normal-core
 configuration. Revert any isolated core patch. Never restore or replace a guest
 disk automatically; retain the stable machine and its disk unchanged.
 
+## REP cycle-accounting correction (FR-045)
+
+The unchanged phased stress fixture passes Normal but produces repeated 350-ms
+DynRec calls during memory work. Extracted production STOSD helpers reproduce
+4,096 completed writes with zero element cycles charged from a 20,000 budget.
+First add failing tests across all 18 MOVS/LODS/STOS helpers, both directions,
+fits/exact/limited/exhausted budgets, zero counts, first/middle faults and retry.
+Reserve the bounded slice's cycles before execution and refund its uncompleted
+elements on checked faults. Guard nonpositive budgets before unsigned conversion.
+Use multiplication for signed direction scaling, retaining defined backwards
+execution. Keep the generated exception/count handoff and opcode charge intact.
+
+Deliver a standalone pinned-core patch 0008; include it in source reconstruction
+and the build-specific CPU capability fingerprint. Verify host/UBSan, pins,
+hygiene, Android build, stopped-only install, full disposable x86 gate and the
+unchanged fixed-20k Normal/DynRec GPU stress pair. Keep Windows machines stopped.
+If correctness regresses, remove only patch 0008 and its registrations, rebuild
+and invalidate capability; never restore disks. If stress still fails, stop and
+investigate the measured remaining cause. A disposable pass does not resolve
+the separate Normal/Windows/AoE2 starvation or waive promotion gates.
+
 ## Dependencies
 
 - Feature 007 supplies independent experimental machine disks and selected
