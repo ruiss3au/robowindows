@@ -71,6 +71,13 @@ specification, plan, tasks, and validation record when work begins.
 
 ## Next
 
+- Add bounded internal worker timing and translation/interpreter-fallback
+  counters (Feature 002 T072). Offline analysis places the worst bursts inside
+  core calls, with tiny frontend gaps and small host callback cost, but current
+  DynRec residency cannot see direct Normal fallback or translation work.
+  Validate measurement overhead on disposable fixtures before proposing another
+  Windows capture; no speculative engine or buffer tuning
+  ([attribution](002-realtime-emulation-audio/timing-investigation.md#offline-attribution-of-the-post-rep-capture--2026-09-10)).
 - Use the completed UI and address specific reported issues. Resume Feature
   009's clock/median campaign only if the user later requests it; no new guest
   trial is queued by completing the UI milestone.

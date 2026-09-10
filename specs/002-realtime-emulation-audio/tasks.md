@@ -289,6 +289,15 @@ recoverable; it is not required for completion of the conservative MVP.
   full x86 gate and the unchanged stress fixture before another Windows trial.
   Feature 008 T045/T046 passed all 18 helper regressions, the complete x86 gate
   and unchanged Normal/DynRec stress pair; Windows/AoE2 remains unverified.
+- [x] T071 Analyze the retained post-REP desktop capture against call/callback
+  clock semantics and pinned core control flow. Separate measured overload from
+  unmeasured worker phases and decoder fallback; do not boot a guest or infer a
+  specific hot instruction from sampled residency alone. See the offline
+  attribution section in `timing-investigation.md`.
+- [ ] T072 Specify bounded worker/frame-wait/mix timing and translation/fallback
+  counters, then implement and validate reset, nested accounting and overhead
+  with host/disposable fixtures before a separately authorized Windows capture.
+  Do not change engine/cache/link, queue, cycle or scheduler policy for diagnosis.
 
 T062 remains open. The corrected scheduler passed the complete Normal workload,
 but the matched DynRec start failed before the benchmark when Windows Explorer

@@ -301,3 +301,74 @@ queue, enlarge the audio target, or claim GPU is the cause. Attribute the
 remaining worker cost from this capture before proposing another runtime change
 or Windows repetition. No new trial is queued. See [complete scope, metrics and
 clean-shutdown evidence](../011-gpu-presentation/validation.md#post-rep-dynrec-desktop-smoke--failed-timing-clean-shutdown-2026-09-10).
+
+## Offline attribution of the post-REP capture — 2026-09-10
+
+Read-only analysis of the retained capture and pinned source narrows the failure
+to bursts inside the core call, but cannot yet identify a particular guest
+instruction or internal subsystem. No guest was started, no device setting or
+runtime code changed, and no extra Windows trial was performed for this analysis.
+The existing timing parser validates all 189 session diagnostic records, with
+zero CPU-clock errors. The primary 73.615-second desktop selection is unchanged.
+
+| Desktop interval group | Intervals | Elapsed ms | Inside retro_run ms | Process CPU during calls ms | Host video + audio callback ms |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| All | 73 | 73,615 | 24,490.848 | 28,674.110 | 3,721.193 |
+| Any underrun | 14 | 14,136 | 12,839.361 | 14,755.681 | 525.025 |
+| No underrun | 59 | 59,479 | 11,651.487 | 13,918.429 | 3,196.168 |
+
+For a diagnostic subset of seven underrunning intervals, at least 95% of each
+interval was inside `retro_run()` and the maximum gap between calls was below
+1 ms. Together these intervals spent 7,047.081 of 7,061 elapsed ms inside the
+call, with a maximum inter-call gap of only 536 us. They produced 380 completed
+calls (53.82/s versus the advertised approximately 70/s), 533 underruns, 77,429
+missing frames and six deadline resynchronizations. Their host video/audio
+callbacks totaled 217.396 ms, only 3.08% of call wall time. This subset explains
+the overloaded behavior; it does not replace the full quality result or exclude
+the other seven underrunning intervals.
+
+The process consumed 8,132.455 ms of CPU during those seven intervals' call
+windows. This includes every runner thread, not just the emulation worker, and
+must not be subtracted from call wall time to infer a wait duration. Presenter
+CPU over those complete intervals was 378.741 ms; its observation window overlaps
+but differs from the process-clock window, so those quantities are not additive.
+The evidence supports bursts of substantial in-process work, not a persistent
+frontend sleep or a stalled page-fault queue. It does not prove which thread or
+instruction consumes the remaining CPU, or exclude scheduling contention.
+
+### What the current fields cannot tell us
+
+- `RunDiagnostics::begin` computes `wake_late_max_us` from the previous nominal
+  deadline. During catch-up this includes accumulated timing debt; it is not an
+  independent measurement of Android wake-up latency. `host_gap_max_us` measures
+  the actual interval between frontend calls and is the relevant cross-check.
+- In pinned DOSBox Pure `dosbox_pure_libretro.cpp`, `retro_run()` waits for
+  `DBP_ThreadControl(TCM_FINISH_FRAME)`, mixes the ready audio, starts the next
+  worker frame and submits audio/video. The worker normally blocks on a pthread
+  condition variable at its frame boundary (`include/dbp_threads.h`). Existing
+  totals do not separate frontend wait, internal mixing, worker execution,
+  internal rendering or device emulation. Small host callback times do not rule
+  out expensive rendering/mixing inside DOSBox.
+- `core_host.cpp::sample_runtime_decoder` samples the decoder identity only
+  after `retro_run()` returns. In `src/cpu/core_dynrec.cpp`, special code pages,
+  frequently invalidated instructions and `BR_Opcode`/`BR_SMCBlock` can directly
+  invoke `CPU_Core_Normal_Run()` without switching that identity. Therefore
+  `current=DynRec` and zero Normal samples do **not** establish zero interpreter
+  fallback. Cache creation also occurs inside that same DynRec entry point.
+  No available counter measures their frequency or cost in this Windows run.
+- The frontend remained at 70.007141 Hz throughout the desktop selection; its
+  next refresh change was at shutdown. The earlier live-refresh debt-reset
+  defect is not reproduced by this selection. The measured PageFaultCore totals
+  remain too small to explain the observed multi-second bursts.
+
+### Next bounded measurement, not a speculative fix
+
+Before another engine or scheduling correction, specify coarse worker-frame
+wall/thread-CPU timing, frontend frame-wait/mix timing and bounded counters for
+translation and direct interpreter fallback reasons. Distinguish nested work
+and observation windows; publish only aggregate allowlisted fields, never guest
+addresses, opcodes, registers, content or per-call traces. Measure instrumentation
+overhead and reset/snapshot behavior with host and disposable Normal/DynRec
+fixtures before asking for any separate Windows capture. Keep engine/cache/link,
+cycle, audio-queue and scheduling policies unchanged. Implementation and any
+new device run remain separate next steps, not consequences of this diagnosis.
