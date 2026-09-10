@@ -10,7 +10,8 @@ specification, plan, tasks, and validation record when work begins.
   stress pair pass. DynRec's maximum call fell from 352 ms to 19 ms, with zero
   audio errors/resynchronizations and 29.77 presented FPS. This closes the
   disposable memory-work regression, not the earlier Normal/AoE2 failures.
-  Keep Windows trials paused pending a separately coordinated next step
+  The subsequent authorized Windows desktop check still failed audio/timing;
+  its clean shutdown is verified. Keep further Windows trials paused
   ([evidence](008-arm64-dynamic-recompilation/rep-cycle-accounting.md)).
 
 - Shared audio investigation: Feature 002's live-refresh correction is installed
@@ -28,7 +29,11 @@ specification, plan, tasks, and validation record when work begins.
   errors, and guest timing within 0.5%. Normal Windows GPU smoke sustained 29.78
   presented FPS without graphics failures, but failed audio/timing acceptance
   (605 underruns, 89,086 missing frames, seven resynchronizations). Windows shut
-  down cleanly. Hold the DynRec Windows smoke pending diagnosis; these results
+  down cleanly. The later post-REP DynRec desktop-only smoke held 29.78 FPS but
+  recorded 763 underruns, 112,203 missing frames and nine deadline resets in
+  73.615 seconds. Page-fault returns stayed balanced with no wipe; shutdown was
+  clean. Hold further Windows trials pending attribution of the remaining worker
+  overruns ([DynRec evidence](011-gpu-presentation/validation.md#post-rep-dynrec-desktop-smoke--failed-timing-clean-shutdown-2026-09-10)). These results
   do not establish that GPU presentation caused the timing failure
   ([evidence](011-gpu-presentation/validation.md#windows-gpu-smoke--normal-settled-capture)).
   The authorized Normal/Software comparison also failed (15.09 FPS, 454 underruns,

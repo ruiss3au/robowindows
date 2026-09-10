@@ -193,3 +193,69 @@ desktop-idle baselines. Exact launch times, game state and action equivalence
 between captures remain unknown, so individual failure intervals cannot yet be
 assigned to a game phase. The failures remain valid; the clarification changes
 their workload interpretation, not their counts or acceptance result.
+
+## Post-REP DynRec desktop smoke — failed timing, clean shutdown (2026-09-10)
+
+The user authorized one desktop-only check after patch 0008's complete x86 and
+unchanged stress gates passed. The installed APK was verified as SHA-256
+`2aa66375e32c93cf908227531a2a1f579b248d11d9e9a531ebf658ed9cbbe704`
+(`6100586474b1+dirty`, CPU capability `7cfbec67d0f96e79`). Both machines were
+stopped and clean before selection. Through the existing Properties UI, only
+the experimental copy changed to DynRec fixed-20k / GPU; its settings generation
+became 31. Stable `incoming` remained Normal/Software generation 1.
+
+Startup capture began at tablet time 09:30:18; the normal guarded `Start DynRec`
+control entered the isolated runner. Initial telemetry confirms configured/current
+DynRec, balanced-100-ms scheduling and requested/active GPU. Bounded host-only
+evidence is under ignored `artifacts/dynrec-desktop-84hHFd/`. The user confirmed
+desktop readiness; the coordinated window-opening start was marked at 09:31:51.
+The requested workload was My Computer, Control Panel and ordinary windows, not
+AoE2 or a benchmark. Exact individual actions and subjective sound quality were
+not reported; desktop readiness alone does not establish either.
+
+Audio starvation was already visible near readiness and recurred during the
+desktop interval. The planned three-minute check was therefore ended early after
+failure was established; its uncompleted duration is not a pass. To retain the
+existing strict parser's 25–60-second bounds, the contiguous complete telemetry
+intervals after readiness through 09:33:05 were validated in two chronological
+pieces (36,352 and 37,263 ms), then their counts summed. Selection was by time,
+not by whether the intervals passed. No benchmark guest result is implied by
+reuse of the telemetry parser.
+
+| Desktop interval measure | Result |
+| --- | ---: |
+| Complete intervals / elapsed ms | 73 / 73,615 |
+| Presented FPS | 29.78 |
+| Audio underruns / missing frames | 763 / 112,203 |
+| Deadline resynchronizations | 9 |
+| Maximum emulator call / producer gap us | 72,893 / 80,575 |
+| Maximum scheduler lateness us | 265,157 |
+| Over-budget calls / catch-up calls | 570 / 1,176 |
+| Graphics errors / fallbacks / post failures | 0 / 0 / 0 |
+
+Both pieces validated schema 4, foreground state, configured/current DynRec,
+balanced-100-ms timing and requested/active GPU. They had zero dropped or
+saturated audio, stream errors, and presenter/CPU clock errors. The audio queue
+reached zero. A 49,386-ms subwindow starting about twenty seconds
+after readiness still recorded 21 underruns and 2,847 missing frames: the failure
+is not confined to the readiness boundary. Independent guest-clock accuracy and
+human audio quality remain unverified.
+
+The last residency sample before shutdown showed DynRec 12,767, PageFault 11,
+Normal/Halt/Other zero, balanced fault queue 259/259, final depth zero / high-water
+one, no wipe, double fault or reset. PageFaultCore had 29,200 balanced calls with
+155,752-us cumulative duration, 160-us maximum and no 10-ms slow call. This does
+not reproduce sustained PageFault residency or the disposable REP 350-ms stall.
+Repeated workload overruns still exhaust the queue; their Windows-path cause
+remains unattributed. GPU presentation passing its rate check does not turn the
+overall smoke into a pass or prove a CPU-only root cause.
+
+The user ended the test and shut Windows down normally. At tablet time
+09:33:38.858 the core reported `guest requested shutdown`, followed by
+`guest stopped cleanly` at 09:33:38.908. Postflight confirmed no active-session
+marker, DynRec runner or recovery journal. Both profiles have clean provenance:
+stable `incoming` remains Normal/Software generation 1; the experimental copy
+retains the user-selected DynRec fixed-20k/GPU configuration, generation 31.
+No guest force-stop, restore, reinstall, additional trial or push was performed.
+T010 is complete as a failed diagnostic with clean teardown; T008's quality
+acceptance remains open. Further Windows repetitions are not queued.

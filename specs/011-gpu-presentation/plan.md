@@ -49,3 +49,16 @@ properties, wait for desktop readiness, and ask the user to repeat the previous
 workload. Capture aggregate telemetry and verify orderly Windows shutdown.
 Unconfirmed workload equivalence limits causal conclusions. Keep DynRec Windows
 testing on hold; this comparison does not authorize runtime changes or more runs.
+
+After patch 0008 passed the full x86 and unchanged Normal/DynRec stress gates,
+the user authorized one short DynRec fixed-20k + GPU Windows desktop check on
+the experimental copy (2026-09-10). Select the named modes through stopped-machine
+properties, preserve stable `incoming`, and use the existing guarded Start path.
+Wait for explicit desktop readiness, then capture approximately three minutes
+while the user opens a few ordinary windows. No AoE2, benchmark, pause/resume,
+repeated starts or thermal campaign. Record startup separately from the settled
+window; silence is not proof of sound quality or independent guest-clock accuracy.
+Ask for normal in-guest shutdown afterward and verify runner/journal cleanup.
+On a guest failure, stop the workload and coordinate safe shutdown or the existing
+quarantine path; never force-stop a live Windows guest. This narrow check does
+not resolve the earlier Normal/AoE2 starvation or promote either feature.

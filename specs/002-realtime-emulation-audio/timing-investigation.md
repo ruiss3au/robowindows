@@ -280,3 +280,24 @@ This closes T070 and the reproduced DynRec memory-work failure. It does not
 explain the earlier Normal/Windows/AoE2 starvation or qualify sustained audio.
 Both real machines remain stopped, clean and unchanged; no Windows run or push
 was performed and no further guest trial is automatically queued.
+
+## Post-REP Windows desktop check still fails — 2026-09-10
+
+The user subsequently authorized a short DynRec fixed-20k/GPU desktop-only
+check, without AoE2 or another benchmark. After explicit desktop readiness,
+73.615 seconds of contiguous telemetry recorded 763 underruns, 112,203 missing
+frames and nine deadline resynchronizations despite 29.78 presented FPS and no
+graphics errors/fallbacks. Maximum emulator call was 72,893 us and producer gap
+80,575 us. A later subwindow still underruns, so the failure is not limited to
+the startup/readiness boundary. The check was ended early; Windows shut down
+normally and the isolated runner/journal cleared. The experimental copy retains
+DynRec/GPU generation 31; stable `incoming` remains Normal/Software generation 1.
+
+Final PageFaultCore evidence was balanced (29,200 calls/returns, 155,752 us total,
+160 us maximum), fault queue 259/259 at final depth zero, no wipe/double fault/
+reset. The corrected disposable REP regression remains passed, but Windows
+workload overruns still deplete audio. This is not evidence to change the fault
+queue, enlarge the audio target, or claim GPU is the cause. Attribute the
+remaining worker cost from this capture before proposing another runtime change
+or Windows repetition. No new trial is queued. See [complete scope, metrics and
+clean-shutdown evidence](../011-gpu-presentation/validation.md#post-rep-dynrec-desktop-smoke--failed-timing-clean-shutdown-2026-09-10).
