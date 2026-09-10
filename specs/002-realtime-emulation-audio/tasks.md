@@ -294,10 +294,13 @@ recoverable; it is not required for completion of the conservative MVP.
   unmeasured worker phases and decoder fallback; do not boot a guest or infer a
   specific hot instruction from sampled residency alone. See the offline
   attribution section in `timing-investigation.md`.
-- [ ] T072 Specify bounded worker/frame-wait/mix timing and translation/fallback
+- [x] T072 Specify bounded worker/frame-wait/mix timing and translation/fallback
   counters, then implement and validate reset, nested accounting and overhead
   with host/disposable fixtures before a separately authorized Windows capture.
   Do not change engine/cache/link, queue, cycle or scheduler policy for diagnosis.
+  Patch 0009, host/parser checks, legacy probe, enabled full x86 gate and unchanged
+  Normal/DynRec stress pair passed; see `worker-diagnostics.md`. A Windows capture
+  remains separately authorized and is not included in this completion.
 
 T062 remains open. The corrected scheduler passed the complete Normal workload,
 but the matched DynRec start failed before the benchmark when Windows Explorer

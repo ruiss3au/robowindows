@@ -41,7 +41,7 @@ echo "Starting disposable $core presentation=$policy workload=$workload; keep th
   --es workload "$workload" >/dev/null
 for attempt in {1..150}; do
   "${RW_ADB_TARGET[@]}" logcat -d -s RoboWindowsPresentation:I RoboWindowsTelemetry:I \
-    RoboWindowsTiming:I AndroidRuntime:E libc:F >"$output/telemetry.log"
+    RoboWindowsTiming:I RoboWindowsWorker:I RoboWindowsCalibration:I AndroidRuntime:E libc:F >"$output/telemetry.log"
   if rg -q 'RoboWindowsPresentation: (PASS|FAIL)' "$output/telemetry.log"; then
     rg 'RoboWindowsPresentation:' "$output/telemetry.log"
     rg -q 'RoboWindowsPresentation: PASS' "$output/telemetry.log"

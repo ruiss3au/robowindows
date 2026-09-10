@@ -27,6 +27,7 @@
 #include "realtime_scheduler.h"
 #include "runtime_telemetry.h"
 #include "run_diagnostics.h"
+#include "robowindows_core_timing.h"
 #include "session_state.h"
 
 extern "C" const char* robowindows_cpu_decoder_name(void);
@@ -141,6 +142,7 @@ int64_t steady_now_ns() {
 void reset_timing_state_on_core_thread() {
     realtime_scheduler.reset(steady_now_ns());
     run_diagnostics.reset();
+    robowindows_core_timing_reset();
     has_audio_producer_time = false;
 }
 
@@ -199,6 +201,15 @@ void report_telemetry_if_due() {
             static_cast<unsigned long long>(graphics.cpu_clock_errors));
     if (runtime_timing_policy == RuntimeTimingPolicy::Balanced100Ms) {
         const auto timing = run_diagnostics.take_snapshot();
+        RWTimingSnapshot worker;
+        robowindows_core_timing_take(&worker);
+#define RW_FORMAT(n) " " #n "=%llu"
+#define RW_ARGUMENT(n) , static_cast<unsigned long long>(worker.n)
+        __android_log_print(ANDROID_LOG_INFO, "RoboWindowsWorker",
+                "schema=1 interval_ms=%llu" RW_TIMING_FIELDS(RW_FORMAT),
+                static_cast<unsigned long long>(snapshot.interval_ms) RW_TIMING_FIELDS(RW_ARGUMENT));
+#undef RW_FORMAT
+#undef RW_ARGUMENT
         __android_log_print(ANDROID_LOG_INFO, "RoboWindowsTiming",
                 "schema=1 interval_ms=%llu calls=%llu wall_total_us=%llu "
                 "process_cpu_total_us=%llu process_cpu_max_us=%llu cpu_clock_errors=%llu "
@@ -689,6 +700,16 @@ void run_core() {
         core_initialized = true;
     }
     retro_game_info game{content_path.c_str(), nullptr, 0, nullptr};
+    const bool worker_diagnostics = runtime_timing_policy == RuntimeTimingPolicy::Balanced100Ms;
+    robowindows_core_timing_configure(worker_diagnostics ? 1 : 0);
+    if (worker_diagnostics) {
+        const auto disabled_ns = robowindows_core_timing_calibrate(0);
+        const auto enabled_ns = robowindows_core_timing_calibrate(1);
+        __android_log_print(ANDROID_LOG_INFO, "RoboWindowsCalibration",
+                "schema=1 iterations=2000 events_per_slice=64 disabled_ns=%llu enabled_ns=%llu",
+                static_cast<unsigned long long>(disabled_ns),
+                static_cast<unsigned long long>(enabled_ns));
+    }
     if (!retro_load_game(&game)) {
         __android_log_print(ANDROID_LOG_ERROR, "RoboWindowsCore", "guest load failed");
         running = false;
@@ -787,6 +808,7 @@ void run_core() {
     frame_presenter.stop();
     stop_audio();
     retro_unload_game();
+    robowindows_core_timing_configure(0);
     running = false;
     session_state = robowindows::SessionStateAfterCoreCleanup(session_state.load());
     telemetry.set_state(RuntimeState::Stopped);

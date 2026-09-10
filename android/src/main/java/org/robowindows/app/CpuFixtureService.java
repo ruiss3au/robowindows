@@ -64,7 +64,7 @@ abstract class CpuFixtureService extends Service {
             run = CpuFixtureFiles.create(this, mode(), suite);
             NativeHost.setSurface(null);
             if (!NativeHost.startSession(run.launch.getPath(), getFilesDir().getPath(),
-                    RuntimeTimingPolicy.LEGACY)) {
+                    RuntimeTimingPolicy.BALANCED_100_MS)) {
                 throw new IOException("CPU fixture native start failed");
             }
             started = true;

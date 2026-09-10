@@ -1,0 +1,315 @@
+From: RoboWindows contributors
+Subject: [PATCH] Add experimental aggregate worker timing and fallback counters
+
+Pinned DOSBox Pure 7f6e8fb7385fa446d1444d671063268520bf9b54 after 0001-0008.
+GPL-2.0-or-later. No guest execution, cycle, cache, linking or pacing changes.
+Worker-local counters publish only completed slices; generation resets discard
+old work without frontend writes into live worker state. Legacy defaults off.
+
+--- a/dosbox_pure_libretro.cpp
++++ b/dosbox_pure_libretro.cpp
+@@ -33,6 +33,7 @@
+ #include "include/callback.h"
+ #include "include/dbp_serialize.h"
+ #include "include/dbp_threads.h"
++#include "include/robowindows_core_timing.h"
+ #include "include/dbp_opengl.h"
+ #include "src/ints/int10.h"
+ #include "src/dos/drives.h"
+@@ -66,6 +67,24 @@
+ static float dbp_auto_target, dbp_last_fastforward;
+ static Bit32u dbp_lastmenuticks, dbp_framecount, dbp_emu_waiting, dbp_paused_work;
+ static Semaphore semDoContinue, semDidPause;
++RWCoreTiming rw_core_timing;
++extern "C" void robowindows_core_timing_configure(int enabled) { rw_core_timing.configure(enabled != 0); }
++extern "C" void robowindows_core_timing_reset() { rw_core_timing.reset(); }
++extern "C" void robowindows_core_timing_take(RWTimingSnapshot* out) { *out = rw_core_timing.take(); }
++extern "C" uint64_t robowindows_core_timing_calibrate(int enabled) {
++ RWCoreTiming probe;
++ probe.configure(enabled != 0);
++ const auto start = RWTimingClock::wall();
++ for (int i=0; i<2000; ++i) {
++  probe.worker_begin();
++  for (int j=0; j<64; ++j) probe.event(RW_TRANSLATE);
++  probe.worker_end();
++ }
++ const auto end = RWTimingClock::wall();
++ const auto sample = probe.take();
++ if (sample.translations != (enabled ? 128000u : 0u)) return 0;
++ return start < 0 || end < start ? 0 : uint64_t(end-start)/2000;
++}
+ static retro_throttle_state dbp_throttle;
+ static std::string dbp_crash_message;
+ static std::string dbp_content_path;
+@@ -547,9 +566,11 @@
+ 		case TCM_ON_PAUSE_FRAME:
+ 			DBP_ASSERT(dbp_pause_events && !dbp_paused_midframe);
+ 			dbp_paused_midframe = true;
++			rw_core_timing.worker_end();
+ 			semDidPause.Post();
+ 			emuWaitTimeStart = time_cb();
+ 			semDoContinue.Wait();
++			rw_core_timing.worker_begin();
+ 			dbp_emu_waiting += (Bit32u)(time_cb() - emuWaitTimeStart);
+ 			#ifdef DBP_ENABLE_WAITSTATS
+ 			dbp_wait_paused += (Bit32u)(time_cb() - emuWaitTimeStart);
+@@ -561,7 +582,8 @@
+ 			DBP_ASSERT(dbp_pause_events);
+ 			dbp_pause_events = false;
+ 			goto case_TCM_EMULATION_CONTINUES;
+-		case TCM_FINISH_FRAME:
++		case TCM_FINISH_FRAME: {
++			RWCoreTiming::FrontScope timing(rw_core_timing, false);
+ 			if (!dbp_frame_pending) goto case_TCM_EMULATION_PAUSED;
+ 			if (dbp_pause_events) DBP_ThreadControl(TCM_RESUME_FRAME);
+ 			#ifdef DBP_ENABLE_WAITSTATS
+@@ -572,7 +594,9 @@
+ 			DBP_ASSERT(!dbp_paused_midframe);
+ 			dbp_frame_pending = false;
+ 			goto case_TCM_EMULATION_PAUSED;
++		}
+ 		case TCM_ON_FINISH_FRAME:
++			rw_core_timing.worker_end();
+ 			semDidPause.Post();
+ 			emuWaitTimeStart = time_cb();
+ 			#ifndef DBP_STANDALONE
+@@ -583,6 +607,7 @@
+ 			semDoContinue.Wait();
+ 			DBPS_MIXER_AroundEmulationWait(false);
+ 			#endif
++			rw_core_timing.worker_begin();
+ 			dbp_emu_waiting += (Bit32u)(time_cb() - emuWaitTimeStart);
+ 			#ifdef DBP_ENABLE_WAITSTATS
+ 			dbp_wait_continue += (Bit32u)(time_cb() - emuWaitTimeStart);
+@@ -609,6 +634,7 @@
+ 			} while (dbp_state != DBPSTATE_EXITED);
+ 			return;
+ 		case TCM_ON_SHUTDOWN:
++			rw_core_timing.worker_end();
+ 			dbp_state = DBPSTATE_EXITED;
+ 			dbp_game_running = false;
+ 			semDidPause.Post();
+@@ -2866,6 +2892,7 @@
+ 
+ 	struct Local { static Thread::RET_t THREAD_CC ThreadDOSBox(void*)
+ 	{
++		rw_core_timing.worker_begin();
+ 		control->StartUp();
+ 		DBP_ThreadControl(TCM_ON_SHUTDOWN);
+ 		return 0;
+@@ -3641,6 +3668,8 @@
+ 	#ifndef DBP_STANDALONE
+ 	// mix audio
+ 	Bit32u haveSamples = DBP_MIXER_DoneSamplesCount(), mixSamples = 0; double numSamples;
++	{
++	RWCoreTiming::FrontScope timing(rw_core_timing, true);
+ 	if (dbp_throttle.mode == RETRO_THROTTLE_FAST_FORWARD && dbp_throttle.rate < 1)
+ 		numSamples = haveSamples;
+ 	else if (dbp_throttle.mode == RETRO_THROTTLE_FAST_FORWARD || dbp_throttle.mode == RETRO_THROTTLE_SLOW_MOTION || dbp_throttle.rate < 1)
+@@ -3656,6 +3685,7 @@
+ 		if (mixSamples > aud.length) { aud.audio = (int16_t*)realloc(aud.audio, mixSamples * 4); aud.length = mixSamples; }
+ 		MIXER_CallBack(0, (Bit8u*)aud.audio, mixSamples * 4);
+ 	}
++	}
+ 	#endif
+ 
+ 	// Read buffer_active before waking up emulation thread
+--- a/src/cpu/core_dynrec.cpp
++++ b/src/cpu/core_dynrec.cpp
+@@ -20,6 +20,7 @@
+ #include "dosbox.h"
+ 
+ #if (C_DYNREC)
++#include "robowindows_core_timing.h"
+ 
+ #include <assert.h>
+ #include <stdarg.h>
+@@ -214,7 +215,10 @@
+ 		}
+ 
+ 		// page doesn't contain code or is special
+-		if (GCC_UNLIKELY(!chandler)) return CPU_Core_Normal_Run();
++		if (GCC_UNLIKELY(!chandler)) {
++			rw_core_timing.event(RW_SPECIAL);
++			return CPU_Core_Normal_Run();
++		}
+ 
+ 		// find correct Dynamic Block to run
+ 		CacheBlockDynRec * block=chandler->FindCacheBlock(ip_point&4095);
+@@ -223,11 +227,13 @@
+ 			// unless the instruction is known to be modified
+ 			if (!chandler->invalidation_map || (chandler->invalidation_map[ip_point&4095]<4)) {
+ 				// translate up to 32 instructions
++				rw_core_timing.event(RW_TRANSLATE);
+ 				block=CreateCacheBlock(chandler,ip_point,32);
+ 			} else {
+ 				// let the normal core handle this instruction to avoid zero-sized blocks
+ 				Bitu old_cycles=CPU_Cycles;
+ 				CPU_Cycles=1;
++				rw_core_timing.event(RW_INVALIDATED);
+ 				Bits nc_retcode=CPU_Core_Normal_Run();
+ 				if (!nc_retcode) {
+ 					CPU_Cycles=old_cycles-1;
+@@ -289,10 +295,12 @@
+ 			return core_dynrec.callback;
+ 
+ 		case BR_SMCBlock:
++			rw_core_timing.event(RW_SMC);
+ //			LOG_MSG("selfmodification of running block at %x:%x",SegValue(cs),reg_eip);
+ 			cpu.exception.which=0;
+ 			// fallthrough, let the normal core handle the block-modifying instruction
+ 		case BR_Opcode:
++			if (ret == BR_Opcode) rw_core_timing.event(RW_OPCODE);
+ 			// some instruction has been encountered that could not be translated
+ 			// (thus it is not part of the code block), the normal core will
+ 			// handle this instruction
+@@ -339,6 +347,8 @@
+ 	cpu.trap_skip = false;
+ 
+ 	// let the normal core execute the next (only one!) instruction
++	// Trap fallback is counted separately from unsupported translated opcodes.
++	rw_core_timing.event(RW_TRAP);
+ 	Bits ret=CPU_Core_Normal_Run();
+ 
+ 	// trap to int1 unless the last instruction deferred this
+--- /dev/null
++++ b/include/robowindows_core_timing.h
+@@ -0,0 +1,138 @@
++// RoboWindows aggregate diagnostics; GPL-2.0-or-later.
++#ifndef ROBOWINDOWS_CORE_TIMING_H
++#define ROBOWINDOWS_CORE_TIMING_H
++#include <algorithm>
++#include <atomic>
++#include <cstdint>
++#include <ctime>
++#include <mutex>
++
++#define RW_TIMING_FIELDS(X) \
++ X(worker_slices) X(worker_wall_total_us) X(worker_wall_max_us) \
++ X(worker_cpu_total_us) X(worker_cpu_max_us) X(worker_clock_errors) \
++ X(wait_calls) X(wait_total_us) X(wait_max_us) \
++ X(mix_calls) X(mix_total_us) X(mix_max_us) X(frontend_clock_errors) \
++ X(translations) X(fallback_special) X(fallback_invalidated) \
++ X(fallback_opcode) X(fallback_smc) X(fallback_trap) X(discarded_slices)
++struct RWTimingSnapshot {
++#define RW_FIELD(n) uint64_t n = 0;
++ RW_TIMING_FIELDS(RW_FIELD)
++#undef RW_FIELD
++};
++enum RWTimingEvent { RW_TRANSLATE, RW_SPECIAL, RW_INVALIDATED, RW_OPCODE, RW_SMC, RW_TRAP };
++struct RWTimingClock {
++ static int64_t read(clockid_t clock) {
++  timespec t;
++  if (clock_gettime(clock, &t)) return -1;
++  return int64_t(t.tv_sec)*1000000000LL+t.tv_nsec;
++ }
++ static int64_t wall() { return read(CLOCK_MONOTONIC); }
++ static int64_t cpu() { return read(CLOCK_THREAD_CPUTIME_ID); }
++};
++// One emulation worker owns slice_, live_, and its clocks. The frontend never
++// touches them. Only completed slices cross the mutex; events take no locks.
++template<class Clock> class RWTiming {
++ std::atomic<uint64_t> generation_{0};
++ std::mutex mutex_;
++ RWTimingSnapshot pending_, slice_;
++ uint64_t worker_generation_ = 0;
++ bool live_ = false;
++ int64_t wall_start_ = 0, cpu_start_ = 0;
++ static uint64_t duration(int64_t start, int64_t end, uint64_t& errors) {
++  if (start < 0 || end < start) { ++errors; return 0; }
++  return uint64_t(end-start)/1000;
++ }
++ static void merge(RWTimingSnapshot& a, const RWTimingSnapshot& b) {
++#define RW_SUM(n) a.n += b.n;
++  // Max fields are corrected below after saving the previous values.
++  const auto wall = a.worker_wall_max_us, cpu = a.worker_cpu_max_us;
++  const auto wait = a.wait_max_us, mix = a.mix_max_us;
++  RW_TIMING_FIELDS(RW_SUM)
++#undef RW_SUM
++  a.worker_wall_max_us = std::max(wall,b.worker_wall_max_us);
++  a.worker_cpu_max_us = std::max(cpu,b.worker_cpu_max_us);
++  a.wait_max_us = std::max(wait,b.wait_max_us);
++  a.mix_max_us = std::max(mix,b.mix_max_us);
++ }
++public:
++ void configure(bool enabled) {
++  std::lock_guard<std::mutex> lock(mutex_);
++  const auto old = generation_.load(std::memory_order_relaxed);
++  generation_.store(((old & ~uint64_t(1))+2) | uint64_t(enabled),std::memory_order_release);
++  pending_ = {};
++ }
++ void reset() { configure((generation_.load(std::memory_order_acquire)&1)!=0); }
++ uint64_t generation() const { return generation_.load(std::memory_order_acquire); }
++ void worker_begin() {
++  worker_generation_ = generation();
++  live_ = (worker_generation_ & 1)!=0;
++  if (!live_) return;
++  slice_ = {};
++  wall_start_ = Clock::wall(); cpu_start_ = Clock::cpu();
++ }
++ void event(RWTimingEvent event) {
++  if (!live_) return;
++  switch(event) {
++   case RW_TRANSLATE: ++slice_.translations; break;
++   case RW_SPECIAL: ++slice_.fallback_special; break;
++   case RW_INVALIDATED: ++slice_.fallback_invalidated; break;
++   case RW_OPCODE: ++slice_.fallback_opcode; break;
++   case RW_SMC: ++slice_.fallback_smc; break;
++   case RW_TRAP: ++slice_.fallback_trap; break;
++  }
++ }
++ void worker_end() {
++  if (!live_) return;
++  const auto cpu_end = Clock::cpu(), wall_end = Clock::wall();
++  live_ = false;
++  slice_.worker_slices = 1;
++  slice_.worker_wall_total_us = slice_.worker_wall_max_us =
++    duration(wall_start_,wall_end,slice_.worker_clock_errors);
++  slice_.worker_cpu_total_us = slice_.worker_cpu_max_us =
++    duration(cpu_start_,cpu_end,slice_.worker_clock_errors);
++  std::lock_guard<std::mutex> lock(mutex_);
++  if (worker_generation_ == generation()) merge(pending_,slice_);
++  else if (generation() & 1) ++pending_.discarded_slices;
++ }
++ // Frontend scopes may be nested; totals are inclusive, not additive phases.
++ class FrontScope {
++  RWTiming& owner_;
++  uint64_t generation_;
++  bool mix_;
++  int64_t start_;
++ public:
++  FrontScope(RWTiming& owner, bool mix) : owner_(owner),
++    generation_(owner.generation()), mix_(mix),
++    start_((generation_ & 1) ? Clock::wall() : 0) {}
++  ~FrontScope() {
++   if (!(generation_ & 1)) return;
++   const auto end = Clock::wall();
++   std::lock_guard<std::mutex> lock(owner_.mutex_);
++   if (generation_ != owner_.generation()) return;
++   auto& p = owner_.pending_;
++   const auto us = duration(start_,end,p.frontend_clock_errors);
++   if (mix_) { ++p.mix_calls; p.mix_total_us+=us; p.mix_max_us=std::max(p.mix_max_us,us); }
++   else { ++p.wait_calls; p.wait_total_us+=us; p.wait_max_us=std::max(p.wait_max_us,us); }
++  }
++  FrontScope(const FrontScope&) = delete;
++  FrontScope& operator=(const FrontScope&) = delete;
++ };
++ RWTimingSnapshot take() {
++  std::lock_guard<std::mutex> lock(mutex_);
++  const auto result = pending_; pending_ = {}; return result;
++ }
++};
++typedef RWTiming<RWTimingClock> RWCoreTiming;
++extern RWCoreTiming rw_core_timing;
++#if defined(__GNUC__)
++#define RW_TIMING_EXPORT __attribute__((visibility("default")))
++#else
++#define RW_TIMING_EXPORT
++#endif
++extern "C" {
++ RW_TIMING_EXPORT void robowindows_core_timing_configure(int enabled);
++ RW_TIMING_EXPORT void robowindows_core_timing_reset();
++ RW_TIMING_EXPORT void robowindows_core_timing_take(RWTimingSnapshot* out);
++ RW_TIMING_EXPORT uint64_t robowindows_core_timing_calibrate(int enabled);
++}
++#endif

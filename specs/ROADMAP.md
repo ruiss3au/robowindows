@@ -71,13 +71,14 @@ specification, plan, tasks, and validation record when work begins.
 
 ## Next
 
-- Add bounded internal worker timing and translation/interpreter-fallback
-  counters (Feature 002 T072). Offline analysis places the worst bursts inside
-  core calls, with tiny frontend gaps and small host callback cost, but current
-  DynRec residency cannot see direct Normal fallback or translation work.
-  Validate measurement overhead on disposable fixtures before proposing another
-  Windows capture; no speculative engine or buffer tuning
-  ([attribution](002-realtime-emulation-audio/timing-investigation.md#offline-attribution-of-the-post-rep-capture--2026-09-10)).
+- Internal worker timing and translation/interpreter-fallback counters are
+  installed and validated (Feature 002 T072 / patch 0009). Legacy probe, enabled
+  full x86 gate and unchanged Normal/DynRec stress pair pass with zero quality
+  errors; tablet synthetic calibration stays below 11 us per slice. Next, only
+  with separate user coordination, capture the failing Windows desktop workload
+  to distinguish worker CPU, frontend wait/mix and fallback/translation activity.
+  Do not infer the Windows cause from passing disposable counters or tune the
+  engine/buffers speculatively ([evidence](002-realtime-emulation-audio/worker-diagnostics.md)).
 - Use the completed UI and address specific reported issues. Resume Feature
   009's clock/median campaign only if the user later requests it; no new guest
   trial is queued by completing the UI milestone.

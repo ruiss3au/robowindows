@@ -62,7 +62,8 @@ val cpuDiagnosticRevision = contentRevision(listOf(
     "patches/dosbox-pure/0005-dynrec-honor-supervisor-write-protect.patch",
     "patches/dosbox-pure/0006-pagefault-core-timing-diagnostics.patch",
     "patches/dosbox-pure/0007-bounded-pagefault-core-slice.patch",
-    "patches/dosbox-pure/0008-dynrec-rep-cycle-accounting.patch"
+    "patches/dosbox-pure/0008-dynrec-rep-cycle-accounting.patch",
+    "patches/dosbox-pure/0009-worker-timing-diagnostics.patch"
 ), listOf("dosbox-pure:7f6e8fb7385fa446d1444d671063268520bf9b54"))
 
 android {

@@ -51,3 +51,4 @@ END {
     key=names[i]; printf "timing_%s=%.0f\n", key, (key ~ /_max_us$/ ? maximum[key] : total[key])
   }
 }' "$1"
+bash "$(dirname "$0")/summarize-worker-timing.sh" "$1"

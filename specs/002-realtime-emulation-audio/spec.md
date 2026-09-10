@@ -219,6 +219,19 @@ failure to a measured subsystem without relying only on subjective listening.
   light timer/tone fixture. It MUST NOT consume Windows or application files or
   be described as reproducing the unmeasured internals of a particular game.
 
+- **FR-030**: Experimental diagnostics MUST distinguish completed emulation-worker
+  slices (wall and worker-thread CPU time), frontend frame-wait and mixer wall
+  time, and bounded translation/direct-interpreter-fallback counts by reason.
+  Worker slices exclude the core's frame/pause semaphore wait; slice times include
+  nested guest work and MUST NOT be added to frontend wait or process CPU totals.
+  Publish aggregate schema-versioned records only, with clock errors counted.
+  Reset across lifecycle boundaries without racing the worker or publishing a
+  pre-reset partial slice. Legacy sessions leave these diagnostics disabled.
+  No guest addresses, instructions, registers, content or per-call traces.
+  Instrumentation MUST NOT alter engine, linking, cache, cycles, queues or pacing.
+  Host tests and disposable Normal/DynRec correctness/stress tests MUST validate
+  accounting and characterize overhead before a separately authorized Windows run.
+
 ### Key Entities
 
 - **Performance Profile**: A named, recoverable guest execution configuration with memory,

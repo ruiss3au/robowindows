@@ -116,6 +116,41 @@ paths, disk contents, registration data, or Android input contents. Normal repor
 most once per second plus lifecycle and terminal events. Release builds disable interval
 records and retain only the minimal app-private recovery state.
 
+## Optional internal core timing (FR-030)
+
+`RoboWindowsWorker` schema 1 accompanies each experimental telemetry interval.
+Fields: `schema`, `interval_ms`, `worker_slices`, `worker_wall_total_us`,
+`worker_wall_max_us`, `worker_cpu_total_us`, `worker_cpu_max_us`,
+`worker_clock_errors`, `wait_calls`, `wait_total_us`, `wait_max_us`, `mix_calls`,
+`mix_total_us`, `mix_max_us`, `frontend_clock_errors`, `translations`,
+`fallback_special`, `fallback_invalidated`, `fallback_opcode`, `fallback_smc`,
+`fallback_trap`, `discarded_slices`. All values are nonnegative integers.
+
+Worker totals include only completed slices, excluding frame/pause semaphore
+waits. CPU uses the worker thread clock, not process CPU. Slices may span frontend
+report boundaries; their completed contributions belong to the publication
+interval. Worker and frontend observations overlap and must not be added into a
+single phase budget. Wait/mix totals are inclusive scope wall times; worker CPU
+includes guest execution, translation and device/render work. Translation counts
+are creation attempts, not generated block counts or execution-time estimates.
+Fallback reasons count direct interpreter calls; SMC is not also counted as
+unsupported opcode. No guest instructions or addresses are logged.
+
+Frontend snapshots never read live worker counters. Lifecycle reset advances a
+generation and discards stale completed work; `discarded_slices` makes such
+discard visible when the new generation is enabled. Disabled legacy sessions
+emit no extension. The strict parser accepts historical absence, rejects partial
+or malformed extensions and clock failures, and reports `core_timing=1` only for
+complete valid extensions. A zero-slice interval cannot contain slice totals or
+events; slices need not equal frontend calls because of pause/startup boundaries.
+
+Before loading experimental media, `RoboWindowsCalibration` records schema 1,
+`iterations=2000`, `events_per_slice=64`, and disabled/enabled mean nanoseconds
+per synthetic slice. These are isolated local probes, not guest measurements.
+Nonzero calibrated times and enabled overhead below 1% of the nominal frame
+budget are the initial smoke threshold; capture-to-capture timing variability
+and unmeasured workload-specific overhead remain explicit limitations.
+
 ## Acceptance derivations
 
 - Audio production rate = `audio_produced_frames * 1000 / interval_ms`.

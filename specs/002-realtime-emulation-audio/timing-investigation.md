@@ -372,3 +372,16 @@ overhead and reset/snapshot behavior with host and disposable Normal/DynRec
 fixtures before asking for any separate Windows capture. Keep engine/cache/link,
 cycle, audio-queue and scheduling policies unchanged. Implementation and any
 new device run remain separate next steps, not consequences of this diagnosis.
+
+## Internal measurement installed and verified — 2026-09-10
+
+The user authorized T072's implementation and disposable verification. Patch
+0009 now reports completed-worker wall/thread CPU, frontend frame-wait/mix and
+translation/direct-interpreter-fallback aggregates without changing execution
+policy. Host/reset/concurrency/parser tests, legacy-disabled device checks, the
+enabled complete x86 gate and unchanged Normal/DynRec stress pair passed.
+Synthetic on-tablet overhead calibration stayed below 11 us per slice; it does
+not establish exact Windows-wide measurement overhead. Both Windows machines
+remain stopped, clean and unchanged. See [build identity, counters, timing and
+validation limits](worker-diagnostics.md). The installed diagnostic build is
+ready for a separately coordinated Windows capture, not an audio-fix claim.

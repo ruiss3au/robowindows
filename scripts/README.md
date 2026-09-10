@@ -21,6 +21,7 @@ guest media, and backups are intentionally outside Git.
 | `scripts/parse-win98-benchmark.sh FILE` | Strictly validate and normalize `RWBENCH.TXT` | Read-only |
 | `scripts/summarize-benchmark-telemetry.sh PROFILE LOG` | Validate and summarize matched benchmark telemetry | Read-only |
 | `bash scripts/summarize-runtime-timing.sh LOG` | Validate optional per-interval process/callback timing diagnostics | Read-only |
+| `bash scripts/summarize-worker-timing.sh LOG` | Validate optional completed-worker, frontend-wait/mix and fallback aggregates; included by runtime timing validation | Read-only |
 | `scripts/capture-sm-t500-benchmark.sh --profile PROFILE` | Capture bounded telemetry, result screen and temperature for an already-running experimental guest | Does not start, stop, or change the guest; writes ignored evidence |
 | `scripts/finalize-sm-t500-benchmark.sh ...` | Merge a strict guest result with host metrics and explicit human checks | Refuses to overwrite an existing final report |
 | `scripts/compare-sm-t500-benchmarks.sh ...` | Compare three valid fixed-20k DynRec reports with three matched Normal reports | Emits medians/deltas; never promotes while long gates are pending |

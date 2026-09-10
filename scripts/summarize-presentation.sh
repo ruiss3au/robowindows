@@ -5,6 +5,7 @@ workload=${4:-tone}
 [[ $workload == tone || $workload == stress ]] || exit 2
 case "$1" in normal) decoder=Normal ;; dynamic) decoder=DynRec ;; *) exit 2 ;; esac
 [[ $2 == 0 || $2 == 1 ]] || exit 2
+diagnostics=$(bash "$(dirname "$0")/summarize-runtime-timing.sh" "$3")
 awk -v decoder="$decoder" -v core="$1" -v policy="$2" -v workload="$workload" '
 function fail(message) { print message > "/dev/stderr"; bad=1 }
 /RoboWindowsTelemetry:/ {
@@ -43,3 +44,4 @@ END {
   printf "workload=%s\n", workload
   exit bad ? 1 : 0
 }' "$3"
+printf '%s\n' "$diagnostics"

@@ -12,7 +12,8 @@ grep -q '^timing_process_cpu_total_us=40000$' <<<"$summary"
 grep -q '^timing_host_gap_max_us=15000$' <<<"$summary"
 grep -q '^timing_video_total_us=200$' <<<"$summary"
 printf '%s\n' "$base" >"$work_dir/legacy"
-bash "$repo_dir/scripts/summarize-runtime-timing.sh" "$work_dir/legacy" | grep -q '^timing_diagnostics=unavailable$'
+legacy_summary=$(bash "$repo_dir/scripts/summarize-runtime-timing.sh" "$work_dir/legacy")
+grep -q '^timing_diagnostics=unavailable$' <<<"$legacy_summary"
 for expression in 's/calls=70/calls=-1/' 's/calls=70/calls=71/' \
     's/wall_total_us=10000/wall_total_us=bad/' 's/schema=1/schema=9/' \
     's/video_max_us=5/video_max_us=101/' 's/cpu_clock_errors=0/cpu_clock_errors=71/' \

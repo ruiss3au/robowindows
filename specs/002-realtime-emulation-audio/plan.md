@@ -229,6 +229,32 @@ unit-tested and upstream core changes remain a small, reviewable patch set.
 
 ## Rollback and Safety
 
+### Bounded internal measurement (FR-030 / T072)
+
+Use standalone patch 0009 against the pinned core. A source-owned C++11 helper
+keeps worker-local slice counters; only completed slices are merged under a
+short snapshot mutex. Frontend reset advances an atomic generation, discarding
+in-flight pre-reset contributions without touching worker-local state. Start/end
+slices around worker execution and exclude frame/pause semaphore waits. Count
+translation and direct Normal fallback reasons without clocks, locks or atomics
+on each event; do not time individual instructions or linked blocks. Frontend
+frame-wait and mixer scopes retain their own generation and wall-time totals.
+Export through the narrow native boundary and a separate bounded schema-1 record;
+keep schema-4 runtime and existing timing records compatible. Disabled legacy
+sessions perform no diagnostic clock reads or counter updates.
+
+Test fake-clock accounting, failed clocks, nested work, resets during active
+slices/scopes, disabled behavior and concurrent snapshots. Characterize empty
+scope/event overhead with a bounded calibration before loading disposable media,
+then require full x86 parity and the unchanged stress pair with no quality errors.
+The source-owned CPU fixture uses balanced timing so the full fault/SMC gate
+actually exercises enabled instrumentation; the disposable core/lifecycle probe
+continues to cover disabled legacy behavior. No machine profile changes.
+Record calibration limits and device variability rather than claiming a noisy
+cross-build comparison isolates total overhead. Preserve the prior APK; rollback
+removes only patch 0009 and its host/report integration, invalidates capability
+and never changes guest disks. No Windows start is authorized by this slice.
+
 - Preserve the current conservative profile as the last-known-safe fallback.
 - Test CPU/core changes only with a cloned image. Require identical checksums only when the
   test terminates before guest execution; otherwise verify mountability/filesystem health

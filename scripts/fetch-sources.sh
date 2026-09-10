@@ -84,17 +84,21 @@ while read -r name url commit extra; do
     set -- "$@" "$repo_root/patches/$name/0006-pagefault-core-timing-diagnostics.patch"
     set -- "$@" "$repo_root/patches/$name/0007-bounded-pagefault-core-slice.patch"
     set -- "$@" "$repo_root/patches/$name/0008-dynrec-rep-cycle-accounting.patch"
+    set -- "$@" "$repo_root/patches/$name/0009-worker-timing-diagnostics.patch"
   fi
   if [ -n "$(git -C "$target" status --porcelain --untracked-files=normal)" ]; then
     expected_patch_files=dosbox_pure_libretro.cpp
+    expected_new_files=
     if [ "$name" = dosbox-pure ]; then
 expected_patch_files='dosbox_pure_libretro.cpp
 include/paging.h
+src/cpu/core_dynrec.cpp
 src/cpu/core_dynrec/decoder_opcodes.h
 src/cpu/core_dynrec/operators.h
 src/cpu/cpu.cpp
 src/cpu/paging.cpp
 src/dosbox.cpp'
+      expected_new_files=include/robowindows_core_timing.h
     fi
     audit_dir=$(mktemp -d)
     forward_ok=1
@@ -107,13 +111,14 @@ src/dosbox.cpp'
       for expected_patch in "$@"; do
         patch -s -d "$audit_dir" -p1 < "$expected_patch" || forward_ok=0
       done
-      for expected_file in $expected_patch_files; do
+      for expected_file in $expected_patch_files $expected_new_files; do
         cmp -s "$audit_dir/$expected_file" "$target/$expected_file" || forward_ok=0
       done
     fi
     rm -rf -- "$audit_dir"
     if [ ! -f "$patch_file" ] ||
        [ "$(git -C "$target" diff --name-only)" != "$expected_patch_files" ] ||
+       [ "$(git -C "$target" ls-files --others --exclude-standard)" != "$expected_new_files" ] ||
        [ "$forward_ok" -ne 1 ]; then
       echo "Refusing unexpected dirty source tree: $target" >&2
       failed=1
