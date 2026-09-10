@@ -368,7 +368,7 @@ recoverable; it is not required for completion of the conservative MVP.
   Full host suite, parser/calibration negatives, 20 historical captures, pinned
   reconstruction, hygiene and Android build passed. See implementation evidence
   in `translation-attribution.md`; tablet overhead is not yet measured.
-- [ ] T082 With separate user coordination and both real machines clean/stopped,
+- [x] T082 With separate user coordination and both real machines clean/stopped,
   verify installed build, run legacy/no-extension smoke and full x86 gate, check
   calibration, then unchanged cache cases Normal/GPU before DynRec/GPU and the
   unchanged Normal/DynRec stress pair. Require strict diagnostic coverage,
@@ -376,6 +376,12 @@ recoverable; it is not required for completion of the conservative MVP.
   costs/direct clear reasons; keep unresolved T076 attribution explicit. Stop
   on calibration/correctness/lifecycle/diagnostic failure. No Windows boot,
   promotion, engine tuning or dropped long campaign follows automatically.
+  Authorized unattended execution completed: installed identity verified, legacy
+  smoke/no-extension and all 18 x86 stages passed, all ten Normal-first cache
+  cases passed strict coverage/calibration, and both unchanged stress cases
+  passed at 29.77 FPS and 98.82% guest timing with zero captured audio/scheduling/
+  graphics/clock errors. Final cleanup and unchanged clean/stopped profiles were
+  verified. See device attribution evidence; Windows causality remains open.
 
 T062 remains open. The corrected scheduler passed the complete Normal workload,
 but the matched DynRec start failed before the benchmark when Windows Explorer

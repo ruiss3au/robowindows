@@ -1,7 +1,7 @@
 # Targeted translation/cache attribution — FR-033
 
-Status: implemented and host/build validated (2026-09-10, T080–T081);
-device attribution validation remains T082.
+Status: implemented, installed and disposable-device validated (2026-09-10,
+T080–T082). Windows underrun attribution remains unresolved.
 
 ## Decision and limits
 
@@ -291,3 +291,123 @@ real profiles clean/stopped, generations 1 and 31 unchanged, with no isolated
 runner or recovery journal. No new build has been installed at this checkpoint;
 the already authorized T082 disposable sequence may proceed after stopped guards.
 Windows underruns, exact miss history and per-phase causality remain unresolved.
+
+## Device attribution validation — 2026-09-10
+
+The authorized stopped installation completed; APK readback matched `926af541...871cf67`
+above. The legacy surface/persistence/input/media/pause/resume/restart smoke passed
+with zero terminal, cache or cache-calibration records in a separately captured
+extension-tag log. Full x86 correctness passed all 18 stages at device-log time
+12:05:51.909. All 18 per-runner schema-2 terminal groups, combined worker/cache
+records and four-mode calibrations passed strict validation. Their completed
+worker slices total 3,071; calibration now consumes part of the fixed host gate
+window, so this is not directly comparable to the prior gate's slice count.
+The full-mode synthetic means ranged 107,422–109,040 ns/slice, below 142,680 ns;
+clock and accounting errors were zero. Deliberate DynRec PF stress retained
+PFQ 21/21, depth 0/4, wipe 0/0, PFCore 16,408/16,408 with total/max
+121,762/28,780 us, two Slow10 calls, no double fault or reset. Correctness is not
+a general long-call quality pass.
+
+All five unchanged Normal/GPU cache cases ran before all five DynRec/GPU cases.
+Exact return/checksum/tick records, calibration, schema-2 residual coverage and
+cleanup passed. Each session emitted one ordinary group plus one terminal group.
+All ten reported zero underruns, missing/dropped/saturated audio, stream errors,
+deadline resets, graphics errors/fallbacks, post failures, diagnostic clock/scope
+errors, discarded worker slices and discarded samples. Normal's new fields were
+zero with sample timing explicitly unavailable. Full-mode calibration means were
+109,103–109,466 ns (Normal) and 108,704–109,834 ns (DynRec).
+
+The DynRec measurements below aggregate ordinary plus terminal contributions;
+CPU columns are **observed samples**, not estimated whole-interval phase totals.
+
+| Case | Attempts / completed samples | Sample coverage | Translation CPU total / max us | Publication CPU subset us | Code-write clear calls | Dispatcher hits / misses |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| warm | 52 / 2 | 3.846% | 74 / 50 | 2 | 0 | 10,543 / 52 |
+| cold | 12,334 / 148 | 1.200% | 1,695 / 57 | 189 | 0 | 6,429 / 12,334 |
+| reuse | 12,338 / 149 | 1.208% | 1,742 / 67 | 184 | 0 | 16,673 / 12,338 |
+| data | 53 / 2 | 3.774% | 59 / 38 | 2 | 0 | 10,551 / 53 |
+| rewrite | 4,148 / 75 | 1.808% | 1,251 / 64 | 110 | 4,095 | 10,549 / 4,148 |
+
+All five DynRec cases reported zero cache-reclamation, page-pressure, generic
+page-release and other clears. Code-size clears were 23 / 20 / 24 / 24 / 24 in
+table order; these include bootstrap/mode changes. The rewrite control now
+directly exercises code-write invalidation, unlike the data-write control.
+The first alternating rewrite stores the already-zero value, so 4,095 changed
+writes across 4,096 iterations are expected from source. Linked execution is not
+included in dispatcher hit counts. A second sweep adds only four translation
+attempts, with no observed storage/handler-pressure clears; this supports retained
+code reuse at this footprint, not a global cache capacity or per-miss-history claim.
+
+Sampled translation maxima were 38–67 us and the measured publication subset was
+small; no sampled call reproduces the Windows worker overrun. Only 1.2–3.846% of
+attempts were sampled with deterministic early-slice bias. Do not multiply these
+times by the old Windows translation rate or treat absence of a slow sample as
+proof that translation cannot cause stalls. The fixture still does not reproduce
+the Windows fallback storm; T076's exact per-phase attribution remains limited.
+
+Calibration is before guest load but after the Java/native session clocks start.
+It adds roughly 0.4–0.5 seconds of startup work to these short captures. Whole
+observed presentation averages are consequently 13.97–19.32 FPS, **not** a settled
+presentation pass or evidence that active presentation slowed. Java durations are
+1,104–1,710 ms; native totals 1,112.538–1,680.811 ms. All measured guest ticks remain
+528 except DynRec warm 527 and both rewrite cases 529; setup/priming identities
+are unchanged. Never silently subtract calibration from these clocks to claim
+independent guest speed or compare whole-session FPS to the pre-calibration build.
+The unchanged longer stress pair supplies the separately gated settled check.
+
+Ignored evidence: `artifacts/cache-attribution-device-legacy{,-extension}.log`,
+`artifacts/cache-attribution-device-x86.log`, per-session validation under
+`artifacts/cache-attribution-x86-sessions-f9Q7Wr/`, and wrappers
+`artifacts/cache-attribution-device-{normal,dynamic}-{case}.log`. Matrix raw
+directories use the existing `artifacts/presentation-{core}-1-cache-{case}-{suffix}/`
+layout with these suffixes:
+
+| Case | Normal | DynRec |
+| --- | --- | --- |
+| warm | hTcVlO | ULNx6e |
+| cold | bCM8M8 | 9uNi1c |
+| reuse | PvcIwM | 75DFzO |
+| data | DALUij | EF1lsG |
+| rewrite | dZ7E1W | v7MfRx |
+
+### Unchanged stress pair and final postflight
+
+Both unchanged GPU stress cases passed their strict settled quality gate, Normal
+before DynRec, with `phase_mask=15`. Each recorded Java host 122,055 ms and guest
+120,616 ms (98.82%, within 5%). Normal's 107 settled intervals cover 108,252 ms;
+DynRec's 107 cover 108,288 ms. Both presented 29.77 FPS. All 120 ordinary groups
+plus each terminal residual validated, and their full captured totals also show
+zero underruns, missing/dropped/saturated audio, stream errors, resynchronizations,
+graphics errors/fallbacks, post failures and presenter clock errors. Worker/cache
+clock, scope and discard counters remained zero.
+
+DynRec stress recorded 48 translation attempts and six completed samples:
+330 us sampled translation CPU, 74 us sampled maximum, 17 us publication subset,
+with zero clear operations. The ordinary worker records counted 304,930 BR_Opcode
+fallback events without a timing-quality failure. These counts do not reproduce
+the Windows translation storm or prove fallback cost is harmless in other work.
+Full-mode calibration means were 109,101 ns Normal and 109,468 ns DynRec; the
+four-mode accounting and fixed smoke budget passed. This bounds the diagnostic
+smoke result, not total real-workload overhead or sustained/thermal stability.
+
+Terminal exits were host_stop after the disposable timer completed; native cleanup
+finished before its buffered record was read. PASS records are at device-log
+times 12:10:14.159 and 12:12:20.151. Raw captures/strict summaries are ignored
+`artifacts/presentation-normal-1-stress-xpBBnQ/` and
+`artifacts/presentation-dynamic-1-stress-bITEEP/`, with wrapper logs
+`artifacts/cache-attribution-device-{normal,dynamic}-stress.log`.
+
+Final read-only postflight verified no isolated runner, active-session marker,
+recovery journal, presentation fixture directory or legacy staging/private test
+files. The pre-test stay-awake setting was restored. Both real profiles remain
+clean/stopped and unchanged: stable `incoming` Normal/Software generation 1;
+`win98 dynrec exp` fixed-20k DynRec/GPU generation 31. No Windows guest was opened,
+and no real guest settings/media, CPU engine policy or publication barriers changed.
+
+T082 is complete for disposable calibration, correctness, coverage and stress
+quality. Repository hygiene, whitespace and pinned-source checks passed after
+recording the evidence. No rebuild/reinstall is needed for these documentation
+changes. The next useful measurement requires a separately coordinated Windows
+session with confirmed user activity; it cannot be inferred from these control
+fixtures. No automatic Windows boot, promotion, push or dropped long/manual gate
+is queued. Preserve the deterministic-sampling and exact-attribution limits above.

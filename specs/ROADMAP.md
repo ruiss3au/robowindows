@@ -95,11 +95,17 @@ specification, plan, tasks, and validation record when work begins.
   (12,338), data writes (53) and code rewrites (4,148), supporting reuse and
   retranslation inferences. Teardown-inclusive samples are not settled quality;
   aggregate counts still do not isolate a costly function or the Windows cause.
-  Targeted attribution is implemented and host/build validated (Feature 002 FR-033/T080–T081): bounded
+  Targeted attribution is implemented, installed and disposable-device validated
+  (Feature 002 FR-033/T080–T082): bounded
   translation/publication samples plus direct cache-clear reason counters,
-  with explicit selection bias and no per-miss causality claim. Next, perform
-  authorized stopped installation and disposable T082 calibration/correctness/
-  attribution checks ([design and evidence](002-realtime-emulation-audio/translation-attribution.md)).
+  with explicit selection bias and no per-miss causality claim. Legacy, all 18
+  x86 stages, all ten cache cases and both unchanged stress cases passed. Stress
+  held 29.77 FPS with 98.82% guest timing and zero captured audio/scheduling/
+  graphics errors. Rewrite directly recorded 4,095 code-write clears; the controls
+  did not hit cache-reclamation/page-pressure paths. Both real profiles remain
+  clean/stopped and unchanged. Next, coordinate a short instrumented Windows
+  session with confirmed user activity to measure the remaining underruns
+  ([design and evidence](002-realtime-emulation-audio/translation-attribution.md)).
   No speculative engine/buffer tuning or
   Windows run is queued
   ([fixture and limits](002-realtime-emulation-audio/cache-control-fixture.md)).
