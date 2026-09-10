@@ -84,9 +84,12 @@ specification, plan, tasks, and validation record when work begins.
   instructions. The five source-owned warm/cold/reuse/data-write/code-rewrite
   controls are now implemented, with exact checksums and independent guest ticks;
   host/QEMU, failure checks and Android build pass. Existing fixtures are unchanged.
-  Next, coordinate stopped installation and automated disposable Normal/DynRec
-  characterization; it has not run on the tablet yet. Counts still do not isolate
-  a costly function. No speculative engine/buffer tuning or Windows run is queued
+  The build is installed; the full x86 gate and all ten Normal/DynRec cache-case
+  correctness checks passed with clean cleanup and unchanged real profiles.
+  Eight cases finished before the first timing report; reuse had just one complete
+  interval per core. Next, add bounded terminal diagnostic coverage before another
+  comparison, preserving the exact images. Counts still do not isolate a costly
+  function. No speculative engine/buffer tuning or Windows run is queued
   ([fixture and limits](002-realtime-emulation-audio/cache-control-fixture.md)).
 - Use the completed UI and address specific reported issues. Resume Feature
   009's clock/median campaign only if the user later requests it; no new guest

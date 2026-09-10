@@ -322,6 +322,15 @@ recoverable; it is not required for completion of the conservative MVP.
   before DynRec on the SM-T500. Validate records, cleanup, coverage and actual
   reuse/invalidation counters; do not claim Windows causality or automatically
   queue a Windows trial. Not executed as part of T074–T075.
+  Authorized installation, full x86 gate and all ten cache-case correctness
+  checks subsequently passed. Eight cases emitted no complete timing interval;
+  reuse emitted one per core. Cleanup and unchanged real profiles were verified.
+  Remains open for measurement coverage/mechanism characterization, not for
+  rerunning the already completed correctness cases without a reporting fix.
+- [ ] T077 Specify and implement bounded terminal diagnostic coverage for short
+  disposable sessions, preserving the exact cache images and legacy behavior.
+  Test completed-worker capture, reset/shutdown ordering and explicit partial
+  interval semantics before a separately coordinated repeat. No engine tuning.
 
 T062 remains open. The corrected scheduler passed the complete Normal workload,
 but the matched DynRec start failed before the benchmark when Windows Explorer

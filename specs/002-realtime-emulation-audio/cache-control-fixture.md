@@ -134,3 +134,99 @@ change was performed; the tablet still has its previous diagnostic build.
 Device Normal/DynRec characterization, actual cache reuse/invalidation, audio
 quality and independent guest/host timing accuracy remain unverified. No Windows
 run or promotion is implied by a disposable correctness result.
+
+## Authorized device characterization — 2026-09-10
+
+The user authorized installation of the verified APK and the disposable CPU gate,
+then one five-case Normal/GPU matrix followed by DynRec/GPU. Both real machines
+must remain stopped and unchanged. Stop on correctness, lifecycle or cleanup
+failure; record diagnostic timing failures without promoting them. Preserve all
+case captures, distinguish complete telemetry coverage from whole guest work,
+and verify runner/cache cleanup and clean machine metadata afterward. This
+authorization does not include a Windows workload or engine changes.
+
+### Installed build and CPU gate
+
+Preflight confirmed both profiles clean/stopped, no isolated runner, active-session
+marker or recovery journal. The exact APK above was installed without clearing
+data, then read back and hash-verified. The full disposable x86 gate passed in
+Normal and DynRec at tablet time 11:01:50.829. Its 36 frontend/worker intervals
+validated with zero diagnostic clock errors. The DynRec page-fault suite retained
+21/21 queue returns, depth zero / high-water four, no wipe, and 16,408/16,408
+PageFaultCore calls (84,879 us cumulative / 11,084 us maximum, one 10-ms slow call).
+This is correctness evidence, not a real-time pass for that intentional stress.
+Raw CPU evidence remains ignored in `artifacts/cache-device-x86.log`.
+
+### Five-case results
+
+All five Normal cases ran before all five DynRec cases, fixed 20k and requested
+GPU, on the same APK. Each produced 4,096 checked returns, the exact expected
+checksum, a valid integrity record, the expected configured decoder and its own
+APM shutdown. Results span tablet time 11:02:33.736–11:04:04.240.
+
+| Case | Normal host ms | DynRec host ms | Normal measured PIT ticks | DynRec measured PIT ticks | Complete telemetry intervals, Normal / DynRec |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| warm | 705 | 710 | 528 | 527 | 0 / 0 |
+| cold | 703 | 707 | 528 | 528 | 0 / 0 |
+| reuse | 1,207 | 1,202 | 528 | 528 | 1 / 1 |
+| data | 705 | 702 | 528 | 528 | 0 / 0 |
+| rewrite | 706 | 712 | 529 | 529 | 0 / 0 |
+
+All cases recorded 14 setup ticks; reuse additionally recorded 527 prime ticks
+under both cores, and the other cases recorded zero prime ticks. Host durations
+include bootstrap/setup and shutdown polling, so the small differences are not
+CPU throughput or an independent 5% guest-clock validation. Similar guest ticks
+at the same fixed cycle budget do not imply identical host CPU cost.
+
+The ten strict correctness summaries passed. Ten synthetic enabled calibrations
+ranged from 2,432 to 2,917 ns per slice; retain the previously documented overhead
+limits. Complete raw captures and strict summaries are in ignored
+`artifacts/presentation-{normal,dynamic}-1-cache-*/`; per-case script output is
+in `artifacts/cache-device-{normal,dynamic}-{case}.log`.
+
+### Measurement gap, not a timing pass
+
+Eight sessions ended before the one-second reporting interval. Their reports
+explicitly say frontend/worker timing is unavailable. Printed zero aggregate
+errors and zero presented FPS in those empty reports are **not observations of
+zero errors or zero actual presentation**. There is no settled audio or residency
+measurement for those eight cases.
+
+Only reuse had a complete interval: 1,000 ms under Normal and 1,008 ms under
+DynRec. In those limited windows, worker CPU was 501,164 / 307,055 us and worker
+wall 519,310 / 328,120 us respectively; these overlap frontend timing and cover
+setup/prime/measured work, not the measured loop alone. DynRec recorded 12,324
+translation attempts, Normal zero. All fallback buckets were zero in those two
+windows. Both recorded zero underruns, missing/dropped/saturated audio, deadline
+resets, stream/graphics/clock errors and post failures. Requested/active GPU and
+sampled current decoder matched. Those observations exclude the unreported tail
+and do not establish whole-session or settled quality. The reports intentionally
+retain `quality=not_assessed` and `cache_mechanism=unverified`.
+
+Source review confirms the gap: `report_telemetry_if_due()` returns before
+1,000 ms, and runtime cleanup has no terminal partial-interval report before
+worker diagnostics are disabled. The retained logs cannot reconstruct counters
+that were never emitted. Thus actual warm/cold/rewrite cost and the intended
+invalidation/reuse mechanisms remain uncharacterized; the Windows underrun cause
+is still unresolved. Do not infer cache effectiveness or a DynRec speedup from
+the two partial reuse windows.
+
+Next, specify and test bounded terminal diagnostic reporting for these short
+fixtures, with completed-worker publication, explicit partial-interval/lifecycle
+semantics and unchanged legacy behavior. Preserve these exact guest images;
+blindly repeating a cold sweep to extend duration changes the mechanism. No
+engine/cache/queue adjustment or additional trial was performed in this step.
+
+### Postflight and acceptance
+
+Postflight found no DynRec/CPU/presentation runner, active-session marker,
+recovery journal or presentation cache directory. Both real profiles retained
+clean provenance and unchanged settings: stable `incoming` Normal/Software
+generation 1; experimental copy DynRec fixed-20k/GPU generation 31. Neither real
+guest was booted. No native/Java failure or fixture cleanup failure was observed
+in the captured records. Repository hygiene and whitespace checks passed.
+
+Installation and all ten correctness cases are complete. T076 remains open only
+for adequate diagnostic coverage and mechanism characterization, not another
+blind repeat. No Windows acceptance, human audio judgment, promotion or push is
+included in this milestone.
