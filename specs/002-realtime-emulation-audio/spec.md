@@ -212,6 +212,12 @@ failure to a measured subsystem without relying only on subjective listening.
   diagnostic interval. Only lifecycle resets may clear those states. Legacy
   refresh changes retain their existing deadline-reset behavior. Debt exceeding
   250 ms after a refresh change still MUST be counted as a resynchronization.
+- **FR-029**: A source-owned disposable stress workload MUST distinguish idle,
+  integer, RAM-copy and VGA-write phases, retain independent guest tick timing
+  and an unmodified guest tone, and prove that all phases executed. Its identity
+  MUST be explicit in capture results so it cannot be confused with the existing
+  light timer/tone fixture. It MUST NOT consume Windows or application files or
+  be described as reproducing the unmeasured internals of a particular game.
 
 ### Key Entities
 

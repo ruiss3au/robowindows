@@ -276,6 +276,17 @@ recoverable; it is not required for completion of the conservative MVP.
 - [x] T067 Run host, hygiene, pinned-source and Android build checks, then guarded
   disposable Normal/DynRec tests. Record scope and unresolved Windows underruns;
   do not start either Windows machine for this corrective slice.
+- [x] T068 Add an allowlisted, separately identified idle/integer/RAM/VGA stress
+  fixture with phase-completion evidence and strict parser regressions (FR-029).
+- [x] T069 Verify the unchanged light image and stress image in host/QEMU checks,
+  build/install safely, and capture disposable Normal then DynRec fixed-20k/GPU
+  results; retain Windows/game root-cause uncertainty and stopped machine state.
+  Normal passed; DynRec reproduced severe starvation and failed phase/timer
+  validation. Completion records the diagnostic finding, not a quality pass.
+- [ ] T070 Specify and regress the demonstrated DynRec REP element-cycle accounting
+  defect under Feature 008 before a minimal isolated patch. Preserve precise
+  memory-fault progress, zero-count and exhausted-budget behavior; require the
+  full x86 gate and the unchanged stress fixture before another Windows trial.
 
 T062 remains open. The corrected scheduler passed the complete Normal workload,
 but the matched DynRec start failed before the benchmark when Windows Explorer

@@ -183,3 +183,81 @@ No Windows machine was booted, no machine setting changed, and no push performed
 T066/T067 are complete; Windows starvation and the older qualification gates
 remain open. The next investigation needs attribution of the sustained worker
 stalls and a confirmed reproducible workload, not another blind acceptance run.
+
+## Phased stress reproduction and REP accounting finding
+
+The user clarified that the earlier captures included opening windows and then
+Age of Empires II. They were not desktop-idle baselines. Exact game state and
+phase timestamps are still unknown; do not attribute individual Windows failures
+to a specific game operation.
+
+Added a separately allowlisted source-owned stress fixture, described in
+`tests/realtime/workloads.md`. It repeats idle, integer, RAM fill/copy and VGA
+write phases while retaining BIOS tick timing and the PIT tone. It uses real
+mode with 32-bit arithmetic, not a Windows protected-mode/game reproduction.
+The original light image retains its exact checksum. The stress image SHA-256 is
+`816fe821f70ea4ff3929fd2281a1ee47a2487ba9f59e43278ebfad61bd7cd3b1`.
+Results require distinct magic plus all four phase bits and positive batch counts;
+the strict parser rejects light/stress identity confusion and incomplete phases.
+
+Host checks passed, including the production stress image in pinned QEMU 7.2.22:
+630 guest ticks after the bounded 35-second reference run, phase mask 15 and all
+phase counters positive. Pinned sources, repository hygiene, Android build and
+disposable core/lifecycle checks with a surface passed. The CPU diagnostic
+revision is unchanged from the passing complete x86 gate in the preceding slice;
+no native runtime or engine code changed for this fixture addition.
+
+Build `4624fc33e184+dirty`, APK SHA-256
+`bab8d4723396d93c217c7350e39c804d2a35af49fd7eef048f51ab91e2bb9ad2`.
+Both disposable tablet runs used fixed-20k, balanced 100 ms and GPU presentation.
+
+| Measure | Normal | DynRec |
+| --- | ---: | ---: |
+| Capture telemetry ms (including startup) | 121,417 | 121,707 |
+| Audio underruns (entire capture) | 0 | 27,035 |
+| Missing audio frames (entire capture) | 0 | 4,852,605 |
+| Deadline resynchronizations (entire capture) | 0 | 318 |
+| Maximum emulator call us | 29,837 | 351,528 |
+| Maximum producer gap us | 43,658 | 351,551 |
+| Maximum scheduler lateness us | 27,533 | 538,239 |
+| Result | Pass | Fail |
+
+Normal's strict settled window was 108,305 ms at 29.76 presented FPS and
+3,153.25 presenter CPU us/post, with zero quality errors. Its independent guest
+timer reported 121,605 ms versus 122,003 host ms, all phases validated. DynRec's
+entire capture averaged only 6.51 posts/s, dropping to approximately 3–4 calls
+and posts/s during sustained stalls. Neither run had dropped audio frames,
+stream errors, post failures, graphics errors/fallbacks or presenter clock errors.
+
+DynRec's initially clean idle/integer period was followed around 16 host seconds
+by repeated approximately 350-ms calls; this corresponds to entry into the RAM
+phase while prior guest pacing was still near real time. That phase attribution
+is an inference, not a recovered per-phase guest record. The final harness
+reported `FAIL missing guest timer record`, its generic message for any rejected
+magic/status/phase/tick record. It does not prove the record was absent. The
+disposable result was deleted on unload, so exact partial ticks/phase mask are
+unavailable and guest-clock accuracy cannot be claimed for DynRec.
+
+Source inspection identified an independently demonstrable cycle-accounting
+defect in the DynRec MOVS/LODS/STOS helpers: when a repeat fits within the current
+`CPU_Cycles` budget, the helper performs the work without subtracting its element
+count. The generated block bills decoded instructions, not REP elements; Normal
+charges each element. A local UBSan-enabled probe extracted the actual patched
+STOSD helpers and invoked each address-size variant with 4,096 elements and a
+20,000-cycle budget. Both performed 4,096 writes, returned zero remaining elements
+and left `CPU_Cycles` at 20,000: **zero element cycles charged**. The same missing
+charge branch is present in the other affected helpers. The existing fault tests
+covered progress and exhausted-budget resumption but not this fits-in-budget case.
+
+This provides a concrete next engine fix and a disposable performance reproducer.
+It does not yet prove that the defect caused either earlier Windows/AoE2 capture,
+especially the Normal failure. No engine patch or buffer/cycle retuning was made
+in this slice. Before patching, add explicit cycle-accounting/fault-progress
+regressions and extend Feature 008; then rerun the full x86 and unchanged stress
+gates. No more Windows trial is queued.
+
+Both fixtures unloaded and deleted their own files, including the failing run.
+Postflight found no fixture/isolated process, active-session marker, recovery
+journal or remaining presentation cache directory. Both Windows machines retained
+clean provenance and unchanged selection/generation: stable Normal/Software 1,
+experimental copy Normal/Software 30. Neither Windows machine was booted.

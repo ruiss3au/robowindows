@@ -142,6 +142,7 @@ tasks.named("preBuild").configure {
     dependsOn(buildCpuFixture)
     dependsOn(buildExpandedCpuFixtures)
     dependsOn("buildPresentationFixture")
+    dependsOn("buildStressFixture")
 }
 
 tasks.register<Exec>("buildPresentationFixture") {
@@ -151,6 +152,15 @@ tasks.register<Exec>("buildPresentationFixture") {
     val output = layout.buildDirectory.file("generated/cpuFixture/res/raw/robowindows_gpu_tone.bin")
     outputs.file(output)
     commandLine("bash", rootProject.file("scripts/build-presentation-fixture.sh"), output.get().asFile)
+}
+
+tasks.register<Exec>("buildStressFixture") {
+    inputs.files(rootProject.file("tests/cpu/robowindows_cpu_boot.S"),
+        rootProject.file("tests/realtime/presentation_tone.S"),
+        rootProject.file("scripts/build-presentation-fixture.sh"))
+    val output = layout.buildDirectory.file("generated/cpuFixture/res/raw/robowindows_stress_tone.bin")
+    outputs.file(output)
+    commandLine("bash", rootProject.file("scripts/build-presentation-fixture.sh"), output.get().asFile, "stress")
 }
 
 object ExpandedCpuSuiteResourceNames {

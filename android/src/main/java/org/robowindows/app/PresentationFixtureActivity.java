@@ -24,6 +24,7 @@ public final class PresentationFixtureActivity extends Activity {
     private boolean started, finished;
     private long began;
     private String core;
+    private String workload;
     private int presentation;
     private AudioManager audioManager;
     private AudioFocusRequest audioFocus;
@@ -32,10 +33,13 @@ public final class PresentationFixtureActivity extends Activity {
         super.onCreate(state);
         MachineStore store = new MachineStore(this);
         core = getIntent().getStringExtra("core");
+        workload = getIntent().getStringExtra("workload");
+        if (workload == null) workload = "tone";
         presentation = getIntent().getIntExtra("presentation", -1);
         if (!BuildConfig.DEBUG || store.hasInterruptedSession() ||
                 !("normal".equals(core) || "dynamic".equals(core)) ||
-                !PresentationPolicy.allowed(presentation) || !CpuFixtureGate.passed(this)) {
+                !PresentationPolicy.allowed(presentation) || !PresentationWorkload.allowed(workload) ||
+                !CpuFixtureGate.passed(this)) {
             complete("FAIL invalid fixture start"); return;
         }
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
@@ -43,7 +47,8 @@ public final class PresentationFixtureActivity extends Activity {
             directory = new File(getCacheDir(), "presentation-" + java.util.UUID.randomUUID());
             if (!directory.mkdir()) throw new java.io.IOException("fixture directory");
             image = new File(directory, "fixture.ima"); launch = new File(directory, "launch.conf");
-            try (InputStream input = getResources().openRawResource(R.raw.robowindows_gpu_tone);
+            int resource = "stress".equals(workload) ? R.raw.robowindows_stress_tone : R.raw.robowindows_gpu_tone;
+            try (InputStream input = getResources().openRawResource(resource);
                     FileOutputStream output = new FileOutputStream(image)) {
                 byte[] buffer = new byte[8192]; int count;
                 while ((count = input.read(buffer)) != -1) output.write(buffer, 0, count);
@@ -97,18 +102,17 @@ public final class PresentationFixtureActivity extends Activity {
         NativeHost.stopSession(); started = false;
         try (RandomAccessFile file = new RandomAccessFile(image, "r")) {
             file.seek(17 * 512L);
-            byte[] record = new byte[14]; file.readFully(record);
-            if (new String(record, 0, 8, StandardCharsets.US_ASCII).equals("RWGPU001")) {
-                long ticks = java.nio.ByteBuffer.wrap(record, 8, 4).order(java.nio.ByteOrder.LITTLE_ENDIAN).getInt() & 0xffffffffL;
-                if (record[12] == 1 && ticks > 0) {
-                    long hostMs = now - began;
-                    double guestMs = ticks * 65536000.0 / 1193182.0;
-                    boolean good = hostMs >= 122000 && hostMs <= 124000 && Math.abs(guestMs / hostMs - 1) <= .05 &&
-                            activePresentation == presentation && ("dynamic".equals(core) ? "DynRec" : "Normal").equals(decoder);
-                    complete((good ? "PASS" : "FAIL") + " timer core=" + core + " presentation=" + presentation +
-                            " host_ms=" + hostMs + " guest_ms=" + Math.round(guestMs) +
-                            " decoder=" + decoder); return;
-                }
+            byte[] record = new byte[32]; file.readFully(record);
+            long ticks = PresentationWorkload.ticks(workload, record);
+            if (ticks > 0) {
+                long hostMs = now - began;
+                double guestMs = ticks * 65536000.0 / 1193182.0;
+                boolean good = hostMs >= 122000 && hostMs <= 124000 && Math.abs(guestMs / hostMs - 1) <= .05 &&
+                        activePresentation == presentation && ("dynamic".equals(core) ? "DynRec" : "Normal").equals(decoder);
+                complete((good ? "PASS" : "FAIL") + " timer core=" + core + " presentation=" + presentation +
+                        " host_ms=" + hostMs + " guest_ms=" + Math.round(guestMs) +
+                        " decoder=" + decoder + " workload=" + workload +
+                        ("stress".equals(workload) ? " phase_mask=15" : "")); return;
             }
         } catch (Exception error) { complete("FAIL result read"); return; }
         complete("FAIL missing guest timer record");

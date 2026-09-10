@@ -46,6 +46,11 @@ java -cp "$classes_dir" org.robowindows.app.DynamicProgressWatchdogTest
 "$repo_dir/tests/scripts/test-benchmark-telemetry.sh"
 bash "$repo_dir/tests/scripts/test-runtime-timing.sh"
 bash "$repo_dir/tests/scripts/test-presentation.sh"
+javac -d "$classes_dir" \
+  "$repo_dir/android/src/main/java/org/robowindows/app/PresentationWorkload.java" \
+  "$repo_dir/tests/java/org/robowindows/app/PresentationWorkloadTest.java"
+java -cp "$classes_dir" org.robowindows.app.PresentationWorkloadTest
+bash "$repo_dir/scripts/test-stress-reference.sh"
 
 javac -d "$classes_dir" \
   "$repo_dir/android/src/main/java/org/robowindows/app/DynamicReadiness.java" \

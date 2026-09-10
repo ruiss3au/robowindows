@@ -184,3 +184,12 @@ both machines. The experimental copy remains Normal/Software, generation 30;
 stable `incoming` remains Normal/Software, generation 1, and was not started or
 changed. Repository hygiene and diff whitespace checks passed for this evidence
 update. No runtime change, reinstall or push was performed.
+
+### User workload clarification
+
+The user subsequently clarified that they opened windows and then ran Age of
+Empires II during the captures. These were mixed desktop/game sessions, not
+desktop-idle baselines. Exact launch times, game state and action equivalence
+between captures remain unknown, so individual failure intervals cannot yet be
+assigned to a game phase. The failures remain valid; the clarification changes
+their workload interpretation, not their counts or acceptance result.

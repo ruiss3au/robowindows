@@ -203,6 +203,7 @@ public final class MainActivity extends Activity {
                 if (machineStore.hasInterruptedSession() || !CpuFixtureGate.passed(this)) return;
                 Intent fixture = new Intent(this, PresentationFixtureActivity.class);
                 fixture.putExtra("core", getIntent().getStringExtra("core"));
+                fixture.putExtra("workload", getIntent().getStringExtra("workload"));
                 fixture.putExtra("presentation", getIntent().getIntExtra("presentation", -1));
                 startActivity(fixture);
                 return;

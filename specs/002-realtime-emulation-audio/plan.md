@@ -138,6 +138,20 @@ Run host/pinned/build checks and disposable tests without opening Windows disks.
 Rollback reverts this call-site/helper change only. This is a targeted debt and
 measurement correction, not proof that every observed underrun is cured.
 
+The user clarified that the failing captures included opening windows and then
+Age of Empires II, not idle desktop only. Add an explicit `stress` variant to
+the disposable timer/tone harness: repeating eight-guest-second idle, integer,
+RAM-copy and VGA-write phases at the existing fixed 20k. Use real-mode BIOS tick
+timing, 32-bit arithmetic operands and bounded memory regions; do not claim
+protected-mode, Windows-driver or game equivalence. Preserve the default light
+fixture byte-for-byte. A distinct result magic and four-bit executed-phase mask
+must prevent accepting the wrong fixture or a partial run. Validate the actual
+production image in pinned QEMU and the parser on the host before a stopped
+installation and one disposable Normal/GPU then DynRec/GPU comparison. No real
+guest launch or runtime retuning is authorized by this diagnostic slice.
+Rollback removes the extra fixture/selector only; settings and engine remain
+unchanged. A non-reproduction narrows only this synthetic workload, not Windows.
+
 Before the next benchmark, isolate informational libretro callbacks from AV
 timing dispatch in a host-testable helper (FR-026). A recorded startup advertised
 an implausibly large FPS with zero sample rate; the existing grouped switch

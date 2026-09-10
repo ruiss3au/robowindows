@@ -49,3 +49,42 @@ camera position and two-minute action sequence. Record scroll/drag response,
 animation smoothness, audio breakup and host telemetry. This user-owned workload
 is qualitative corroboration only; never include its files or screenshots in the
 repository and never substitute it for RW98BENCH metrics.
+
+## Disposable stress/tone workload 1
+
+Build with `bash scripts/build-presentation-fixture.sh OUTPUT stress`; validate
+the production image in QEMU with `bash scripts/test-stress-reference.sh` (also
+part of `scripts/test-host.sh`). GNU binutils 2.40 and QEMU 7.2.22 remain pinned.
+Run on the stopped/unlocked tablet with:
+
+```sh
+bash scripts/test-sm-t500-presentation.sh normal 1 stress
+bash scripts/test-sm-t500-presentation.sh dynamic 1 stress
+```
+
+Run sequentially, Normal first. These commands use only packaged source-owned
+media, fixed-20k and balanced 100 ms; presentation `1` means GPU (`0` is Software).
+The existing default `tone` fixture is byte-for-byte unchanged. The stress
+variant repeats four phases, each 144 BIOS ticks (about 7.91 guest seconds):
+
+1. Idle using HLT until the next interrupt.
+2. Integer multiply/add/rotate/XOR batches with 32-bit operands.
+3. Fill and copy separate 16 KiB RAM ranges at 0x20000 and 0x30000.
+4. Repeated 64,000-byte VGA writes at 0xA0000.
+
+Interrupts stay enabled. BIOS ticks continue independently of host call counts;
+the PIT speaker tone remains active and guest PCM is not modified. Code runs in
+real mode, not Windows protected mode; it is not an AoE2, driver or game-logic
+reproduction. The user clarified that the earlier Windows captures included
+opening windows and then AoE2, motivating heavier synthetic phases without using
+any game files. Precise phase correspondence to those captures is unknown.
+
+Only sector 18 of the disposable floppy is written. Its little-endian record is
+magic `RWSTR001` (8 bytes), elapsed BIOS ticks (uint32), running status 1 (uint16),
+visited-phase mask 15 (uint16), then four positive completed-work batch counters
+(uint32 each). The record is flushed on core unload after 122 host seconds;
+both identity and all-phase evidence are required before the guest-clock check.
+Quality still requires zero settled audio/timing/graphics errors and guest-clock
+error within 5%; a stress failure is evidence, never a reason to weaken the gate.
+Phase scheduling is guest-clock based; do not align it exactly to host timestamps
+if guest time has slowed. This workload establishes no Windows/game acceptance.

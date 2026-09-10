@@ -5,6 +5,14 @@ specification, plan, tasks, and validation record when work begins.
 
 ## Now
 
+- The new disposable phased stress fixture passes under Normal but reproduces
+  severe DynRec starvation during sustained memory work. An actual-helper host
+  probe demonstrates missing REP element-cycle charges for repeats fitting in
+  the budget. Next: specify/test a minimal accounting correction with fault
+  precision and full x86/stress gates. This is not yet an explanation of the
+  earlier Normal/AoE2 failures; keep Windows trials paused
+  ([finding](002-realtime-emulation-audio/timing-investigation.md#phased-stress-reproduction-and-rep-accounting-finding)).
+
 - Shared audio investigation: Feature 002's live-refresh correction is installed
   and verified. Refresh changes no longer silently discard experimental timing
   debt or diagnostic intervals; legacy cadence and the 100 ms queue target are
