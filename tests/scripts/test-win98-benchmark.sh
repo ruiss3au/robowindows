@@ -31,15 +31,15 @@ cmp "$first_dir/RWBENCH.ISO" "$second_dir/RWBENCH.ISO"
   cd "$first_dir"
   sha256sum -c SHA256SUMS >/dev/null
 )
-file "$first_dir/RWBENCH.EXE" | grep -q 'PE32 executable (GUI) Intel 80386'
+file "$first_dir/RWBENCH.EXE" | grep 'PE32 executable (GUI) Intel 80386' >/dev/null
 for dll in KERNEL32.dll USER32.dll GDI32.dll; do
-  objdump -p "$first_dir/RWBENCH.EXE" | grep -qi "DLL Name: $dll"
+  objdump -p "$first_dir/RWBENCH.EXE" | grep -i "DLL Name: $dll" >/dev/null
 done
-if objdump -p "$first_dir/RWBENCH.EXE" | grep -qi 'DLL Name: WINMM.dll'; then
+if objdump -p "$first_dir/RWBENCH.EXE" | grep -i 'DLL Name: WINMM.dll' >/dev/null; then
   echo "Benchmark unexpectedly imports WINMM" >&2
   exit 1
 fi
-if strings "$first_dir/RWBENCH.EXE" | grep -q 'PlaySound'; then
+if strings "$first_dir/RWBENCH.EXE" | grep 'PlaySound' >/dev/null; then
   echo "Benchmark unexpectedly contains a sound path" >&2
   exit 1
 fi

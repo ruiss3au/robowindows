@@ -16,3 +16,8 @@
 - [x] T013 Create and verify an audited, history-free public root snapshot while
   retaining the pre-publication lineage only in local backups.
 - [x] T014 Add a public specification index and roadmap, linked from the README and constitution.
+- [x] T015 Fix reproduced benchmark-check SIGPIPE false failures (SC-003) by
+  draining pipelines without disabling pipefail; rerun the existing host suite.
+  The builder and host check previously exited 141 at objdump/import matching.
+  Full host suite passed after the fix, including identical two-build benchmark
+  output checks. No benchmark source or emulator behavior changed.

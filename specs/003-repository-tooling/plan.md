@@ -59,6 +59,11 @@ docs/
 
 ## Rollback
 
+Wrap-up validation (2026-09-10) reproduced exit 141 in the benchmark builder:
+`objdump -p | grep -q` closes the pipe early under `pipefail`. Consume producer
+output fully in its version/import checks and matching host tests; retain strict
+producer failures and all assertions. No benchmark bytes or runtime changes.
+
 All changes are tracked source and documentation. Reverting the Git commit
 removes the new tools. Backup creation publishes a new directory and never
 alters an existing backup or tablet source. The pre-publication lineage can be

@@ -25,12 +25,12 @@ for tool in as ld objcopy objdump sha256sum xorriso; do
   }
 done
 
-as_version="$(as --version | head -1)"
+as_version="$(as --version | sed -n '1p')"
 [[ "$as_version" == "GNU assembler (GNU Binutils for Debian) 2.40" ]] || {
   echo "Unsupported assembler: $as_version (expected GNU binutils 2.40)" >&2
   exit 1
 }
-xorriso_version="$(xorriso -version 2>&1 | head -1)"
+xorriso_version="$(xorriso -version 2>&1 | sed -n '1p')"
 [[ "$xorriso_version" == "xorriso 1.5.4 : RockRidge filesystem manipulator, libburnia project." ]] || {
   echo "Unsupported ISO builder: $xorriso_version (expected xorriso 1.5.4)" >&2
   exit 1
@@ -57,11 +57,12 @@ ld -mi386pe --no-insert-timestamp --subsystem windows:4.0 \
   "$work_dir/libkernel32.a" "$work_dir/libuser32.a" \
   "$work_dir/libgdi32.a"
 
-objdump -f "$work_dir/RW98BENCH.EXE" | grep -q 'file format pei-i386'
+# Drain each producer: grep -q can give objdump SIGPIPE under pipefail.
+objdump -f "$work_dir/RW98BENCH.EXE" | grep 'file format pei-i386' >/dev/null
 for dll in KERNEL32.dll USER32.dll GDI32.dll; do
-  objdump -p "$work_dir/RW98BENCH.EXE" | grep -qi "DLL Name: $dll"
+  objdump -p "$work_dir/RW98BENCH.EXE" | grep -i "DLL Name: $dll" >/dev/null
 done
-if objdump -p "$work_dir/RW98BENCH.EXE" | grep -qi 'DLL Name: WINMM.dll'; then
+if objdump -p "$work_dir/RW98BENCH.EXE" | grep -i 'DLL Name: WINMM.dll' >/dev/null; then
   echo "Benchmark workload must not import WINMM or play a test tone" >&2
   exit 1
 fi
