@@ -99,17 +99,20 @@ The tablet must be unlocked and foregrounded. Repeat the appropriate literal cas
 only as authorized; this document does not queue a matrix or any Windows trial.
 The script checks the installed APK against the local build and requires the
 disposable CPU gate. `summarize-cache-fixture.sh` validates one exact correctness
-result and reports runtime/worker totals from complete telemetry intervals.
+result and reports runtime/worker totals from periodic intervals plus a validated
+terminal residual group when available. New device runs require that group.
 `PASS correctness` is **not** an audio, timing, residency or cache-mechanism pass.
 The report always states `quality=not_assessed` and `cache_mechanism=unverified`.
 
-Host duration and worker diagnostics cover the whole session, including bootstrap,
-setup, prime and shutdown; final partial telemetry intervals are not available.
-Very short captures can have no complete diagnostic interval and explicitly report
-unavailable timing. Guest measured ticks are per case; host worker time is not
-measured-loop-only attribution. Setup differences, queue history and measurement
-coverage must be considered before comparisons. No new phase signal, per-call
-clock or emulator-memory inspection was added to conceal that limitation.
+Worker diagnostics include bootstrap, setup, prime and shutdown, not just the
+measured loop. Historical captures without terminal reporting can lack timing
+entirely; current captures explicitly identify residual coverage and teardown.
+Java `host_ms` ends at the shutdown-status poll before the cleanup join, while
+native telemetry uses a different start and includes cleanup: these are not
+interchangeable elapsed clocks. Guest measured ticks are per case; host worker
+time is not measured-loop-only attribution. Setup differences, queue history and
+measurement coverage must be considered before comparisons. No new phase signal,
+per-call clock or emulator-memory inspection conceals that limitation.
 
 ## Verification status
 
@@ -276,3 +279,134 @@ previously recorded hashes. Ignored logs are `artifacts/terminal-host.log` and
 the repeated unchanged Normal/DynRec comparison remain separately coordinated
 T078 work. Rollback removes only terminal reporting/consumer opt-in; real machine
 settings and disks remain untouched.
+
+## Terminal device validation authorization — 2026-09-10
+
+The user authorized T078: install the verified terminal-reporting APK with both
+real machines stopped, run the disposable legacy smoke and full Normal/DynRec
+x86 gate, then the unchanged five-case cache matrix Normal-first and DynRec
+second. Read-only preflight confirmed both profiles clean, no active session,
+isolated runner or recovery journal, and the candidate APK hash above. Stable
+generation 1 and experimental generation 31 remain unchanged. Require terminal
+coverage in each cache capture and stop on correctness, lifecycle, cleanup or
+diagnostic validation failure. This does not authorize Windows boots, engine
+tuning, promotion, a broader manual campaign or a push.
+
+## Terminal device results — 2026-09-10
+
+### Installation, legacy and x86 validation
+
+The authorized stopped installation completed. Installed APK readback matched
+`4bae989c5385adeb5e43882a1c2ade439cd5324e755e03f95b3fef1c13a6e1ee`
+(source label `42e6c31b9f30+dirty`, CPU capability `2e6caa2dcea9a5bf`).
+`REQUIRE_SURFACE=1 scripts/test-sm-t500-core.sh` passed rendering, persistence,
+input, media change, pause/resume, restart and clean-stop probes. A separate
+terminal-tag logcat capture before clearing the logs confirmed zero terminal
+records under legacy timing. Its silent fixture is not an audio quality test.
+
+The full 18-stage Normal/DynRec x86 gate passed at device-log time 11:31:46.769.
+All 18 experimental sessions emitted exactly one valid terminal group. Splitting
+the capture by runner process and applying the strict normalizer and existing
+runtime/worker parsers validated every group. Ordinary-only parsing still reports
+36 intervals and 2,367 completed worker slices; adding each session's terminal
+group yields 3,640 completed slices. Diagnostic clocks reported no errors.
+DynRec suite 103 retained PFQ 21/21, depth 0/4, wipe 0/0 and PFCore 16,408/16,408;
+PFCore total/max were 130,959/33,011 us with two over-10-ms calls in this deliberate
+stress case. No double fault or reset was recorded. This correctness gate is not
+a timing-quality pass or evidence that every long page-fault call is eliminated.
+
+### Unchanged Normal-first cache matrix
+
+All five Normal/GPU cases ran before all five DynRec/GPU cases. Every strict
+record passed 4,096 return checks, the expected checksum and the guest APM
+shutdown/cleanup check. Setup was 14 guest ticks in all cases, reuse priming was
+527 ticks in both cores, and other priming recorded zero ticks. Each image is
+unchanged from the hashes above.
+
+Pairs below are Normal / DynRec. Worker CPU is aggregate observed CPU, including
+setup, priming and teardown; it is not the measured loop's translation time.
+
+| Case | Java host ms | Measured guest ticks | Native observed ms including tail | Worker CPU us | DynRec translation attempts |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| warm | 705 / 705 | 528 / 527 | 670.043 / 701.275 | 301,685 / 163,281 | 52 |
+| cold | 703 / 710 | 528 / 528 | 674.536 / 695.016 | 307,876 / 206,400 | 12,334 |
+| reuse | 1,205 / 1,207 | 528 / 528 | 1,211.005 / 1,232.627 | 604,564 / 350,513 | 12,338 |
+| data | 705 / 703 | 528 / 528 | 672.864 / 700.412 | 303,846 / 157,174 | 53 |
+| rewrite | 705 / 704 | 529 / 529 | 676.831 / 692.786 | 302,766 / 176,126 | 4,148 |
+
+Each capture has exactly one terminal group with `reason=guest_shutdown` and
+`terminal_coverage=available`. Eight have no periodic group; reuse has one per
+core. Completed worker slices total 37 per short case and 74 per reuse case, with
+zero reported discarded slices. All Normal translation counts and all five
+fallback buckets in both cores are zero. Every capture records zero underruns,
+missing/dropped/saturated audio, stream errors, resynchronizations, graphics
+errors/fallbacks, post failures and diagnostic clock errors.
+
+Requested/active presentation remained GPU. The two periodic reuse records have
+the expected current decoder. Every terminal record has `current=Other` after
+APM shutdown and `queue_current=0` after audio stop; hence each summary reports
+one `other_decoder_intervals`. These are shutdown observations, not evidence of
+foreground residency failure or a running empty queue. Configured decoder checks
+passed, but the eight terminal-only sessions have no periodic residency sample.
+Presented FPS over the observed intervals including teardown ranges 22.82–26.42;
+it is not settled FPS or unique game frames. The zero error counts likewise do
+not establish settled Windows audio quality, independent 5% clock accuracy or
+sustained stability. Retain `quality=not_assessed`.
+
+### Bounded mechanism interpretation and next step
+
+The controls now distinguish low-translation warm/data work from a cold sweep
+and repeated code rewriting. The two-sweep reuse session has only four more
+translation attempts than cold's one sweep, consistent with substantial retained
+code reuse. Rewrite has 4,096 more attempts than warm and 4,095 more than data,
+consistent with code-write-triggered retranslation. These are inferences from
+aggregate controls, not per-phase cache-hit or invalidation-reason measurements.
+Source review of `src/cpu/dyn_cache.h` confirms that write handlers can clear
+cached blocks before entry without hitting any of the fallback counters. Their
+zero values therefore do not contradict the rewrite result.
+
+DynRec's observed worker CPU is lower than Normal's in every case. Cold and
+rewrite cost more worker CPU than DynRec's warm/data controls, but those whole
+sessions differ in setup/control instructions and host scheduling. A single run
+cannot assign the difference exclusively to translation, measure an exact cache
+hit rate or identify a costly function. Neither this fixture nor its low fallback
+counts reproduces the retained Windows translation/fallback storm. Keep the
+report's `cache_mechanism=unverified` for exact mechanism attribution.
+
+T078 is complete. T076's missing diagnostic coverage is resolved; its strict
+actual reuse/invalidation attribution remains open at the limits above. The next
+useful work is to specify bounded translation-cost/cache-miss-reason attribution,
+using these controls to validate it before any engine change or Windows trial.
+Do not resize caches, remove publication barriers or tune audio buffers from
+these counts alone. No more trials follow automatically.
+
+### Evidence and postflight
+
+Ignored wrapper logs are `artifacts/terminal-device-legacy.log`,
+`artifacts/terminal-device-legacy-terminal.log`, `artifacts/terminal-device-x86.log`
+and `artifacts/terminal-device-{normal,dynamic}-{case}.log`. Per-session x86
+validation is in `artifacts/terminal-x86-sessions-NKcbJv/`. Raw matrix captures are
+the `artifacts/presentation-{core}-1-cache-{case}-{suffix}/` directories below;
+each contains `telemetry.log`, `summary.txt` and APK identity.
+
+| Case | Normal suffix | DynRec suffix |
+| --- | --- | --- |
+| warm | lAicCp | X6mFVF |
+| cold | RjVPAi | lVAdQy |
+| reuse | INmSw7 | 2qJz1T |
+| data | Qs3VdV | z8TyDp |
+| rewrite | ZgPEy5 | Ta1Z9j |
+
+Postflight confirmed no isolated runner, active-session marker, recovery journal
+or presentation cache directory. The legacy staged/private fixture files were
+removed and the original stay-awake setting restored. Both real profiles remain
+clean and unchanged: stable `incoming` Normal/Software generation 1;
+`win98 dynrec exp` fixed-20k DynRec/GPU generation 31. Neither Windows guest was
+opened. Only sanitized aggregate evidence is tracked; raw generated captures
+remain ignored. No engine change, promotion or push is included.
+
+After recording the device results, repository hygiene, whitespace checks,
+pinned-source verification and the terminal/cache-summary parser regressions
+passed. Full host tests and Android build are the unchanged T077 results above;
+this device-evidence step changes documentation only and does not rebuild or
+reinstall for documentation.

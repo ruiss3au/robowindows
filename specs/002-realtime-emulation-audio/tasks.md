@@ -325,20 +325,28 @@ recoverable; it is not required for completion of the conservative MVP.
   Authorized installation, full x86 gate and all ten cache-case correctness
   checks subsequently passed. Eight cases emitted no complete timing interval;
   reuse emitted one per core. Cleanup and unchanged real profiles were verified.
-  Remains open for measurement coverage/mechanism characterization, not for
-  rerunning the already completed correctness cases without a reporting fix.
+  T078 subsequently resolved tail coverage in all ten unchanged cases. Counts
+  support reuse/retranslation inferences, but actual per-phase/cache-miss-reason
+  attribution remains unverified. Keep that bounded attribution work open;
+  do not queue further correctness repetitions or Windows trials automatically.
 - [x] T077 Specify and implement bounded terminal diagnostic coverage for short
   disposable sessions, preserving the exact cache images and legacy behavior.
   Test completed-worker capture, reset/shutdown ordering and explicit partial
   interval semantics before a separately coordinated repeat. No engine tuning.
   FR-032 frontend terminal gate/group and strict cache-report opt-in passed full
   host tests, pins and Android build; all guest image hashes remain unchanged.
-  Device terminal coverage has not yet been exercised.
-- [ ] T078 With user coordination and both machines stopped, install the T077
+  Device terminal coverage subsequently passed T078 below.
+- [x] T078 With user coordination and both machines stopped, install the T077
   build, verify legacy/no-terminal behavior and the full disposable CPU gate,
   then run the unchanged cache cases Normal before DynRec. Require terminal
   coverage in new captures and record teardown/measurement limitations. No
   Windows trial, engine adjustment or promotion follows automatically.
+  Installed APK hash verified; legacy surface/lifecycle probe passed with zero
+  terminal groups; full x86 gate passed with 18 valid terminal groups. All ten
+  unchanged cache cases passed correctness, terminal parsing and cleanup, with
+  zero recorded audio/scheduling/graphics/clock errors. Shutdown-only residency
+  and teardown-inclusive timing are not settled quality; see the terminal device
+  results in `cache-control-fixture.md`. Both real profiles remain clean/unchanged.
 
 T062 remains open. The corrected scheduler passed the complete Normal workload,
 but the matched DynRec start failed before the benchmark when Windows Explorer
