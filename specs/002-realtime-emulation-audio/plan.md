@@ -255,6 +255,16 @@ cross-build comparison isolates total overhead. Preserve the prior APK; rollback
 removes only patch 0009 and its host/report integration, invalidates capability
 and never changes guest disks. No Windows start is authorized by this slice.
 
+### Offline follow-up (T073)
+
+After the authorized instrumented desktop capture, review pinned worker paths
+and failing/non-failing interval groups without modifying runtime behavior.
+The [worker-path review](worker-path-review.md) records the shared BR_Opcode
+meaning and selects a separately specified source-owned cache-reuse/retranslation
+control before more Windows trials. Sampling design is a fallback, not permission
+to add per-instruction clocks or alter cache publication. Existing APK/settings
+are retained; this step requires no installation or device session.
+
 - Preserve the current conservative profile as the last-known-safe fallback.
 - Test CPU/core changes only with a cloned image. Require identical checksums only when the
   test terminates before guest execution; otherwise verify mountability/filesystem health

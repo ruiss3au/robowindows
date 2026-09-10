@@ -133,8 +133,14 @@ interval. Worker and frontend observations overlap and must not be added into a
 single phase budget. Wait/mix totals are inclusive scope wall times; worker CPU
 includes guest execution, translation and device/render work. Translation counts
 are creation attempts, not generated block counts or execution-time estimates.
-Fallback reasons count direct interpreter calls; SMC is not also counted as
-unsupported opcode. No guest instructions or addresses are logged.
+Fallback buckets count direct interpreter calls at their dispatch sites. The
+historical `fallback_opcode` field means a `BR_Opcode` return, not exclusively an
+unsupported instruction: the translator also emits that return when it stops at
+a repeatedly invalidated byte within a block. `fallback_invalidated` covers the
+separate block-entry invalidation-map check. `fallback_smc` counts an explicit
+`BR_SMCBlock` return and is not also counted in `fallback_opcode`; zero SMC returns
+do not prove absence of code writes or invalidations. Existing schema/field names
+remain unchanged. No guest instructions or addresses are logged.
 
 Frontend snapshots never read live worker counters. Lifecycle reset advances a
 generation and discards stale completed work; `discarded_slices` makes such

@@ -301,6 +301,14 @@ recoverable; it is not required for completion of the conservative MVP.
   Patch 0009, host/parser checks, legacy probe, enabled full x86 gate and unchanged
   Normal/DynRec stress pair passed; see `worker-diagnostics.md`. A Windows capture
   remains separately authorized and is not included in this completion.
+- [x] T073 Review pinned worker/decoder/cache control flow against the retained
+  instrumented Windows capture. Correct counter interpretation, compare failing
+  and non-failing intervals without treating events as durations, and specify a
+  bounded next diagnostic or source-owned reproduction. Offline only: no engine
+  change, installation or new guest trial. Record evidence and rollback limits.
+  See `worker-path-review.md`: translation rate is associated with failing
+  intervals; BR_Opcode is not exclusively unsupported instructions. A controlled
+  cache-reuse/retranslation fixture is designed, not implemented or device-tested.
 
 T062 remains open. The corrected scheduler passed the complete Normal workload,
 but the matched DynRec start failed before the benchmark when Windows Explorer

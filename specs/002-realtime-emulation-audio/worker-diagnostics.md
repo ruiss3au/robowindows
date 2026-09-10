@@ -34,7 +34,7 @@ core/input/lifecycle probe passed and emitted zero worker/calibration records.
 The CPU fixture now uses balanced timing so its full Normal/DynRec gate actually
 exercises enabled instrumentation; it still opens only its own source-owned media.
 The complete gate passed exact records. Its 36 diagnostic intervals validated
-2,364 worker slices, 1,245 translation attempts and 474 unsupported-opcode
+2,364 worker slices, 1,245 translation attempts and 474 BR_Opcode
 interpreter calls, with zero diagnostic clock errors. No special-page,
 invalidation, SMC-return or trap fallback events were observed in these sampled
 gate intervals; host tests cover their counter slots, not a claim of device
@@ -75,7 +75,7 @@ and new diagnostic parsers. The image remains SHA-256
 | Frontend wait total / max us | 2,415,067 / 29,135 | 254,319 / 19,018 |
 | Frontend mix total / max us | 131,647 / 1,876 | 146,358 / 2,167 |
 | Translation attempts | 0 | 48 |
-| Unsupported-opcode interpreter calls | 0 | 305,484 |
+| BR_Opcode interpreter calls | 0 | 305,484 |
 | Disabled / enabled calibration ns per slice | 91 / 2,450 | 90 / 2,420 |
 
 Both entire captures also recorded zero dropped/saturated audio, stream errors,
@@ -130,7 +130,7 @@ enabled per synthetic slice, retaining the overhead limitations described above.
 | Frontend mix total / max us | 26,494 / 1,920 |
 | Host video / audio callback total us | 1,691,866 / 203,431 |
 | Translation attempts | 1,361,016 |
-| Invalidated / unsupported-opcode fallback events | 105,656 / 4,211,741 |
+| Block-entry invalidated / BR_Opcode fallback events | 105,656 / 4,211,741 |
 
 The queue reached zero. Configured/current decoder stayed DynRec, the runtime
 was foreground/balanced-100-ms, and requested/active presentation stayed GPU.
@@ -185,3 +185,8 @@ generation 31. Only the host capture process was subsequently terminated.
 No fatal/lifecycle error was observed in the selected log tags. This completes
 T011 as a diagnostic failure with clean shutdown, not Feature 011 quality
 acceptance. No runtime edit, guest force-stop, restore, extra trial or push occurred.
+
+The subsequent [offline worker-path review](worker-path-review.md) corrects the
+historical opcode-bucket interpretation, compares failing/non-failing intervals,
+and specifies the next disposable investigation. These event counts are unchanged;
+`BR_Opcode` is not exclusively an unsupported-instruction diagnosis.

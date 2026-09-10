@@ -78,10 +78,13 @@ specification, plan, tasks, and validation record when work begins.
   instrumented Windows desktop capture then reproduced underruns with clean
   shutdown. In overloaded intervals, worker wait was about 96% of frontend call
   wall and worker CPU about 97% of elapsed time; frontend mixing was small.
-  Next, review worker paths offline and design bounded function/phase attribution
-  or a source-owned reproduction. Translation/fallback counts do not yet isolate
-  a costly function. No speculative engine/buffer tuning or further Windows run
-  is queued ([evidence](002-realtime-emulation-audio/worker-diagnostics.md#instrumented-windows-desktop-capture--2026-09-10)).
+  Offline review found translation attempts about 7.68 times as frequent in
+  underrun intervals, while fallback rates changed much less. The opcode bucket
+  also includes translator stops at invalidated code, not only unsupported
+  instructions. Next: specify and implement the designed source-owned warm/cold/
+  rewritten-code comparison; preserve existing fixtures. Counts still do not
+  isolate a costly function. No speculative engine/buffer tuning or further
+  Windows run is queued ([review](002-realtime-emulation-audio/worker-path-review.md)).
 - Use the completed UI and address specific reported issues. Resume Feature
   009's clock/median campaign only if the user later requests it; no new guest
   trial is queued by completing the UI milestone.
