@@ -324,6 +324,30 @@ records, zero tails, clock errors, and unchanged ordinary consumers. Require hos
 pins and Android build; retain all five cache image hashes. Rollback removes only
 terminal reporting and consumer opt-in. No install/device run in this slice.
 
+### Targeted translation/cache attribution (FR-033 / T079–T082)
+
+The [selected design](translation-attribution.md) adds sampled outer translation
+wall/thread-CPU timing and a bounded publication subset, plus clock-free lookup
+and clear-operation reason counters. Select outer attempts 1/65/129/193 per
+worker slice, cap publication scopes at four per selected translation, and bound
+new duration clocks to 80 reads per slice. Explicitly report deterministic
+selection bias; do not extrapolate exact total translation CPU or miss causes.
+Worker-owned scope guards handle nesting, exceptions, pause boundaries and stale
+generations; atomically publish the old worker and new cache accumulators together.
+
+Use one new isolated diagnostic patch and the existing experimental internal
+policy boundary, no UI or profile changes. Add a separate schema-1 cache record
+and schema-2 terminal group without changing the existing telemetry/worker/timing
+schemas. Version-aware consumers retain historical absence and settled-window
+behavior. No guest markers, address maps, allocator/link changes or ARM barrier
+changes. Validate host accounting, pinned hook sites, bounded overhead, parser
+compatibility and Android build before a separately coordinated stopped install
+and disposable Normal-first tests. Retain the current APK; rollback removes only
+the new instrumentation and consumers, never machine settings or media.
+
+T079 is documentation/source review only; implementation and device validation
+are distinct T080–T082 milestones, not claimed completed work.
+
 - Preserve the current conservative profile as the last-known-safe fallback.
 - Test CPU/core changes only with a cloned image. Require identical checksums only when the
   test terminates before guest execution; otherwise verify mountability/filesystem health

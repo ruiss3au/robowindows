@@ -250,6 +250,18 @@ failure to a measured subsystem without relying only on subjective listening.
   treated as settled foreground audio/presentation. Keep legacy output/cadence and
   existing periodic schemas unchanged; reject incomplete/duplicate terminal groups.
 
+- **FR-033**: Experimental diagnostics MUST distinguish bounded sampled translation
+  wall/worker-thread CPU and its sampled code-publication subset from clock-free
+  dispatcher lookup and cache-clear reason counts. Fix selection and clock caps,
+  expose skips/discards/errors, handle nesting and lifecycle boundaries, and
+  publish only completed-worker aggregates, including terminal residuals. Sampled
+  timings MUST NOT be extrapolated into exact interval costs; clear reasons MUST
+  NOT be labeled proven causes of subsequent misses. Preserve existing schemas,
+  legacy behavior, guest images, execution/cache/link policy and ARM publication
+  barriers. No guest-address history or raw content logs. Follow the precise
+  [attribution contract and acceptance tasks](translation-attribution.md), including
+  overhead validation before separately coordinated disposable device tests.
+
 ### Key Entities
 
 - **Performance Profile**: A named, recoverable guest execution configuration with memory,

@@ -95,8 +95,12 @@ specification, plan, tasks, and validation record when work begins.
   (12,338), data writes (53) and code rewrites (4,148), supporting reuse and
   retranslation inferences. Teardown-inclusive samples are not settled quality;
   aggregate counts still do not isolate a costly function or the Windows cause.
-  Next, specify bounded translation-cost/cache-miss-reason attribution and
-  validate it against these controls. No speculative engine/buffer tuning or
+  Targeted attribution is now specified (Feature 002 FR-033/T079): bounded
+  translation/publication samples plus direct cache-clear reason counters,
+  with explicit selection bias and no per-miss causality claim. Next, implement
+  and host/build-validate T080–T081 before separately coordinating disposable
+  tests ([design](002-realtime-emulation-audio/translation-attribution.md)).
+  No speculative engine/buffer tuning or
   Windows run is queued
   ([fixture and limits](002-realtime-emulation-audio/cache-control-fixture.md)).
 - Use the completed UI and address specific reported issues. Resume Feature

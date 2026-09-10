@@ -348,6 +348,30 @@ recoverable; it is not required for completion of the conservative MVP.
   and teardown-inclusive timing are not settled quality; see the terminal device
   results in `cache-control-fixture.md`. Both real profiles remain clean/unchanged.
 
+- [x] T079 Specify FR-033 targeted translation/publication sampling and direct
+  cache-clear reasons from the T078 evidence and pinned hook-site review. Fix
+  sample/clock bounds, bias and nesting/reset semantics, versioned wire contract,
+  overhead gate, privacy, rollback and executable verification tasks in
+  `translation-attribution.md`. Documentation only; no runtime/device changes.
+- [ ] T080 Implement FR-033 as an isolated diagnostic patch and bounded worker
+  accumulator. Add failing-first fake-clock and actual-hook tests for sampling,
+  lookup/clear categories, nested publication, exceptions, stale generations and
+  worker-boundary discards. Preserve ARM publication source and all guest hashes;
+  keep legacy disabled and old translation counts unchanged. No engine tuning.
+- [ ] T081 Integrate one atomic worker/cache snapshot into JNI reporting, add
+  schema-1 cache records/schema-2 terminal parsing and bounded three-mode/event
+  calibration. Test historical/partial/corrupt captures and unchanged consumers.
+  Update capability identity, run full host tests, pins, hygiene, diff checks and
+  Android debug build; record APK/hash and overhead limitations. No installation.
+- [ ] T082 With separate user coordination and both real machines clean/stopped,
+  verify installed build, run legacy/no-extension smoke and full x86 gate, check
+  calibration, then unchanged cache cases Normal/GPU before DynRec/GPU and the
+  unchanged Normal/DynRec stress pair. Require strict diagnostic coverage,
+  correctness, cleanup and existing stress quality gates. Characterize sampled
+  costs/direct clear reasons; keep unresolved T076 attribution explicit. Stop
+  on calibration/correctness/lifecycle/diagnostic failure. No Windows boot,
+  promotion, engine tuning or dropped long campaign follows automatically.
+
 T062 remains open. The corrected scheduler passed the complete Normal workload,
 but the matched DynRec start failed before the benchmark when Windows Explorer
 reported an illegal operation. Telemetry isolated repeated over-250 ms deadline
