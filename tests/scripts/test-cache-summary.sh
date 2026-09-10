@@ -12,7 +12,10 @@ rg -q '^quality=not_assessed$' <<<"$summary"
 rg -q '^underruns=2$' <<<"$summary"
 rg -q '^timing_diagnostics=unavailable$' <<<"$summary"
 printf '%s\n' "$result" >"$work_dir/short"
-bash "$repo_dir/scripts/summarize-cache-fixture.sh" dynamic 1 cold "$work_dir/short" | rg -q '^complete_intervals=0$'
+short=$(bash "$repo_dir/scripts/summarize-cache-fixture.sh" dynamic 1 cold "$work_dir/short")
+for expected in complete_intervals=0 terminal_coverage=unavailable whole_session_presented_fps=unavailable underruns=unavailable; do
+  rg -qx "$expected" <<<"$short"
+done
 for expr in 's/cache-cold/cache-warm/' 's/host_ms=2300/host_ms=60001/' \
   's/checksum=3540426752/checksum=1/' 's/total_ticks=1220/total_ticks=1200/' \
   's/total_ticks=1220/total_ticks=40000/' 's/measured_ticks=1200/measured_ticks=0/' \

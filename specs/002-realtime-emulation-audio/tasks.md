@@ -327,10 +327,18 @@ recoverable; it is not required for completion of the conservative MVP.
   reuse emitted one per core. Cleanup and unchanged real profiles were verified.
   Remains open for measurement coverage/mechanism characterization, not for
   rerunning the already completed correctness cases without a reporting fix.
-- [ ] T077 Specify and implement bounded terminal diagnostic coverage for short
+- [x] T077 Specify and implement bounded terminal diagnostic coverage for short
   disposable sessions, preserving the exact cache images and legacy behavior.
   Test completed-worker capture, reset/shutdown ordering and explicit partial
   interval semantics before a separately coordinated repeat. No engine tuning.
+  FR-032 frontend terminal gate/group and strict cache-report opt-in passed full
+  host tests, pins and Android build; all guest image hashes remain unchanged.
+  Device terminal coverage has not yet been exercised.
+- [ ] T078 With user coordination and both machines stopped, install the T077
+  build, verify legacy/no-terminal behavior and the full disposable CPU gate,
+  then run the unchanged cache cases Normal before DynRec. Require terminal
+  coverage in new captures and record teardown/measurement limitations. No
+  Windows trial, engine adjustment or promotion follows automatically.
 
 T062 remains open. The corrected scheduler passed the complete Normal workload,
 but the matched DynRec start failed before the benchmark when Windows Explorer

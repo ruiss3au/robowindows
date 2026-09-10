@@ -87,8 +87,10 @@ specification, plan, tasks, and validation record when work begins.
   The build is installed; the full x86 gate and all ten Normal/DynRec cache-case
   correctness checks passed with clean cleanup and unchanged real profiles.
   Eight cases finished before the first timing report; reuse had just one complete
-  interval per core. Next, add bounded terminal diagnostic coverage before another
-  comparison, preserving the exact images. Counts still do not isolate a costly
+  interval per core. Bounded terminal diagnostic coverage is now implemented and
+  host/build validated, preserving the exact images and legacy behavior. Next,
+  coordinate stopped installation, disposable correctness checks and the unchanged
+  comparison with required terminal coverage. Counts still do not isolate a costly
   function. No speculative engine/buffer tuning or Windows run is queued
   ([fixture and limits](002-realtime-emulation-audio/cache-control-fixture.md)).
 - Use the completed UI and address specific reported issues. Resume Feature

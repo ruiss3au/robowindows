@@ -157,6 +157,35 @@ Nonzero calibrated times and enabled overhead below 1% of the nominal frame
 budget are the initial smoke threshold; capture-to-capture timing variability
 and unmeasured workload-specific overhead remain explicit limitations.
 
+## Terminal residual group (FR-032)
+
+Balanced sessions that reach normal runtime cleanup emit once, in this order:
+
+1. `RoboWindowsTerminal`: `schema=1 interval_us=N periodic_records=N reason=guest_shutdown|host_stop|runtime_failure clock_errors=N`.
+2. `RoboWindowsTerminalTelemetry`: existing schema-4 fields, `state=stopping` and
+   `audio_state=stopped`; `interval_ms=floor(interval_us/1000)` may be zero.
+3. `RoboWindowsTerminalWorker`: existing worker schema 1, same interval_ms.
+4. `RoboWindowsTerminalTiming`: existing frontend timing schema 1, same interval_ms.
+
+All numeric fields are nonnegative integers; clock errors invalidate timing.
+The header counts preceding ordinary telemetry groups in this session so missing
+whole groups cannot silently become complete coverage. Only one session per
+capture is accepted by the terminal-aware normalizer. The marker/group must be
+complete and ordered; no ordinary interval may follow it. Historical absence is
+valid but explicitly lacks terminal coverage. Existing periodic-only consumers
+ignore these distinct tags and retain their prior acceptance windows.
+
+The group is sampled after outputs have stopped and the worker has published
+its final slice through the existing shutdown handshake, but before configuration
+reset clears pending diagnostics. It is residual, not a cumulative second copy;
+sum ordinary and terminal totals once, take maxima across both. Worker/frontend
+clocks remain overlapping. Teardown may clear the queue and consume wall/worker
+time. Final decoder is a sampled observation, not proof of continuous residency.
+Lifecycle resets can still discard pre-reset partial diagnostics as described
+above; terminal availability alone is not proof of an uninterrupted full-session
+measurement. Load failure/native crash need not produce a group. Legacy sessions
+emit none. No guest image changes, addresses, PCM or extra guest work.
+
 ## Acceptance derivations
 
 - Audio production rate = `audio_produced_frames * 1000 / interval_ms`.

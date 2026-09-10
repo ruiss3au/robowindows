@@ -27,6 +27,7 @@
 #include "realtime_scheduler.h"
 #include "runtime_telemetry.h"
 #include "run_diagnostics.h"
+#include "terminal_report.h"
 #include "robowindows_core_timing.h"
 #include "session_state.h"
 
@@ -127,6 +128,7 @@ bool has_audio_producer_time = false;
 std::chrono::steady_clock::time_point last_audio_producer_time;
 RuntimeTelemetry telemetry;
 RunDiagnostics run_diagnostics;
+TerminalReportGate terminal_report;
 FrameMailbox frame_mailbox;
 FramePresenter frame_presenter(frame_mailbox, telemetry);
 std::chrono::steady_clock::time_point telemetry_report_time;
@@ -146,14 +148,29 @@ void reset_timing_state_on_core_thread() {
     has_audio_producer_time = false;
 }
 
-void report_telemetry_if_due() {
+void report_telemetry_if_due(bool terminal = false) {
     const auto now = std::chrono::steady_clock::now();
     const auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
             now - telemetry_report_time).count();
-    if (elapsed < 1000) return;
-    RuntimeTelemetrySnapshot snapshot = telemetry.take_snapshot(static_cast<uint64_t>(elapsed));
+    if (!terminal && elapsed < 1000) return;
+    uint64_t clock_errors = 0;
+    uint64_t elapsed_us = 0;
+    if (terminal) {
+        elapsed_us = TerminalReportGate::elapsed_us(
+                std::chrono::duration_cast<std::chrono::nanoseconds>(telemetry_report_time.time_since_epoch()).count(),
+                std::chrono::duration_cast<std::chrono::nanoseconds>(now.time_since_epoch()).count(), clock_errors);
+        const auto state = session_state.load();
+        const char* reason = state == robowindows::SESSION_GUEST_SHUTDOWN ? "guest_shutdown" :
+                (state == robowindows::SESSION_FAILED ? "runtime_failure" : "host_stop");
+        __android_log_print(ANDROID_LOG_INFO, "RoboWindowsTerminal",
+                "schema=1 interval_us=%llu periodic_records=%llu reason=%s clock_errors=%llu",
+                static_cast<unsigned long long>(elapsed_us),
+                static_cast<unsigned long long>(terminal_report.periodic_records()), reason,
+                static_cast<unsigned long long>(clock_errors));
+    }
+    RuntimeTelemetrySnapshot snapshot = telemetry.take_snapshot(terminal ? elapsed_us / 1000 : static_cast<uint64_t>(elapsed));
     const auto graphics = frame_presenter.take_snapshot();
-    __android_log_print(ANDROID_LOG_INFO, "RoboWindowsTelemetry",
+    __android_log_print(ANDROID_LOG_INFO, terminal ? "RoboWindowsTerminalTelemetry" : "RoboWindowsTelemetry",
             "schema=4 interval_ms=%llu state=%s audio_state=%s decoder=%s current=%s "
             "timing=%s pacing=%s run=%llu retro_max_us=%llu retro_over=%llu "
             "producer_gap_max_us=%llu scheduler_late_max_us=%llu catchup=%llu resync=%llu "
@@ -205,12 +222,12 @@ void report_telemetry_if_due() {
         robowindows_core_timing_take(&worker);
 #define RW_FORMAT(n) " " #n "=%llu"
 #define RW_ARGUMENT(n) , static_cast<unsigned long long>(worker.n)
-        __android_log_print(ANDROID_LOG_INFO, "RoboWindowsWorker",
+        __android_log_print(ANDROID_LOG_INFO, terminal ? "RoboWindowsTerminalWorker" : "RoboWindowsWorker",
                 "schema=1 interval_ms=%llu" RW_TIMING_FIELDS(RW_FORMAT),
                 static_cast<unsigned long long>(snapshot.interval_ms) RW_TIMING_FIELDS(RW_ARGUMENT));
 #undef RW_FORMAT
 #undef RW_ARGUMENT
-        __android_log_print(ANDROID_LOG_INFO, "RoboWindowsTiming",
+        __android_log_print(ANDROID_LOG_INFO, terminal ? "RoboWindowsTerminalTiming" : "RoboWindowsTiming",
                 "schema=1 interval_ms=%llu calls=%llu wall_total_us=%llu "
                 "process_cpu_total_us=%llu process_cpu_max_us=%llu cpu_clock_errors=%llu "
                 "host_gap_max_us=%llu wake_late_max_us=%llu video_total_us=%llu "
@@ -229,6 +246,7 @@ void report_telemetry_if_due() {
                 static_cast<unsigned long long>(timing.audio_max_us));
     }
     telemetry_report_time = now;
+    if (!terminal) terminal_report.periodic_reported();
 }
 
 int classify_decoder(const char* name) {
@@ -807,7 +825,10 @@ void run_core() {
     telemetry.set_state(RuntimeState::Stopping);
     frame_presenter.stop();
     stop_audio();
+    terminal_report.outputs_stopped();
     retro_unload_game();
+    terminal_report.worker_stopped();
+    if (terminal_report.claim()) report_telemetry_if_due(true);
     robowindows_core_timing_configure(0);
     running = false;
     session_state = robowindows::SessionStateAfterCoreCleanup(session_state.load());
@@ -896,6 +917,7 @@ Java_org_robowindows_app_NativeHost_startSession(JNIEnv* env, jclass, jstring co
     exception_iret_executed = 0;
     guest_resets = 0;
     runtime_timing_policy = static_cast<RuntimeTimingPolicy>(timing_policy_id);
+    terminal_report.reset(runtime_timing_policy == RuntimeTimingPolicy::Balanced100Ms);
     realtime_scheduler = RealTimeScheduler(runtime_timing_policy);
     timing_reset_requested = false;
     has_audio_producer_time = false;

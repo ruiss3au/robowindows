@@ -230,3 +230,49 @@ Installation and all ten correctness cases are complete. T076 remains open only
 for adequate diagnostic coverage and mechanism characterization, not another
 blind repeat. No Windows acceptance, human audio judgment, promotion or push is
 included in this milestone.
+
+## Terminal reporting implementation — 2026-09-10
+
+FR-032/T077 adds one residual group after presenter/audio stop and completed
+worker shutdown, before disabling worker diagnostics. It uses distinct terminal
+tags so existing periodic-only quality consumers remain unchanged. A microsecond
+header identifies tail duration, preceding periodic-group count and exit reason;
+the triplet retains the existing field schemas. See the [terminal contract](contracts/runtime-telemetry.md#terminal-residual-group-fr-032).
+Legacy sessions leave the terminal gate disabled and perform no terminal clock
+reads. No upstream patch, CPU instruction/cache/link change or guest work was added.
+
+The cache reporter now explicitly opts into terminal validation and aggregates
+ordinary plus residual counts once, with maxima across both. The header prevents
+missing whole ordinary groups from silently looking complete. Historical logs
+without terminal records still parse with unavailable terminal coverage; an empty
+capture now reports unavailable error/FPS observations instead of misleading
+zeros. The device capture entry point requires terminal coverage for new cache
+runs. A terminal group with missing/duplicate/reordered records or bad clocks is
+rejected. Zero/sub-ms tails do not receive a fabricated minimum duration.
+
+Terminal values include teardown, `state=stopping`, stopped audio and potentially
+cleared queue depth. They are not settled audio or presentation samples. Worker
+and frontend clocks overlap; a completed slice may begin in a preceding interval.
+Existing lifecycle-generation resets can discard partial work and are not undone
+by terminal reporting. Load failures/crashes need not yield a terminal group.
+The reports retain `quality=not_assessed` and `cache_mechanism=unverified`; actual
+cache behavior and the Windows underrun cause are still open.
+
+Full host tests passed: once-only/disabled/early shutdown gating, fresh-session
+reset, microsecond/zero/bad-clock arithmetic, final completed-worker drain before
+disable, lifecycle stale-slice discard, terminal-only/mixed histories, dropped
+whole groups, corrupt/unknown/duplicate fields, missing/reordered records and
+unchanged ordinary consumers. A source guard verifies the production cleanup
+ordering. Existing cache checksums, injected failure/APM QEMU checks and x86/REP/
+worker/graphics host checks also passed. Pins, repository hygiene and whitespace
+checks passed. No device calls or installation occurred in this implementation.
+
+Android debug build passed: source label `42e6c31b9f30+dirty`, new CPU capability
+`2e6caa2dcea9a5bf`, APK SHA-256
+`4bae989c5385adeb5e43882a1c2ade439cd5324e755e03f95b3fef1c13a6e1ee`.
+All five packaged cache images and the original light/stress images retain the
+previously recorded hashes. Ignored logs are `artifacts/terminal-host.log` and
+`artifacts/terminal-build.log`. Device shutdown-tail coverage, legacy smoke and
+the repeated unchanged Normal/DynRec comparison remain separately coordinated
+T078 work. Rollback removes only terminal reporting/consumer opt-in; real machine
+settings and disks remain untouched.

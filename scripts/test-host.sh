@@ -47,6 +47,7 @@ java -cp "$classes_dir" org.robowindows.app.DynamicProgressWatchdogTest
 bash "$repo_dir/tests/scripts/test-runtime-timing.sh"
 bash "$repo_dir/tests/scripts/test-worker-timing.sh"
 bash "$repo_dir/tests/scripts/test-cache-summary.sh"
+bash "$repo_dir/tests/scripts/test-terminal-timing.sh"
 bash "$repo_dir/tests/scripts/test-presentation.sh"
 javac -d "$classes_dir" \
   "$repo_dir/android/src/main/java/org/robowindows/app/PresentationWorkload.java" \
@@ -118,6 +119,10 @@ g++ -std=c++11 -O2 -Wall -Wextra -Werror -fsanitize=undefined -fno-sanitize-reco
   -I"$repo_dir/third_party/dosbox-pure/include" \
   "$repo_dir/tests/native/worker_timing_test.cpp" -o "$classes_dir/worker_timing_test"
 "$classes_dir/worker_timing_test"
+g++ -std=c++17 -O2 -Wall -Wextra -Werror -fsanitize=undefined -fno-sanitize-recover=undefined -pthread \
+  -I"$repo_dir/android/src/main/cpp" -I"$repo_dir/third_party/dosbox-pure/include" \
+  "$repo_dir/tests/native/terminal_report_test.cpp" -o "$classes_dir/terminal_report_test"
+"$classes_dir/terminal_report_test"
 
 g++ -std=c++17 -Wall -Wextra -Werror -pthread \
   -I"$repo_dir/android/src/main/cpp" \

@@ -242,6 +242,14 @@ failure to a measured subsystem without relying only on subjective listening.
   labeled measured-loop-only cost. Preserve existing correctness/stress images,
   require Normal before DynRec on device, and do not infer Windows causality.
 
+- **FR-032**: Successfully loaded experimental sessions MUST publish exactly one
+  explicitly terminal residual telemetry/worker/frontend group after output
+  shutdown and completed worker shutdown, before diagnostics are disabled. Include
+  elapsed microseconds, periodic-group count and exit reason; permit sub-ms tails
+  without inventing elapsed time. Terminal data includes teardown and MUST NOT be
+  treated as settled foreground audio/presentation. Keep legacy output/cadence and
+  existing periodic schemas unchanged; reject incomplete/duplicate terminal groups.
+
 ### Key Entities
 
 - **Performance Profile**: A named, recoverable guest execution configuration with memory,

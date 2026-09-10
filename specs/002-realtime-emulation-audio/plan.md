@@ -298,6 +298,32 @@ must be rejected. Rollback removes new packaged workload selection only. Require
 host/QEMU protocol/negative tests, unchanged old hashes, pins and Android build;
 installation and device characterization remain a separate coordinated step.
 
+### Terminal diagnostic coverage (FR-032 / T077)
+
+Add a host-testable once-only shutdown gate to the project-owned frontend, armed
+only for balanced experimental sessions. Keep periodic reports byte-schema
+compatible. After presenter/audio stop and `retro_unload_game()` completion,
+take the residual snapshots before disabling worker diagnostics. Pinned Pure's
+TCM_ON_SHUTDOWN publishes its final worker slice before signaling shutdown;
+the frontend must never access an in-flight slice directly. No upstream change.
+
+Emit a schema-1 terminal header and separately tagged schema-4 telemetry / schema-1
+worker / schema-1 frontend records. Terminal elapsed includes unload/output
+teardown, queue depth can reflect clearing, and state/audio are stopping/stopped.
+Do not mix it into existing settled-window consumers. A strict normalizer checks
+group order, header/interval agreement and periodic-group count before opted-in
+cache reports combine residual and regular totals. Preserve historical captures
+without a terminal group as incomplete coverage, not fabricated zero observations.
+No load-failure or crash completeness claim; no interval synthesis on lifecycle
+reset. Record existing generation-reset limitations explicitly.
+
+Test disabled/early/duplicate shutdown, fresh-session reset, sub-ms/zero timing,
+bad clocks, delayed final worker completion, and drain-before-disable. Parser
+tests cover terminal-only and mixed histories, missing/reordered/duplicated
+records, zero tails, clock errors, and unchanged ordinary consumers. Require host,
+pins and Android build; retain all five cache image hashes. Rollback removes only
+terminal reporting and consumer opt-in. No install/device run in this slice.
+
 - Preserve the current conservative profile as the last-known-safe fallback.
 - Test CPU/core changes only with a cloned image. Require identical checksums only when the
   test terminates before guest execution; otherwise verify mountability/filesystem health

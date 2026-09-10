@@ -54,6 +54,7 @@ val cpuDiagnosticRevision = contentRevision(listOf(
     "android/src/main/cpp/core_host.cpp",
     "android/src/main/cpp/av_environment.h",
     "android/src/main/cpp/run_diagnostics.h",
+    "android/src/main/cpp/terminal_report.h",
     "android/src/main/cpp/Android.mk",
     "patches/dosbox-pure/0001-preserve-conf-on-guest-reboot.patch",
     "patches/dosbox-pure/0002-dynrec-consume-invlpg-address.patch",
