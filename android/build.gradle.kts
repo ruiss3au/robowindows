@@ -145,6 +145,21 @@ tasks.named("preBuild").configure {
     dependsOn(buildExpandedCpuFixtures)
     dependsOn("buildPresentationFixture")
     dependsOn("buildStressFixture")
+    dependsOn("buildCacheFixtures")
+}
+
+tasks.register("buildCacheFixtures") {
+    dependsOn(listOf("warm", "cold", "reuse", "data", "rewrite").map { "buildCache_$it" })
+}
+listOf("warm", "cold", "reuse", "data", "rewrite").forEach { phase ->
+    tasks.register<Exec>("buildCache_$phase") {
+        inputs.files(rootProject.file("tests/cpu/robowindows_cpu_boot.S"),
+            rootProject.file("tests/cpu/cache_workload.S"),
+            rootProject.file("scripts/build-cache-fixture.sh"))
+        val output = layout.buildDirectory.file("generated/cpuFixture/res/raw/robowindows_cache_$phase.bin")
+        outputs.file(output)
+        commandLine("bash", rootProject.file("scripts/build-cache-fixture.sh"), phase, output.get().asFile)
+    }
 }
 
 tasks.register<Exec>("buildPresentationFixture") {

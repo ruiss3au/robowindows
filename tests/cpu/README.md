@@ -54,3 +54,12 @@ the 64-instruction limit.
 
 SM-T500 before/after evidence is recorded in feature 008's `validation.md`.
 A CPU fixture pass does not verify Windows filesystem health or stability.
+
+The separate `cache_workload.S` performance control is not part of the x86
+correctness gate. It uses five independently identified images and a new 64-byte
+record, with exact return/checksum assertions and independent PIT ticks. See
+[protocol, controls and timing limits](../../specs/002-realtime-emulation-audio/cache-control-fixture.md).
+Build with `bash scripts/build-cache-fixture.sh CASE [OUTPUT]`; validate all cases
+and an injected failure with `bash scripts/test-cache-reference.sh`. Builders
+refuse to overwrite differing existing outputs. QEMU results are correctness
+references, not Normal/DynRec performance measurements.

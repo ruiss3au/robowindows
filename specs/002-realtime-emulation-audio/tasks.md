@@ -309,6 +309,19 @@ recoverable; it is not required for completion of the conservative MVP.
   See `worker-path-review.md`: translation rate is associated with failing
   intervals; BR_Opcode is not exclusively unsupported instructions. A controlled
   cache-reuse/retranslation fixture is designed, not implemented or device-tested.
+- [x] T074 Implement FR-031's fixed five-case guest fixture, bounded checksummed
+  protocol, safe deterministic builder, strict parser and host/QEMU regressions.
+  Preserve existing fixture identities; test malformed and failed records.
+- [x] T075 Integrate the five allowlisted packaged fixtures into the existing
+  isolated disposable boundary with timeout/cleanup and aggregate-only reports.
+  Run host tests, pins, hygiene and Android build. No installation or device run
+  is included; record pending Normal/DynRec characterization explicitly.
+  Full host/QEMU and Android build passed; see `cache-control-fixture.md`.
+- [ ] T076 Only with separate coordination, verify stopped installation and
+  disposable CPU correctness, then characterize the cache controls under Normal
+  before DynRec on the SM-T500. Validate records, cleanup, coverage and actual
+  reuse/invalidation counters; do not claim Windows causality or automatically
+  queue a Windows trial. Not executed as part of T074–T075.
 
 T062 remains open. The corrected scheduler passed the complete Normal workload,
 but the matched DynRec start failed before the benchmark when Windows Explorer

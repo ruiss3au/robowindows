@@ -27,6 +27,8 @@ guest media, and backups are intentionally outside Git.
 | `scripts/compare-sm-t500-benchmarks.sh ...` | Compare three valid fixed-20k DynRec reports with three matched Normal reports | Emits medians/deltas; never promotes while long gates are pending |
 | `scripts/test-host.sh` | Compile and run Java/C++ host checks | Temporary files only |
 | `bash scripts/test-stress-reference.sh` | Verify all idle/integer/RAM/VGA stress phases and timer progress in pinned QEMU | Disposable source-owned floppy only; approximately 35 seconds |
+| `bash scripts/test-cache-reference.sh` | Validate five protected-mode cache controls, exact checksums, malformed records, injected failure and APM shutdown in pinned QEMU | Fresh generated floppies only; not tablet performance evidence |
+| `bash scripts/build-cache-fixture.sh warm\|cold\|reuse\|data\|rewrite [OUTPUT]` | Build a pinned, separately identified cache-control image | Staged no-clobber publication; differing existing outputs are rejected |
 | `scripts/check-repository.sh` | Check Git hygiene and shell syntax | Read-only |
 | `scripts/check-experimental-fat.sh --image FILE --expected PATH` | Read-only FAT health check for a quarantined experimental volume | Requires `fsck.fat`/`dosfsck` and `mtype`; never mounts or repairs |
 | `scripts/test-sm-t500-core.sh` | Run disposable settings/storage, input and direct-core device probes; silent fixture validates stream opening and schema-3 presentation, not audio continuity | Requires stopped machines; installs APK and creates temporary tablet files |
@@ -34,6 +36,8 @@ guest media, and backups are intentionally outside Git.
 | `bash scripts/build-presentation-fixture.sh [OUTPUT [tone\|stress]]` | Build pinned BIOS-timer/VGA/PIT-tone boot image; optional phased stress variant | Generated output only; no proprietary OS required |
 | `bash scripts/test-sm-t500-presentation.sh normal\|dynamic 0\|1 [tone\|stress]` | Two-minute Software (0) or GPU (1) light/stress timer/tone run | Requires passed CPU gate and stopped machines; isolated disposable image; writes ignored evidence; tablet stays foreground |
 | `bash scripts/summarize-presentation.sh normal\|dynamic 0\|1 LOG [tone\|stress]` | Strict settled timer/tone telemetry and workload identity validation | Read-only; short experiment, not sustained thermal certification |
+| `bash scripts/test-sm-t500-presentation.sh normal\|dynamic 0\|1 cache-warm\|cache-cold\|cache-reuse\|cache-data\|cache-rewrite` | Run one packaged fixed-work cache control in the existing isolated fixture process | Passed CPU gate, stopped machines and unlocked/foreground tablet required; 60-second internal timeout; no guest-library paths |
+| `bash scripts/summarize-cache-fixture.sh normal\|dynamic 0\|1 warm\|cold\|reuse\|data\|rewrite LOG` | Validate cache-case correctness and report complete-interval timing separately | Read-only; whole-session timing includes setup; neither quality nor Windows causality is inferred |
 | `scripts/test-sm-t500-realtime.sh` | Legacy realtime clone/environment test modes | Some modes create explicit host/device clones |
 | `scripts/cleanup-tablet-storage.sh --preflight` | Verify the two disposable tablet areas and protected library | Read-only; requires RoboWindows at Machines |
 | `scripts/cleanup-tablet-storage.sh --delete` | Permanently remove only verified disposable tablet areas | Re-runs preflight and checks library invariants |

@@ -81,10 +81,13 @@ specification, plan, tasks, and validation record when work begins.
   Offline review found translation attempts about 7.68 times as frequent in
   underrun intervals, while fallback rates changed much less. The opcode bucket
   also includes translator stops at invalidated code, not only unsupported
-  instructions. Next: specify and implement the designed source-owned warm/cold/
-  rewritten-code comparison; preserve existing fixtures. Counts still do not
-  isolate a costly function. No speculative engine/buffer tuning or further
-  Windows run is queued ([review](002-realtime-emulation-audio/worker-path-review.md)).
+  instructions. The five source-owned warm/cold/reuse/data-write/code-rewrite
+  controls are now implemented, with exact checksums and independent guest ticks;
+  host/QEMU, failure checks and Android build pass. Existing fixtures are unchanged.
+  Next, coordinate stopped installation and automated disposable Normal/DynRec
+  characterization; it has not run on the tablet yet. Counts still do not isolate
+  a costly function. No speculative engine/buffer tuning or Windows run is queued
+  ([fixture and limits](002-realtime-emulation-audio/cache-control-fixture.md)).
 - Use the completed UI and address specific reported issues. Resume Feature
   009's clock/median campaign only if the user later requests it; no new guest
   trial is queued by completing the UI milestone.

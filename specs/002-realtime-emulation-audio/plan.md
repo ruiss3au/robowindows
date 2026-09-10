@@ -265,6 +265,39 @@ control before more Windows trials. Sampling design is a fallback, not permissio
 to add per-instruction clocks or alter cache publication. Existing APK/settings
 are retained; this step requires no installation or device session.
 
+### Translation fixture (FR-031 / T074–T075)
+
+Use five build-time cases in a new source-owned protected-mode stage, reusing the
+existing eight-sector boot loader. Generate 4,096 identical 64-byte routine slots
+in bounded RAM, each with a 512-iteration deterministic integer loop. Warm uses
+one primed slot; cold calls each slot once; reuse primes the entire footprint
+then repeats it. Data-write and rewrite cases each prime one slot and perform
+the same alternating write/call counts, targeting separate data or an immediate
+inside the called routine. Check each return and the final 4,096-call checksum.
+The 256-KiB footprint does not prove host cache residency; counters must confirm
+reuse/invalidation on the eventual device runs.
+
+Use a dedicated approximately 1-kHz PIT IRQ counter in protected mode, retaining
+setup, warm-up, measured and total ticks separately. Restore BIOS interrupt/timer
+state, write a checksummed 64-byte result to sector 18, then request APM shutdown.
+Host/QEMU tests use a source-fixture-only debug-exit device after the result write.
+Protocol or arithmetic failures remain failures even if teardown succeeds.
+
+Package independent image identities and permit only literal case names through
+the existing non-exported presentation fixture activity. Poll guest shutdown and
+fail after 60 host seconds; stop/unload only that generated fixture before reading
+its result and cleaning its private directory. Use balanced-100-ms/fixed-20k with
+unchanged presentation selection. Log case/checksum/ticks and whole-session host
+duration, not guest data or measured-loop host time. A correctness PASS does not
+assert zero underruns, decoder residency, cache reuse or timer-speed acceptance;
+report aggregate timing separately. No machine setting or core patch changes.
+
+Builders stage outputs and publish without overwriting an existing differing
+file. Byte-identical generated outputs are reusable; existing mutated run images
+must be rejected. Rollback removes new packaged workload selection only. Require
+host/QEMU protocol/negative tests, unchanged old hashes, pins and Android build;
+installation and device characterization remain a separate coordinated step.
+
 - Preserve the current conservative profile as the last-known-safe fallback.
 - Test CPU/core changes only with a cloned image. Require identical checksums only when the
   test terminates before guest execution; otherwise verify mountability/filesystem health

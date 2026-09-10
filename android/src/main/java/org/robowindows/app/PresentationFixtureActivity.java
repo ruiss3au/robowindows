@@ -38,7 +38,8 @@ public final class PresentationFixtureActivity extends Activity {
         presentation = getIntent().getIntExtra("presentation", -1);
         if (!BuildConfig.DEBUG || store.hasInterruptedSession() ||
                 !("normal".equals(core) || "dynamic".equals(core)) ||
-                !PresentationPolicy.allowed(presentation) || !PresentationWorkload.allowed(workload) ||
+                !PresentationPolicy.allowed(presentation) ||
+                !(PresentationWorkload.allowed(workload) || CacheWorkload.allowed(workload)) ||
                 !CpuFixtureGate.passed(this)) {
             complete("FAIL invalid fixture start"); return;
         }
@@ -48,6 +49,14 @@ public final class PresentationFixtureActivity extends Activity {
             if (!directory.mkdir()) throw new java.io.IOException("fixture directory");
             image = new File(directory, "fixture.ima"); launch = new File(directory, "launch.conf");
             int resource = "stress".equals(workload) ? R.raw.robowindows_stress_tone : R.raw.robowindows_gpu_tone;
+            switch (CacheWorkload.id(workload)) {
+                case 1: resource = R.raw.robowindows_cache_warm; break;
+                case 2: resource = R.raw.robowindows_cache_cold; break;
+                case 3: resource = R.raw.robowindows_cache_reuse; break;
+                case 4: resource = R.raw.robowindows_cache_data; break;
+                case 5: resource = R.raw.robowindows_cache_rewrite; break;
+                default: break;
+            }
             try (InputStream input = getResources().openRawResource(resource);
                     FileOutputStream output = new FileOutputStream(image)) {
                 byte[] buffer = new byte[8192]; int count;
@@ -95,6 +104,7 @@ public final class PresentationFixtureActivity extends Activity {
     private void poll() {
         if (finished) return;
         long now = SystemClock.elapsedRealtime();
+        if (CacheWorkload.allowed(workload)) { pollCache(now); return; }
         if (now - began < 122000) { handler.postDelayed(this::poll, 100); return; }
         final String decoder = NativeHost.sessionDecoder();
         final int activePresentation = NativeHost.sessionPresentation();
@@ -118,16 +128,43 @@ public final class PresentationFixtureActivity extends Activity {
         complete("FAIL missing guest timer record");
     }
 
+    private void pollCache(long now) {
+        if (now - began >= 60000) { complete("FAIL cache timeout"); return; }
+        int status = NativeHost.sessionStatus();
+        if (status != NativeHost.SESSION_GUEST_SHUTDOWN) {
+            if (status == NativeHost.SESSION_FAILED || status == NativeHost.SESSION_STOPPED) {
+                complete("FAIL cache unexpected native exit"); return;
+            }
+            handler.postDelayed(this::poll, 100); return;
+        }
+        String decoder = NativeHost.sessionDecoder();
+        // Join cleanup: the shutdown notification can precede buffered disk flush.
+        NativeHost.stopSession(); started = false;
+        try (RandomAccessFile file = new RandomAccessFile(image, "r")) {
+            file.seek(17 * 512L);
+            byte[] bytes = new byte[64]; file.readFully(bytes);
+            CacheWorkload.Result result = CacheWorkload.parse(workload, bytes);
+            if (result == null || !("dynamic".equals(core) ? "DynRec" : "Normal").equals(decoder)) {
+                complete("FAIL cache result or configured decoder"); return;
+            }
+            complete("PASS correctness core=" + core + " presentation=" + presentation +
+                    " workload=" + workload + " host_ms=" + (now - began) +
+                    " decoder=" + decoder + result.fields());
+        } catch (Exception error) { complete("FAIL cache result read"); }
+    }
+
     private void complete(String result) {
         if (finished) return;
         finished = true; handler.removeCallbacksAndMessages(null);
         if (started) NativeHost.stopSession();
         started = false;
         if (audioManager != null && audioFocus != null) audioManager.abandonAudioFocusRequest(audioFocus);
-        if (launch != null) launch.delete();
-        if (image != null) image.delete();
-        if (directory != null) directory.delete();
-        Log.i("RoboWindowsPresentation", result);
+        boolean cleaned = true;
+        if (launch != null && launch.exists() && !launch.delete()) cleaned = false;
+        if (image != null && image.exists() && !image.delete()) cleaned = false;
+        if (directory != null && directory.exists() && !directory.delete()) cleaned = false;
+        if (CacheWorkload.allowed(workload) && !cleaned) result = "FAIL cache cleanup";
+        Log.i(CacheWorkload.allowed(workload) ? "RoboWindowsCacheFixture" : "RoboWindowsPresentation", result);
         finish();
         IsolatedProcessExit.afterResult();
     }

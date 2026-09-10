@@ -232,6 +232,16 @@ failure to a measured subsystem without relying only on subjective listening.
   Host tests and disposable Normal/DynRec correctness/stress tests MUST validate
   accounting and characterize overhead before a separately authorized Windows run.
 
+- **FR-031**: A source-owned translation fixture MUST distinguish warm reuse,
+  cold first sweep, same-footprint second sweep, data-write control and code
+  rewrite. Each disposable image selects one allowlisted case; no user media or
+  arbitrary workload path is accepted. Fixed operation counts, exact per-return
+  assertions/checksums, independent PIT ticks and setup/warm-up timing MUST be
+  validated before performance interpretation. Completion, failure and timeout
+  are distinct. Whole-session host timing includes boot/setup and MUST NOT be
+  labeled measured-loop-only cost. Preserve existing correctness/stress images,
+  require Normal before DynRec on device, and do not infer Windows causality.
+
 ### Key Entities
 
 - **Performance Profile**: A named, recoverable guest execution configuration with memory,
