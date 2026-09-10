@@ -14,6 +14,9 @@ LOCAL_SRC_FILES := native_host.cpp core_host.cpp runtime_telemetry.cpp frame_mai
 LOCAL_C_INCLUDES := $(LOCAL_PATH)/../../../../third_party/dosbox-pure/libretro-common/include
 LOCAL_C_INCLUDES += $(LOCAL_PATH)/../../../../third_party/dosbox-pure/include
 LOCAL_CPPFLAGS := -std=c++17 -Wall -Wextra -Werror
+ifeq ($(NDK_DEBUG),1)
+LOCAL_CPPFLAGS += -DROBOWINDOWS_CACHE_DIAGNOSTICS=1
+endif
 LOCAL_LDLIBS := -llog -landroid -laaudio -lEGL -lGLESv2
 LOCAL_SHARED_LIBRARIES := retro
 include $(BUILD_SHARED_LIBRARY)

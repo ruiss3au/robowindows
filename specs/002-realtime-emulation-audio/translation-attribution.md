@@ -1,6 +1,7 @@
 # Targeted translation/cache attribution — FR-033
 
-Status: specified, not implemented or installed (2026-09-10, T079).
+Status: implemented and host/build validated (2026-09-10, T080–T081);
+device attribution validation remains T082.
 
 ## Decision and limits
 
@@ -106,7 +107,7 @@ Use fixed-size worker-local state and scoped guards; no per-event heap allocatio
 mutex/atomic operation or guest execution changes. If a source path bypasses scope
 cleanup, stop implementation and resolve it explicitly before enabling the hooks.
 
-## Proposed internal wire contract
+## Internal wire contract
 
 New `RoboWindowsCache` schema 1 follows each experimental `RoboWindowsTiming`
 record, with the same `interval_ms`. All fields below are nonnegative integers;
@@ -175,12 +176,26 @@ ns/slice, attempts/slice, sample/clock counts and valid-clock status. Also measu
 clock-free event-only cost, so low per-sample cost cannot hide high counter volume.
 
 Initial smoke budget: full enabled synthetic slice cost below 1% of the nominal
-frame period, no accounting errors, exact expected sample/skip counts, and zero
+70.086-Hz boot-frame period (fixed 142,680 ns), no accounting errors, exact
+expected sample/skip counts, and zero
 disabled hook clocks/updates. This is a synthetic smoke bound, not proof of <1%
 real workload overhead: slices per frame and event volume vary. Record all modes,
 budget failures and device variability without selecting a favorable run. No
 further guest campaign if calibration or correctness fails; do not silently
 raise the cap or loosen thresholds.
+
+All four calibration records form one schema-1 `RoboWindowsCacheCalibration`
+group, modes 0 disabled / 1 worker-only / 2 full / 3 events-only. Fields are
+`schema mode iterations attempts_per_slice publication_per_sample mean_ns
+cache_clock_reads samples_completed stride_skipped cap_skipped cache_events
+clock_errors accounting_errors`. Counts cover all 2,000 slices, not per-slice
+means. `cache_events` is lookup + invalidate + clear calls, three per attempted
+event iteration in modes 2/3. The full mode must report 160,000 extra clock reads,
+8,000 samples, 378,000 stride skips and 638,000 cap skips; other modes report zero
+sample clocks/counts. Enabled cache events total 3,072,000. Invalid calibration
+or a failed smoke budget aborts debug experimental loading before guest execution;
+legacy/release loading is unchanged. This budget is a fixed diagnostic smoke
+reference, not a threshold silently adjusted by guest refresh updates.
 
 Host verification must cover disabled/Normal behavior, attempts 0/1/64/65/193/194/
 512, nested translations/publications, publication cap, clock failures, rounding,
@@ -225,3 +240,54 @@ verification and local commits. T080–T081 may proceed immediately. T082 may ru
 without another checkpoint when read-only preflight verifies stopped/clean real
 machines and an available unlocked tablet; pause only for necessary user action.
 This does not authorize a real Windows boot, unsafe stop, promotion or push.
+
+## Implementation and host/build evidence — 2026-09-10
+
+Isolated patch 0010 adds worker-local scopes and cache-clear hooks, retaining
+patches 0001–0009 and all upstream pins. The combined native take operation drains
+both accumulators under the existing publication lock/generation check. Duration
+totals remain nanoseconds until the aggregate is drained. A surviving old scope
+cannot contribute clocks/data after its worker boundary; recursive depth/reason
+state restores on stack unwind. Existing manual translation-count callers and
+worker-only calibration retain their original meaning.
+
+The frontend enables the new extension only with the debug NDK build flag and
+balanced timing. Legacy leaves it disabled; release does not enable the new
+cache sampler/records. Four calibration modes precede loading, and invalid
+calibration or an over-budget full-mode result refuses guest loading. Normal
+has real zero-event records, not invented sample times. The strict parser reports
+sample coverage, direct clear reasons and explicit unavailable sample timing.
+Schema-1 terminal/history support and existing settled-only consumers remain.
+
+Full host tests passed, including new C++11/UBSan sampling, nesting, caps, clock
+errors, nanosecond aggregation, exceptions, stale publication/translation scopes,
+worker-boundary discards and concurrent reset/atomic drain. Actual pinned Clear,
+InvalidateRange, ClearRelease, cache_openblock and dyn_closeblock bodies were
+compiled against bounded mocks; recursive code-write clears, specific versus
+generic reasons and publication ordering passed. Source guards verify the single
+dispatcher lookup/translation hook and byte-identical ARM publication source.
+Existing CPU/REP/APM/checksum, runtime/audio/presentation tests passed too.
+
+Parser tests reject missing/reordered/duplicate/mixed fields and groups, invalid
+sample/clear arithmetic, caps, clocks, wrong calibration modes/counts and budget
+overruns. All 20 historical device cache captures reparse successfully without
+claiming the new extension. The full-suite synthetic calibration (host with
+UBSan, not tablet overhead) recorded mean ns/slice 30,548 disabled, 36,199 worker
+only, 113,056 full, 6,853 events only; accounting/clock checks passed. A standalone
+run was faster, illustrating why these probes are not whole-workload overhead.
+
+Pinned reconstruction, repository hygiene and whitespace checks passed. Android
+debug build passed in 63 seconds, source label `22dba188cde3+dirty`, CPU capability
+`13cb1ca6e18ea3db`, APK SHA-256
+`926af541ff2873ca7c62a6f7250d166c392f6d45b837c04590cf5d830871cf67`.
+All five packaged cache hashes remain exact. The existing upstream OSD C++ VLA
+warning was observed; no diagnostic compile failure. Ignored logs are
+`artifacts/cache-attribution-host.log` and `artifacts/cache-attribution-build.log`.
+The prior APK is preserved at ignored `artifacts/cache-attribution-baseline.apk`
+with SHA-256 `4bae989c5385adeb5e43882a1c2ade439cd5324e755e03f95b3fef1c13a6e1ee`.
+
+Read-only preflight after build confirmed the tablet awake/unlocked and both
+real profiles clean/stopped, generations 1 and 31 unchanged, with no isolated
+runner or recovery journal. No new build has been installed at this checkpoint;
+the already authorized T082 disposable sequence may proceed after stopped guards.
+Windows underruns, exact miss history and per-phase causality remain unresolved.

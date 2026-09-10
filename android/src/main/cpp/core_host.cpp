@@ -135,6 +135,11 @@ std::chrono::steady_clock::time_point telemetry_report_time;
 
 const char* configured_decoder_name();
 const char* runtime_decoder_name();
+#ifdef ROBOWINDOWS_CACHE_DIAGNOSTICS
+constexpr bool cache_diagnostics_enabled = true;
+#else
+constexpr bool cache_diagnostics_enabled = false;
+#endif
 
 int64_t steady_now_ns() {
     return std::chrono::duration_cast<std::chrono::nanoseconds>(
@@ -163,7 +168,8 @@ void report_telemetry_if_due(bool terminal = false) {
         const char* reason = state == robowindows::SESSION_GUEST_SHUTDOWN ? "guest_shutdown" :
                 (state == robowindows::SESSION_FAILED ? "runtime_failure" : "host_stop");
         __android_log_print(ANDROID_LOG_INFO, "RoboWindowsTerminal",
-                "schema=1 interval_us=%llu periodic_records=%llu reason=%s clock_errors=%llu",
+                "schema=%d interval_us=%llu periodic_records=%llu reason=%s clock_errors=%llu",
+                cache_diagnostics_enabled ? 2 : 1,
                 static_cast<unsigned long long>(elapsed_us),
                 static_cast<unsigned long long>(terminal_report.periodic_records()), reason,
                 static_cast<unsigned long long>(clock_errors));
@@ -219,7 +225,8 @@ void report_telemetry_if_due(bool terminal = false) {
     if (runtime_timing_policy == RuntimeTimingPolicy::Balanced100Ms) {
         const auto timing = run_diagnostics.take_snapshot();
         RWTimingSnapshot worker;
-        robowindows_core_timing_take(&worker);
+        RWCacheSnapshot cache;
+        robowindows_core_timing_take_v2(&worker, &cache);
 #define RW_FORMAT(n) " " #n "=%llu"
 #define RW_ARGUMENT(n) , static_cast<unsigned long long>(worker.n)
         __android_log_print(ANDROID_LOG_INFO, terminal ? "RoboWindowsTerminalWorker" : "RoboWindowsWorker",
@@ -244,6 +251,15 @@ void report_telemetry_if_due(bool terminal = false) {
                 static_cast<unsigned long long>(timing.video_max_us),
                 static_cast<unsigned long long>(timing.audio_total_us),
                 static_cast<unsigned long long>(timing.audio_max_us));
+        if (cache_diagnostics_enabled) {
+#define RW_FORMAT(n) " " #n "=%llu"
+#define RW_ARGUMENT(n) , static_cast<unsigned long long>(cache.n)
+            __android_log_print(ANDROID_LOG_INFO, terminal ? "RoboWindowsTerminalCache" : "RoboWindowsCache",
+                    "schema=1 interval_ms=%llu sample_stride=64 sample_cap=4 publication_cap=4" RW_CACHE_FIELDS(RW_FORMAT),
+                    static_cast<unsigned long long>(snapshot.interval_ms) RW_CACHE_FIELDS(RW_ARGUMENT));
+#undef RW_FORMAT
+#undef RW_ARGUMENT
+        }
     }
     telemetry_report_time = now;
     if (!terminal) terminal_report.periodic_reported();
@@ -719,7 +735,9 @@ void run_core() {
     }
     retro_game_info game{content_path.c_str(), nullptr, 0, nullptr};
     const bool worker_diagnostics = runtime_timing_policy == RuntimeTimingPolicy::Balanced100Ms;
-    robowindows_core_timing_configure(worker_diagnostics ? 1 : 0);
+    robowindows_core_timing_configure_v2(worker_diagnostics ? 1 : 0,
+            worker_diagnostics && cache_diagnostics_enabled ? 1 : 0);
+    bool cache_calibration_valid = true;
     if (worker_diagnostics) {
         const auto disabled_ns = robowindows_core_timing_calibrate(0);
         const auto enabled_ns = robowindows_core_timing_calibrate(1);
@@ -727,8 +745,32 @@ void run_core() {
                 "schema=1 iterations=2000 events_per_slice=64 disabled_ns=%llu enabled_ns=%llu",
                 static_cast<unsigned long long>(disabled_ns),
                 static_cast<unsigned long long>(enabled_ns));
+        if (cache_diagnostics_enabled) {
+            for (int mode = 0; mode < 4; ++mode) {
+                RWCacheCalibration probe;
+                robowindows_core_cache_calibrate(mode, &probe);
+                // Fixed 1% of the 70.086-Hz boot frame; not a live pacing control.
+                if (!probe.mean_ns || probe.clock_errors || probe.accounting_errors ||
+                        (mode == 2 && probe.mean_ns >= 142680)) cache_calibration_valid = false;
+                __android_log_print(ANDROID_LOG_INFO, "RoboWindowsCacheCalibration",
+                        "schema=1 mode=%d iterations=2000 attempts_per_slice=512 publication_per_sample=4 "
+                        "mean_ns=%llu cache_clock_reads=%llu samples_completed=%llu stride_skipped=%llu "
+                        "cap_skipped=%llu cache_events=%llu clock_errors=%llu accounting_errors=%llu",
+                        mode, static_cast<unsigned long long>(probe.mean_ns),
+                        static_cast<unsigned long long>(probe.cache_clock_reads),
+                        static_cast<unsigned long long>(probe.samples_completed),
+                        static_cast<unsigned long long>(probe.stride_skipped),
+                        static_cast<unsigned long long>(probe.cap_skipped),
+                        static_cast<unsigned long long>(probe.cache_events),
+                        static_cast<unsigned long long>(probe.clock_errors),
+                        static_cast<unsigned long long>(probe.accounting_errors));
+            }
+        }
     }
-    if (!retro_load_game(&game)) {
+    if (!cache_calibration_valid) {
+        __android_log_print(ANDROID_LOG_ERROR, "RoboWindowsCore", "cache diagnostic calibration failed; guest not loaded");
+    }
+    if (!cache_calibration_valid || !retro_load_game(&game)) {
         __android_log_print(ANDROID_LOG_ERROR, "RoboWindowsCore", "guest load failed");
         running = false;
         session_state = robowindows::SESSION_FAILED;

@@ -186,18 +186,18 @@ above; terminal availability alone is not proof of an uninterrupted full-session
 measurement. Load failure/native crash need not produce a group. Legacy sessions
 emit none. No guest image changes, addresses, PCM or extra guest work.
 
-## Planned translation/cache extension (FR-033)
+## Translation/cache extension (FR-033)
 
-Not implemented in the T078 device build. The authoritative field list,
+Implemented in T080–T081; not present in historical T078 captures. The authoritative field list,
 sampling/clock bounds, ownership, arithmetic invariants and parser behavior are
-in [translation-attribution.md](../translation-attribution.md#proposed-internal-wire-contract).
-It proposes `RoboWindowsCache` schema 1 after each experimental timing record and
+in [translation-attribution.md](../translation-attribution.md#internal-wire-contract).
+It adds `RoboWindowsCache` schema 1 after each debug experimental timing record and
 terminal header schema 2 with `RoboWindowsTerminalCache` as the fifth record.
 Existing schema-1 terminal groups and telemetry/worker/frontend schemas retain
 their current meaning. Historical missing extensions remain unavailable, not
 zero translation cost. Sampled costs and direct clear-operation reasons are not
-whole-worker phase budgets or per-miss history. T080–T082 must implement and
-validate this extension before any capture can claim its presence.
+whole-worker phase budgets or per-miss history. T082 must validate the installed
+extension before any device attribution claim. Legacy/release cache probes stay off.
 
 ## Acceptance derivations
 

@@ -1,0 +1,461 @@
+From: RoboWindows contributors
+Subject: [PATCH] Add bounded translation samples and cache-clear attribution
+
+Pinned Pure 7f6e8fb7385fa446d1444d671063268520bf9b54 after 0001-0009.
+GPL-2.0-or-later. Diagnostic hooks only; no execution/cache/link/pacing changes.
+Completed-worker atomic publication; legacy/release cache diagnostics disabled.
+
+--- a/dosbox_pure_libretro.cpp
++++ b/dosbox_pure_libretro.cpp
+@@ -69,8 +69,17 @@
+ static Semaphore semDoContinue, semDidPause;
+ RWCoreTiming rw_core_timing;
+ extern "C" void robowindows_core_timing_configure(int enabled) { rw_core_timing.configure(enabled != 0); }
++extern "C" void robowindows_core_timing_configure_v2(int enabled, int cache_enabled) {
++ rw_core_timing.configure(enabled != 0, cache_enabled != 0);
++}
+ extern "C" void robowindows_core_timing_reset() { rw_core_timing.reset(); }
+ extern "C" void robowindows_core_timing_take(RWTimingSnapshot* out) { *out = rw_core_timing.take(); }
++extern "C" void robowindows_core_timing_take_v2(RWTimingSnapshot* out, RWCacheSnapshot* cache) {
++ *out = rw_core_timing.take(cache);
++}
++extern "C" void robowindows_core_cache_calibrate(int mode, RWCacheCalibration* out) {
++ *out = RWCacheCalibrate(mode);
++}
+ extern "C" uint64_t robowindows_core_timing_calibrate(int enabled) {
+  RWCoreTiming probe;
+  probe.configure(enabled != 0);
+--- a/include/robowindows_core_timing.h
++++ b/include/robowindows_core_timing.h
+@@ -6,6 +6,7 @@
+ #include <cstdint>
+ #include <ctime>
+ #include <mutex>
++#include "robowindows_cache_timing.h"
+ 
+ #define RW_TIMING_FIELDS(X) \
+  X(worker_slices) X(worker_wall_total_us) X(worker_wall_max_us) \
+@@ -35,6 +36,8 @@
+  std::atomic<uint64_t> generation_{0};
+  std::mutex mutex_;
+  RWTimingSnapshot pending_, slice_;
++ RWCacheTotals pending_cache_;
++ RWCacheTiming<Clock> cache_;
+  uint64_t worker_generation_ = 0;
+  bool live_ = false;
+  int64_t wall_start_ = 0, cpu_start_ = 0;
+@@ -55,17 +58,22 @@
+   a.mix_max_us = std::max(mix,b.mix_max_us);
+  }
+ public:
+- void configure(bool enabled) {
++ typedef RWCacheTiming<Clock> Cache;
++ Cache& cache() { return cache_; } // Worker only; never call from the frontend.
++ void configure(bool enabled, bool cache_enabled=false) {
+   std::lock_guard<std::mutex> lock(mutex_);
+   const auto old = generation_.load(std::memory_order_relaxed);
+-  generation_.store(((old & ~uint64_t(1))+2) | uint64_t(enabled),std::memory_order_release);
++  generation_.store(((old & ~uint64_t(3))+4) | uint64_t(enabled) |
++    (enabled && cache_enabled ? 2u : 0u),std::memory_order_release);
+   pending_ = {};
++  pending_cache_ = {};
+  }
+- void reset() { configure((generation_.load(std::memory_order_acquire)&1)!=0); }
++ void reset() { const auto g=generation(); configure((g&1)!=0,(g&2)!=0); }
+  uint64_t generation() const { return generation_.load(std::memory_order_acquire); }
+  void worker_begin() {
+   worker_generation_ = generation();
+   live_ = (worker_generation_ & 1)!=0;
++  cache_.begin(live_ && (worker_generation_ & 2));
+   if (!live_) return;
+   slice_ = {};
+   wall_start_ = Clock::wall(); cpu_start_ = Clock::cpu();
+@@ -83,6 +91,7 @@
+  }
+  void worker_end() {
+   if (!live_) return;
++  cache_.finish();
+   const auto cpu_end = Clock::cpu(), wall_end = Clock::wall();
+   live_ = false;
+   slice_.worker_slices = 1;
+@@ -91,7 +100,10 @@
+   slice_.worker_cpu_total_us = slice_.worker_cpu_max_us =
+     duration(cpu_start_,cpu_end,slice_.worker_clock_errors);
+   std::lock_guard<std::mutex> lock(mutex_);
+-  if (worker_generation_ == generation()) merge(pending_,slice_);
++  if (worker_generation_ == generation()) {
++   merge(pending_,slice_);
++   pending_cache_.merge(cache_.totals());
++  }
+   else if (generation() & 1) ++pending_.discarded_slices;
+  }
+  // Frontend scopes may be nested; totals are inclusive, not additive phases.
+@@ -117,12 +129,72 @@
+   FrontScope(const FrontScope&) = delete;
+   FrontScope& operator=(const FrontScope&) = delete;
+  };
+- RWTimingSnapshot take() {
++ RWTimingSnapshot take(RWCacheSnapshot* cache=nullptr) {
+   std::lock_guard<std::mutex> lock(mutex_);
++  if(cache) *cache=pending_cache_.snapshot();
++  pending_cache_={};
+   const auto result = pending_; pending_ = {}; return result;
+  }
+ };
+ typedef RWTiming<RWTimingClock> RWCoreTiming;
++struct RWCacheCalibration {
++ uint64_t mean_ns=0, cache_clock_reads=0, samples_completed=0;
++ uint64_t stride_skipped=0, cap_skipped=0, cache_events=0;
++ uint64_t clock_errors=0, accounting_errors=0;
++};
++// Calibration is local, before guest loading; counting clock reads is not on
++// the runtime path. Mode 0 disabled, 1 worker only, 2 sampled, 3 events only.
++struct RWCalibrationClock {
++ static uint64_t& reads() { static thread_local uint64_t n=0; return n; }
++ static int64_t wall() { ++reads(); return RWTimingClock::wall(); }
++ static int64_t cpu() { ++reads(); return RWTimingClock::cpu(); }
++};
++inline RWCacheCalibration RWCacheCalibrate(int mode) {
++ RWCacheCalibration out;
++ if(mode<0 || mode>3) { out.accounting_errors=1; return out; }
++ typedef RWTiming<RWCalibrationClock> Probe;
++ Probe probe; probe.configure(mode!=0,mode>=2);
++ RWCalibrationClock::reads()=0;
++ const auto start=RWTimingClock::wall();
++ for(unsigned i=0;i<2000;++i) {
++  probe.worker_begin();
++  for(unsigned j=0;j<512;++j) {
++   if(mode!=3) {
++    probe.event(RW_TRANSLATE);
++    Probe::Cache::TranslationScope t(probe.cache());
++    for(unsigned k=0;k<4;++k) { Probe::Cache::PublicationScope pub(probe.cache()); }
++    t.complete();
++   }
++   probe.cache().lookup(false); probe.cache().invalidate();
++   Probe::Cache::ReasonScope reason(probe.cache(),RW_CLEAR_CODE_WRITE);
++   probe.cache().clear();
++  }
++  probe.worker_end();
++ }
++ const auto end=RWTimingClock::wall();
++ RWCacheSnapshot cache; const auto worker=probe.take(&cache);
++ const uint64_t expected_worker_reads=mode ? 8000 : 0;
++ if(RWCalibrationClock::reads()<expected_worker_reads) ++out.accounting_errors;
++ else out.cache_clock_reads=RWCalibrationClock::reads()-expected_worker_reads;
++ out.samples_completed=cache.samples_completed;
++ out.stride_skipped=cache.stride_skipped; out.cap_skipped=cache.cap_skipped;
++ out.cache_events=cache.lookup_misses+cache.invalidate_calls+cache.clear_calls;
++ out.clock_errors=worker.worker_clock_errors+cache.clock_errors;
++ if(start<0 || end<start) ++out.clock_errors;
++ else out.mean_ns=uint64_t(end-start)/2000;
++ const bool sampled=mode==2, events=mode>=2;
++ if(out.cache_clock_reads!=(sampled ? 160000u : 0u) ||
++    cache.samples_started!=(sampled ? 8000u : 0u) ||
++    out.samples_completed!=(sampled ? 8000u : 0u) || cache.samples_discarded ||
++    out.stride_skipped!=(sampled ? 378000u : 0u) ||
++    out.cap_skipped!=(sampled ? 638000u : 0u) ||
++    cache.publication_scopes!=(sampled ? 32000u : 0u) || cache.publication_skipped ||
++    cache.translation_attempts!=(sampled ? 1024000u : 0u) ||
++    worker.translations!=((mode==1 || mode==2) ? 1024000u : 0u) ||
++    out.cache_events!=(events ? 3072000u : 0u) || cache.scope_errors)
++  ++out.accounting_errors;
++ return out;
++}
+ extern RWCoreTiming rw_core_timing;
+ #if defined(__GNUC__)
+ #define RW_TIMING_EXPORT __attribute__((visibility("default")))
+@@ -131,8 +203,11 @@
+ #endif
+ extern "C" {
+  RW_TIMING_EXPORT void robowindows_core_timing_configure(int enabled);
++ RW_TIMING_EXPORT void robowindows_core_timing_configure_v2(int enabled, int cache_enabled);
+  RW_TIMING_EXPORT void robowindows_core_timing_reset();
+  RW_TIMING_EXPORT void robowindows_core_timing_take(RWTimingSnapshot* out);
++ RW_TIMING_EXPORT void robowindows_core_timing_take_v2(RWTimingSnapshot* out, RWCacheSnapshot* cache);
+  RW_TIMING_EXPORT uint64_t robowindows_core_timing_calibrate(int enabled);
++ RW_TIMING_EXPORT void robowindows_core_cache_calibrate(int mode, RWCacheCalibration* out);
+ }
+ #endif
+--- a/src/cpu/core_dynrec.cpp
++++ b/src/cpu/core_dynrec.cpp
+@@ -222,13 +222,16 @@
+ 
+ 		// find correct Dynamic Block to run
+ 		CacheBlockDynRec * block=chandler->FindCacheBlock(ip_point&4095);
++		rw_core_timing.cache().lookup(block != 0);
+ 		if (!block) {
+ 			// no block found, thus translate the instruction stream
+ 			// unless the instruction is known to be modified
+ 			if (!chandler->invalidation_map || (chandler->invalidation_map[ip_point&4095]<4)) {
+ 				// translate up to 32 instructions
+ 				rw_core_timing.event(RW_TRANSLATE);
++				RWCoreTiming::Cache::TranslationScope timing(rw_core_timing.cache());
+ 				block=CreateCacheBlock(chandler,ip_point,32);
++				timing.complete();
+ 			} else {
+ 				// let the normal core handle this instruction to avoid zero-sized blocks
+ 				Bitu old_cycles=CPU_Cycles;
+--- a/src/cpu/core_dynrec/decoder_basic.h
++++ b/src/cpu/core_dynrec/decoder_basic.h
+@@ -140,6 +140,7 @@
+ 		cph=(CodePageHandlerDynRec *)handler;
+ 		if (handler->flags & cflag) return false;
+ 		// wrong code size/stale dynamic code, drop it
++		RWCoreTiming::Cache::ReasonScope reason(rw_core_timing.cache(), RW_CLEAR_CODE_SIZE);
+ 		cph->ClearRelease();
+ 		cph=0;
+ 		// handler was changed, refresh
+@@ -151,6 +152,7 @@
+ 			if (handler->flags & PFLAG_HASCODE) {
+ 				cph=(CodePageHandlerDynRec *)handler;
+ 				if (handler->flags & cflag) return false;
++				RWCoreTiming::Cache::ReasonScope reason(rw_core_timing.cache(), RW_CLEAR_CODE_SIZE);
+ 				cph->ClearRelease();
+ 				cph=0;
+ 				handler=get_tlb_readhandler(lin_addr);
+@@ -172,6 +174,7 @@
+ 	}
+ 	// find a free CodePage
+ 	if (!cache.free_pages) {
++		RWCoreTiming::Cache::ReasonScope reason(rw_core_timing.cache(), RW_CLEAR_PAGE_PRESSURE);
+ 		if (cache.used_pages!=decode.page.code) cache.used_pages->ClearRelease();
+ 		else {
+ 			// try another page to avoid clearing our source-crosspage
+@@ -689,6 +692,7 @@
+ 	dyn_fill_blocks();
+ 	cache_block_before_close();
+ 	cache_closeblock();
++	RWCoreTiming::Cache::PublicationScope publication(rw_core_timing.cache());
+ 	cache_block_closing(decode.block->cache.start,decode.block->cache.size);
+ }
+ 
+--- a/src/cpu/dyn_cache.h
++++ b/src/cpu/dyn_cache.h
+@@ -166,6 +166,8 @@
+ 
+ 	// clear out blocks that contain code which has been modified
+ 	bool InvalidateRange(Bitu start,Bitu end) {
++		RWCoreTiming::Cache::ReasonScope reason(rw_core_timing.cache(), RW_CLEAR_CODE_WRITE);
++		rw_core_timing.cache().invalidate();
+ 		Bits index=1+(end>>DYN_HASH_SHIFT);
+ 		bool is_current_block=false;	// if the current block is modified, it has to be exited as soon as possible
+ 
+@@ -426,6 +428,7 @@
+ 		prev=0;
+ 	}
+ 	void ClearRelease(void) {
++		RWCoreTiming::Cache::ReasonScope reason(rw_core_timing.cache(), RW_CLEAR_PAGE_RELEASE);
+ 		// clear out all cache blocks in this page
+ 		Bitu count=active_blocks;
+ 		CacheBlockDynRec **map=hash_map;
+@@ -491,6 +494,7 @@
+ }
+ 
+ void CacheBlockDynRec::Clear(void) {
++	rw_core_timing.cache().clear();
+ 	Bitu ind;
+ 	// check if this is not a cross page block
+ 	if (hash.index) for (ind=0;ind<2;ind++) {
+@@ -538,6 +542,7 @@
+ 
+ 
+ static CacheBlockDynRec * cache_openblock(void) {
++	RWCoreTiming::Cache::ReasonScope reason(rw_core_timing.cache(), RW_CLEAR_CACHE_RECLAIM);
+ 	CacheBlockDynRec * block=cache.block.active;
+ 	// check for enough space in this block
+ 	Bitu size=block->cache.size;
+--- /dev/null
++++ b/include/robowindows_cache_timing.h
+@@ -0,0 +1,192 @@
++// RoboWindows bounded diagnostic sampling; GPL-2.0-or-later.
++#ifndef ROBOWINDOWS_CACHE_TIMING_H
++#define ROBOWINDOWS_CACHE_TIMING_H
++#include <algorithm>
++#include <cstdint>
++
++#define RW_CACHE_COUNTS(X) \
++ X(lookup_hits) X(lookup_misses) X(translation_attempts) X(nested_attempts) \
++ X(stride_skipped) X(cap_skipped) X(samples_started) X(samples_completed) X(samples_discarded) \
++ X(publication_scopes) X(publication_skipped) X(invalidate_calls) X(clear_calls) \
++ X(clear_code_write) X(clear_cache_reclaim) X(clear_code_size) X(clear_page_pressure) \
++ X(clear_page_release) X(clear_other) X(clock_errors) X(scope_errors)
++#define RW_CACHE_TIMES(X) \
++ X(translation_wall_sample) X(translation_cpu_sample) \
++ X(publication_wall_sample) X(publication_cpu_sample)
++#define RW_CACHE_FIELDS(X) \
++ RW_CACHE_COUNTS(X) \
++ X(translation_wall_sample_us) X(translation_wall_sample_max_us) \
++ X(translation_cpu_sample_us) X(translation_cpu_sample_max_us) \
++ X(publication_wall_sample_us) X(publication_wall_sample_max_us) \
++ X(publication_cpu_sample_us) X(publication_cpu_sample_max_us)
++struct RWCacheSnapshot {
++#define RW_FIELD(n) uint64_t n = 0;
++ RW_CACHE_FIELDS(RW_FIELD)
++#undef RW_FIELD
++};
++// Duration totals stay in ns until the frontend drains a published aggregate.
++struct RWCacheTotals {
++ RWCacheSnapshot counts;
++#define RW_NS(n) uint64_t n##_ns=0, n##_max_ns=0;
++ RW_CACHE_TIMES(RW_NS)
++#undef RW_NS
++ void merge(const RWCacheTotals& b) {
++#define RW_SUM(n) counts.n+=b.counts.n;
++  RW_CACHE_COUNTS(RW_SUM)
++#undef RW_SUM
++#define RW_SUM_NS(n) n##_ns+=b.n##_ns; n##_max_ns=std::max(n##_max_ns,b.n##_max_ns);
++  RW_CACHE_TIMES(RW_SUM_NS)
++#undef RW_SUM_NS
++ }
++ RWCacheSnapshot snapshot() const {
++  RWCacheSnapshot out=counts;
++#define RW_US(n) out.n##_us=n##_ns/1000; out.n##_max_us=n##_max_ns/1000;
++  RW_CACHE_TIMES(RW_US)
++#undef RW_US
++  return out;
++ }
++};
++enum RWClearReason { RW_CLEAR_OTHER, RW_CLEAR_CODE_WRITE, RW_CLEAR_CACHE_RECLAIM,
++ RW_CLEAR_CODE_SIZE, RW_CLEAR_PAGE_PRESSURE, RW_CLEAR_PAGE_RELEASE };
++
++template<class Clock> class RWCacheTiming {
++public:
++ class TranslationScope;
++ class PublicationScope;
++private:
++ bool live_=false;
++ uint64_t serial_=0, outer_=0, depth_=0, publication_depth_=0;
++ RWClearReason reason_=RW_CLEAR_OTHER;
++ RWCacheTotals slice_;
++ TranslationScope* selected_=nullptr;
++ static bool elapsed(int64_t a,int64_t b,uint64_t& out,uint64_t& errors) {
++  if(a<0 || b<a) { ++errors; return false; }
++  out=uint64_t(b-a); return true;
++ }
++public:
++ // Depth and scoped reason survive frame/pause boundaries until stack unwind.
++ void begin(bool enabled) {
++  live_=enabled; ++serial_; outer_=0; slice_={};
++ }
++ void finish() {
++  if(selected_) selected_->discard();
++  live_=false;
++ }
++ const RWCacheTotals& totals() const { return slice_; }
++ void lookup(bool hit) {
++  if(!live_) return;
++  if(hit) ++slice_.counts.lookup_hits; else ++slice_.counts.lookup_misses;
++ }
++ void invalidate() { if(live_) ++slice_.counts.invalidate_calls; }
++ void clear() {
++  if(!live_) return;
++  ++slice_.counts.clear_calls;
++  switch(reason_) {
++   case RW_CLEAR_CODE_WRITE: ++slice_.counts.clear_code_write; break;
++   case RW_CLEAR_CACHE_RECLAIM: ++slice_.counts.clear_cache_reclaim; break;
++   case RW_CLEAR_CODE_SIZE: ++slice_.counts.clear_code_size; break;
++   case RW_CLEAR_PAGE_PRESSURE: ++slice_.counts.clear_page_pressure; break;
++   case RW_CLEAR_PAGE_RELEASE: ++slice_.counts.clear_page_release; break;
++   default: ++slice_.counts.clear_other; break;
++  }
++ }
++ class ReasonScope {
++  RWCacheTiming& p_; RWClearReason previous_; bool active_;
++ public:
++  ReasonScope(RWCacheTiming& p,RWClearReason r):p_(p),previous_(p.reason_),active_(p.live_) {
++   if(active_ && !(r==RW_CLEAR_PAGE_RELEASE && previous_!=RW_CLEAR_OTHER)) p_.reason_=r;
++  }
++  ~ReasonScope() { if(active_) p_.reason_=previous_; }
++  ReasonScope(const ReasonScope&)=delete;
++  ReasonScope& operator=(const ReasonScope&)=delete;
++ };
++ class TranslationScope {
++  friend class RWCacheTiming;
++  friend class PublicationScope;
++  RWCacheTiming& p_;
++  uint64_t serial_=0;
++  bool tracked_=false, active_=false, completed_=false, valid_=true;
++  int64_t wall_=0,cpu_=0;
++  uint64_t publication_attempts_=0;
++  RWCacheTotals sample_;
++  void discard() {
++   if(!active_) return;
++   active_=false; ++p_.slice_.counts.samples_discarded;
++   if(p_.selected_==this) p_.selected_=nullptr;
++  }
++ public:
++  explicit TranslationScope(RWCacheTiming& p):p_(p) {
++   if(!p.live_) return;
++   tracked_=true; serial_=p.serial_;
++   ++p.slice_.counts.translation_attempts;
++   if(p.depth_++ != 0) { ++p.slice_.counts.nested_attempts; return; }
++   const auto ordinal=++p.outer_;
++   if(p.slice_.counts.samples_started==4) { ++p.slice_.counts.cap_skipped; return; }
++   if((ordinal-1)%64) { ++p.slice_.counts.stride_skipped; return; }
++   ++p.slice_.counts.samples_started;
++   active_=true; p.selected_=this;
++   wall_=Clock::wall(); cpu_=Clock::cpu();
++  }
++  // Only the original call's normal return commits a timing sample.
++  void complete() { completed_=true; }
++  ~TranslationScope() {
++   if(!tracked_) return;
++   if(active_ && serial_==p_.serial_ && p_.live_) {
++    if(!completed_) discard();
++    else {
++     const auto cpu_end=Clock::cpu(), wall_end=Clock::wall();
++     uint64_t w=0,c=0;
++     const bool wall_ok=elapsed(wall_,wall_end,w,p_.slice_.counts.clock_errors);
++     const bool cpu_ok=elapsed(cpu_,cpu_end,c,p_.slice_.counts.clock_errors);
++     if(!valid_ || !wall_ok || !cpu_ok) discard();
++     else if(sample_.publication_wall_sample_ns>w || sample_.publication_cpu_sample_ns>c) {
++      ++p_.slice_.counts.scope_errors; discard();
++     } else {
++      sample_.counts.samples_completed=1;
++      sample_.translation_wall_sample_ns=sample_.translation_wall_sample_max_ns=w;
++      sample_.translation_cpu_sample_ns=sample_.translation_cpu_sample_max_ns=c;
++      p_.slice_.merge(sample_); active_=false; p_.selected_=nullptr;
++     }
++    }
++   }
++   if(p_.depth_) --p_.depth_; else if(p_.live_) ++p_.slice_.counts.scope_errors;
++  }
++  TranslationScope(const TranslationScope&)=delete;
++  TranslationScope& operator=(const TranslationScope&)=delete;
++ };
++ class PublicationScope {
++  RWCacheTiming& p_; TranslationScope* sample_=nullptr;
++  uint64_t serial_=0; bool tracked_=false;
++  int64_t wall_=0,cpu_=0;
++ public:
++  explicit PublicationScope(RWCacheTiming& p):p_(p) {
++   if(!p.live_ || !p.selected_) return;
++   tracked_=true; serial_=p.serial_;
++   if(p.publication_depth_++ != 0) return;
++   auto* t=p.selected_;
++   if(t->publication_attempts_++ >= 4) { ++t->sample_.counts.publication_skipped; return; }
++   sample_=t; wall_=Clock::wall(); cpu_=Clock::cpu();
++  }
++  ~PublicationScope() {
++   if(!tracked_) return;
++   if(sample_ && p_.live_ && serial_==p_.serial_ && sample_->active_) {
++    const auto cpu_end=Clock::cpu(), wall_end=Clock::wall();
++    uint64_t w=0,c=0;
++    const bool wall_ok=elapsed(wall_,wall_end,w,p_.slice_.counts.clock_errors);
++    const bool cpu_ok=elapsed(cpu_,cpu_end,c,p_.slice_.counts.clock_errors);
++    if(!wall_ok || !cpu_ok) sample_->valid_=false;
++    else {
++     auto& s=sample_->sample_; ++s.counts.publication_scopes;
++     s.publication_wall_sample_ns+=w; s.publication_cpu_sample_ns+=c;
++     s.publication_wall_sample_max_ns=std::max(s.publication_wall_sample_max_ns,w);
++     s.publication_cpu_sample_max_ns=std::max(s.publication_cpu_sample_max_ns,c);
++    }
++   }
++   if(p_.publication_depth_) --p_.publication_depth_;
++   else if(p_.live_) ++p_.slice_.counts.scope_errors;
++  }
++  PublicationScope(const PublicationScope&)=delete;
++  PublicationScope& operator=(const PublicationScope&)=delete;
++ };
++};
++#endif

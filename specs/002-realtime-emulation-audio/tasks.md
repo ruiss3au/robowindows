@@ -353,16 +353,21 @@ recoverable; it is not required for completion of the conservative MVP.
   sample/clock bounds, bias and nesting/reset semantics, versioned wire contract,
   overhead gate, privacy, rollback and executable verification tasks in
   `translation-attribution.md`. Documentation only; no runtime/device changes.
-- [ ] T080 Implement FR-033 as an isolated diagnostic patch and bounded worker
+- [x] T080 Implement FR-033 as an isolated diagnostic patch and bounded worker
   accumulator. Add failing-first fake-clock and actual-hook tests for sampling,
   lookup/clear categories, nested publication, exceptions, stale generations and
   worker-boundary discards. Preserve ARM publication source and all guest hashes;
   keep legacy disabled and old translation counts unchanged. No engine tuning.
-- [ ] T081 Integrate one atomic worker/cache snapshot into JNI reporting, add
+  Patch 0010 and fake-clock/actual-hook/concurrent-reset tests passed; ARM
+  publication source and all packaged cache hashes remain unchanged.
+- [x] T081 Integrate one atomic worker/cache snapshot into JNI reporting, add
   schema-1 cache records/schema-2 terminal parsing and bounded three-mode/event
   calibration. Test historical/partial/corrupt captures and unchanged consumers.
   Update capability identity, run full host tests, pins, hygiene, diff checks and
   Android debug build; record APK/hash and overhead limitations. No installation.
+  Full host suite, parser/calibration negatives, 20 historical captures, pinned
+  reconstruction, hygiene and Android build passed. See implementation evidence
+  in `translation-attribution.md`; tablet overhead is not yet measured.
 - [ ] T082 With separate user coordination and both real machines clean/stopped,
   verify installed build, run legacy/no-extension smoke and full x86 gate, check
   calibration, then unchanged cache cases Normal/GPU before DynRec/GPU and the

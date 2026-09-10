@@ -95,11 +95,11 @@ specification, plan, tasks, and validation record when work begins.
   (12,338), data writes (53) and code rewrites (4,148), supporting reuse and
   retranslation inferences. Teardown-inclusive samples are not settled quality;
   aggregate counts still do not isolate a costly function or the Windows cause.
-  Targeted attribution is now specified (Feature 002 FR-033/T079): bounded
+  Targeted attribution is implemented and host/build validated (Feature 002 FR-033/T080–T081): bounded
   translation/publication samples plus direct cache-clear reason counters,
-  with explicit selection bias and no per-miss causality claim. Next, implement
-  and host/build-validate T080–T081 before separately coordinating disposable
-  tests ([design](002-realtime-emulation-audio/translation-attribution.md)).
+  with explicit selection bias and no per-miss causality claim. Next, perform
+  authorized stopped installation and disposable T082 calibration/correctness/
+  attribution checks ([design and evidence](002-realtime-emulation-audio/translation-attribution.md)).
   No speculative engine/buffer tuning or
   Windows run is queued
   ([fixture and limits](002-realtime-emulation-audio/cache-control-fixture.md)).

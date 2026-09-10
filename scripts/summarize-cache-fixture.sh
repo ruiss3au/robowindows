@@ -8,6 +8,7 @@ work_dir=$(mktemp -d)
 trap 'rm -rf -- "$work_dir"' EXIT
 bash "$(dirname "$0")/normalize-session-timing.sh" "$4" >"$work_dir/session.log"
 diagnostics=$(bash "$(dirname "$0")/summarize-runtime-timing.sh" "$work_dir/session.log")
+attribution=$(bash "$(dirname "$0")/summarize-cache-attribution.sh" "$work_dir/session.log")
 awk -v core="$1" -v decoder="$decoder" -v policy="$2" -v phase="$3" '
 function fail(s) { print s > "/dev/stderr"; bad=1 }
 function parse(line) {
@@ -83,3 +84,4 @@ END {
  print "cache_mechanism=unverified"
 }' "$work_dir/session.log"
 printf '%s\n' "$diagnostics"
+printf '%s\n' "$attribution"

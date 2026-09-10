@@ -47,11 +47,16 @@ echo "Starting disposable $core presentation=$policy workload=$workload; keep th
 for attempt in {1..150}; do
   "${RW_ADB_TARGET[@]}" logcat -d -s RoboWindowsPresentation:I RoboWindowsTelemetry:I \
     RoboWindowsTiming:I RoboWindowsWorker:I RoboWindowsCalibration:I RoboWindowsCacheFixture:I \
+    RoboWindowsCache:I RoboWindowsCacheCalibration:I RoboWindowsTerminalCache:I \
     RoboWindowsTerminal:I RoboWindowsTerminalTelemetry:I RoboWindowsTerminalWorker:I RoboWindowsTerminalTiming:I \
     AndroidRuntime:E libc:F >"$output/telemetry.log"
   if rg -q "$tag: (PASS|FAIL)" "$output/telemetry.log"; then
     rg "$tag:" "$output/telemetry.log"
     rg -q "$tag: PASS" "$output/telemetry.log"
+    bash "$repo_dir/scripts/summarize-cache-calibration.sh" "$output/telemetry.log" | tee "$output/calibration.txt"
+    bash "$repo_dir/scripts/normalize-session-timing.sh" "$output/telemetry.log" > "$output/normalized.log"
+    bash "$repo_dir/scripts/summarize-cache-attribution.sh" "$output/normalized.log" | tee "$output/attribution.txt"
+    rg -qx 'translation_attribution=sampled' "$output/attribution.txt"
     if [[ $cache_workload == true ]]; then
       bash "$repo_dir/scripts/summarize-cache-fixture.sh" "$core" "$policy" "$cache_phase" "$output/telemetry.log" | tee "$output/summary.txt"
       # Historical log summaries may lack a tail; new device runs may not.

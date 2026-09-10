@@ -85,6 +85,7 @@ while read -r name url commit extra; do
     set -- "$@" "$repo_root/patches/$name/0007-bounded-pagefault-core-slice.patch"
     set -- "$@" "$repo_root/patches/$name/0008-dynrec-rep-cycle-accounting.patch"
     set -- "$@" "$repo_root/patches/$name/0009-worker-timing-diagnostics.patch"
+    set -- "$@" "$repo_root/patches/$name/0010-bounded-cache-attribution.patch"
   fi
   if [ -n "$(git -C "$target" status --porcelain --untracked-files=normal)" ]; then
     expected_patch_files=dosbox_pure_libretro.cpp
@@ -93,12 +94,15 @@ while read -r name url commit extra; do
 expected_patch_files='dosbox_pure_libretro.cpp
 include/paging.h
 src/cpu/core_dynrec.cpp
+src/cpu/core_dynrec/decoder_basic.h
 src/cpu/core_dynrec/decoder_opcodes.h
 src/cpu/core_dynrec/operators.h
 src/cpu/cpu.cpp
+src/cpu/dyn_cache.h
 src/cpu/paging.cpp
 src/dosbox.cpp'
-      expected_new_files=include/robowindows_core_timing.h
+      expected_new_files='include/robowindows_cache_timing.h
+include/robowindows_core_timing.h'
     fi
     audit_dir=$(mktemp -d)
     forward_ok=1
