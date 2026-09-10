@@ -1,5 +1,13 @@
 # Validation: ARM64 Dynamic Recompilation
 
+## Opt-in availability — 2026-09-10
+
+T047/T048 passed their scoped host/build/disposable checks. Both 18-stage CPU
+button runs passed; cancellation between them invalidated the old pass. Ordinary
+storage/journal/recovery probes passed without booting real guests. See the
+[promotion evidence](../../docs/opt-in-promotion.md). Wider availability is an
+explicit exception, not a passed historical Windows/audio/clock/thermal gate.
+
 No dynamic execution is authorized or claimed by this specification alone.
 
 ## Existing evidence

@@ -1,5 +1,11 @@
 # Implementation Plan: Real-Time Emulation and Clean Audio
 
+The 2026-09-10 opt-in promotion (Feature 008 T047) extends the existing balanced
+policy to ordinary-machine DynRec through the explicit launch selector. No
+scheduler/audio algorithm changes; ordinary Normal and experimental timing stay
+unchanged. Host policy tests cover every combination. Rollback uses Normal,
+without silently changing existing selections or reopening paused investigation.
+
 **Feature**: `002-realtime-emulation-audio` | **Date**: 2026-08-10  
 **Spec**: [spec.md](spec.md) | **Research**: [research.md](research.md)
 

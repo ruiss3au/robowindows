@@ -1,5 +1,14 @@
 # Validation
 
+## Opt-in availability — 2026-09-10
+
+T012 passed host eligibility/recovery-policy checks, both build variants and
+ordinary-machine Properties visibility without changing the saved preference.
+The disposable colors/padding/resolution/context/surface/fallback probe also
+passed on the installed build; no guest media was opened.
+See [promotion evidence](../../docs/opt-in-promotion.md). Existing Windows
+audio/timing failures and sustained-quality gaps remain unpassed.
+
 Implementation started 2026-09-10. Basic GPU device checks passed; timer/tone and
 real Windows acceptance are recorded separately below, not implied by those checks.
 Stable `incoming` must remain untouched. Thermal stability and unfinished DynRec

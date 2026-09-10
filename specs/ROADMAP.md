@@ -3,14 +3,18 @@
 This is the short priority list. Each item gets its own numbered feature
 specification, plan, tasks, and validation record when work begins.
 
-## Paused for practical use — 2026-09-10
+## Opt-in promotion and practical use — 2026-09-10
 
 The user chose to wrap up and use the current app. The investigation suggestions
 below are parked context, **not an active execution queue**. No new metrics,
 pressure fixtures, Windows trials, median collection or long tests should start
-automatically. Keep GPU and DynRec experimental; preserve existing selections and
-the stable Normal/Software machine. The launcher-icon milestone adds no runtime
-tuning. See the [practical-use handoff](../docs/current-handoff.md) for settings,
+automatically. The user subsequently authorized opt-in DynRec fixed-20k and GPU
+availability for ordinary machines and release builds, optional live counters and
+rerunnable CPU correctness tests. Preserve existing selections and Normal/Software
+defaults; no existing machine is switched automatically. Promotion is an explicit
+availability exception, not a passed audio/clock/thermal qualification. Historical
+copy-only restrictions below describe earlier evidence, not current eligibility.
+See the [practical-use handoff](../docs/current-handoff.md) for settings,
 known limitations and the explicit unfinished-work list. Resume only when asked.
 
 ## Now

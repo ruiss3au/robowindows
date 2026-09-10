@@ -11,6 +11,10 @@ final class RuntimeTimingPolicy {
         return experimental ? BALANCED_100_MS : LEGACY;
     }
 
+    static int forLaunch(boolean experimental, boolean dynamic) {
+        return dynamic ? BALANCED_100_MS : forExperimentalMachine(experimental);
+    }
+
     static boolean isAllowed(int policy) {
         return policy == LEGACY || policy == BALANCED_100_MS;
     }

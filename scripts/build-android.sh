@@ -6,8 +6,9 @@ repo_root=$(CDPATH= cd -- "$script_dir/.." && pwd)
 sdk_root=${ANDROID_SDK_ROOT:-${XDG_DATA_HOME:-$HOME/.local/share}/robowindows/android-sdk}
 
 case "${1:---debug}" in
-  --debug) ;;
-  *) echo "Usage: $0 [--debug]" >&2; exit 2 ;;
+  --debug) variant=debug; task=assembleDebug; apk_name=android-debug.apk ;;
+  --release) variant=release; task=assembleRelease; apk_name=android-release-unsigned.apk ;;
+  *) echo "Usage: $0 [--debug|--release]" >&2; exit 2 ;;
 esac
 
 [ -x "$repo_root/gradlew" ] || {
@@ -27,12 +28,13 @@ mkdir -p "$GRADLE_USER_HOME"
 
 "$repo_root/scripts/fetch-sources.sh" --verify-only
 cd "$repo_root"
-./gradlew --no-daemon :android:assembleDebug
+./gradlew --no-daemon ":android:$task"
 
-apk="$repo_root/android/build/outputs/apk/debug/android-debug.apk"
+apk="$repo_root/android/build/outputs/apk/$variant/$apk_name"
 [ -f "$apk" ] || { echo "Expected APK missing: $apk" >&2; exit 1; }
 mkdir -p "$repo_root/artifacts"
-cp "$apk" "$repo_root/artifacts/robowindows-debug.apk"
-sha256sum "$repo_root/artifacts/robowindows-debug.apk" \
-  > "$repo_root/artifacts/robowindows-debug.apk.sha256"
-echo "Built $repo_root/artifacts/robowindows-debug.apk"
+artifact="$repo_root/artifacts/robowindows-$variant.apk"
+cp "$apk" "$artifact"
+sha256sum "$artifact" > "$artifact.sha256"
+echo "Built $artifact"
+if [ "$variant" = release ]; then echo "Unsigned verification build; not an installable signed release."; fi

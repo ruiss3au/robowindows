@@ -121,12 +121,14 @@ final class MachinePropertiesView extends LinearLayout {
         } else if (tab == 1) {
             String reason = store.dynamicUnavailable(profile, CpuFixtureGate.passed(getContext()));
             option(body, "Normal", !draft.dynamic, editable, () -> { draft.dynamic = false; render(); });
-            if (BuildConfig.DEBUG && profile.isExperimental()) {
-                option(body, "DynRec (experimental) · fixed 20k", draft.dynamic, editable && reason == null,
+            {
+                option(body, "DynRec · fixed 20k", draft.dynamic, editable && reason == null,
                         () -> { draft.dynamic = true; render(); });
             }
-            body.addView(text(reason == null ? "DynRec uses an isolated trial. Clean shutdown retains your choice; " +
-                    "a failed trial returns to Normal and requires disk recovery." : reason));
+            body.addView(text(reason == null ? "DynRec runs in an isolated process. Clean shutdown retains your choice; " +
+                    "a failed session returns to Normal and requires disk recovery." : reason));
+            body.addView(text("Performance varies. Windows audio issues and sustained stability remain unresolved. " +
+                    "Back up important guest media before changing modes."));
             if (profile.isExperimental()) {
                 body.addView(text("Saved Normal cycles: " + draft.normalCycles / 1000 + "k" +
                         (draft.dynamic ? " — select Normal to edit. DynRec always uses 20k." : "")));
@@ -139,12 +141,12 @@ final class MachinePropertiesView extends LinearLayout {
         } else if (tab == 2) {
             option(body, "Software · 15 FPS", draft.presentationMode == PresentationPolicy.SOFTWARE,
                     editable, () -> { draft.presentationMode = PresentationPolicy.SOFTWARE; render(); });
-            if (BuildConfig.DEBUG && profile.isExperimental()) {
-                option(body, "GPU · 30 FPS (experimental)", draft.presentationMode == PresentationPolicy.GPU,
+            {
+                option(body, "GPU · 30 FPS", draft.presentationMode == PresentationPolicy.GPU,
                         editable, () -> { draft.presentationMode = PresentationPolicy.GPU; render(); });
             }
             body.addView(text("GPU presentation scales the display, not the guest's 3D graphics. " +
-                    "Available on diagnostic experimental copies only. Changes apply next session; " +
+                    "Performance varies by device. Changes apply next session; " +
                     "graphics failures fall back to Software without restarting Windows."));
         } else if (tab == 3) {
             body.addView(text("Imported media: " + profile.mediaName));
@@ -161,7 +163,7 @@ final class MachinePropertiesView extends LinearLayout {
             body.addView(text("Media actions update the stopped machine only; they do not boot it."));
         } else {
             if (store.requiresDynamicMediaCheck(profile)) {
-                body.addView(text("This copy needs a Normal disk-check recovery boot. Only shutdown inside Windows clears quarantine."));
+                body.addView(text("This machine needs a Normal disk-check recovery boot. Only shutdown inside Windows clears quarantine."));
                 option(body, "Start disk-check recovery…", false, !store.hasInterruptedSession(),
                         () -> resolveDraft(() -> actions.recover(profile)));
             } else if (!profile.isExperimental()) {

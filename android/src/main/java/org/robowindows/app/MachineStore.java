@@ -72,9 +72,9 @@ final class MachineStore {
     synchronized MachineProfile selectDynamicProfile(MachineProfile selected) throws IOException {
         MachineProfile current = requireCurrent(selected);
         ensureSettingsReady(current);
-        if (!current.isExperimental() || hasInterruptedSession() ||
+        if (hasInterruptedSession() ||
                 !hasCleanGuestShutdown(current.id)) {
-            throw new IOException("Dynamic trials require a cleanly shut down experimental copy");
+            throw new IOException("DynRec requires a cleanly shut down machine");
         }
         validateWritableOwnership(current);
         if (requiresDynamicMediaCheck(current)) throw new IOException("Complete disk-check recovery first");
@@ -122,12 +122,13 @@ final class MachineStore {
         if (dynamicPolicy == null) throw new IOException("Dynamic cycle policy is missing");
         MachineProfile current = requireCurrent(selected);
         ensureSettingsReady(current);
-        if (!current.isExperimental() || !current.isDynamicSelected() || hasInterruptedSession() ||
+        if (!current.isDynamicSelected() || hasInterruptedSession() ||
                 !hasCleanGuestShutdown(current.id)) {
             throw new IOException("Dynamic trial is not eligible to start");
         }
         validateWritableOwnership(current);
         File journal = dynamicAttemptFile(current);
+        requireDynamicPolicy(current, dynamicPolicy);
         if (journal.exists()) throw new IOException("This experimental machine needs recovery first");
         DynamicAttempt prepared;
         try {
@@ -248,7 +249,7 @@ final class MachineStore {
         }
         for (MachineProfile profile : load()) {
             if (!machineId.equals(profile.id)) continue;
-            if (!profile.isExperimental() || !profile.isDynamicSelected() ||
+            if (!profile.isDynamicSelected() ||
                     profile.configurationGeneration != generation) {
                 throw new IOException("Dynamic attempt no longer matches this machine");
             }
@@ -260,6 +261,7 @@ final class MachineStore {
                     !DynamicAttempt.RUNNING.equals(attempt.state))) {
                 throw new IOException("Dynamic attempt is not authorized for native handoff");
             }
+            requireDynamicPolicy(profile, dynamicPolicy);
             validateWritableOwnership(profile);
             return profile;
         }
@@ -377,10 +379,8 @@ final class MachineStore {
         try { name = SettingsDraft.validatedName(draft.name); }
         catch (IllegalArgumentException error) { throw new IOException(error.getMessage()); }
         ensureSettingsReady(p);
-        if (!PresentationPolicy.allowed(draft.presentationMode) ||
-                (draft.presentationMode != p.presentationMode && draft.presentationMode == PresentationPolicy.GPU &&
-                        (!BuildConfig.DEBUG || !p.isExperimental()))) {
-            throw new IOException("GPU presentation requires a diagnostic experimental copy");
+        if (!PresentationPolicy.allowed(draft.presentationMode)) {
+            throw new IOException("Unknown presentation mode");
         }
         if (draft.dynamic) {
             String reason = dynamicUnavailable(p, cpuPassed);
@@ -425,7 +425,7 @@ final class MachineStore {
     /** Explicit normal-core recovery boot for a user-approved quarantined copy. */
     synchronized MachineProfile prepareRecoveryStart(MachineProfile selected) throws IOException {
         MachineProfile current = requireCurrent(selected);
-        if (!current.isExperimental() || hasInterruptedSession()) {
+        if (hasInterruptedSession()) {
             throw new IOException("This machine is not eligible for recovery boot");
         }
         DynamicAttempt attempt = DynamicAttempt.read(dynamicAttemptFile(current));
@@ -761,6 +761,14 @@ final class MachineStore {
     void markSessionStopped() {
         context.getSharedPreferences(preferencesName, Context.MODE_PRIVATE).edit()
                 .remove(ACTIVE_SESSION).commit();
+    }
+
+    boolean diagnosticsBlocked() {
+        if (hasInterruptedSession()) return true;
+        for (MachineProfile profile : load()) {
+            if (requiresDynamicMediaCheck(profile)) return true;
+        }
+        return false;
     }
 
     boolean hasInterruptedSession() {
@@ -1189,6 +1197,13 @@ final class MachineStore {
 
     private File machineDirectory(MachineProfile profile) {
         return new File(profile.runtimePath).getParentFile();
+    }
+
+    private static void requireDynamicPolicy(MachineProfile profile, DynamicCyclePolicy policy)
+            throws IOException {
+        if (!policy.available(BuildConfig.DEBUG, profile.isExperimental())) {
+            throw new IOException("This cycle policy requires a diagnostic experimental copy");
+        }
     }
 
     private void validateWritableOwnership(MachineProfile profile) throws IOException {

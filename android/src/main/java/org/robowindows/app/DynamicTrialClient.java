@@ -63,7 +63,7 @@ final class DynamicTrialClient {
         data.putLong(DynamicTrialProtocol.GENERATION, attempt.generation);
         data.putString(DynamicTrialProtocol.DYNAMIC_CYCLE_POLICY, attempt.dynamicCyclePolicy);
         data.putInt(DynamicTrialProtocol.RUNTIME_TIMING_POLICY,
-                RuntimeTimingPolicy.forExperimentalMachine(profile.isExperimental()));
+                RuntimeTimingPolicy.forLaunch(profile.isExperimental(), true));
         data.putInt(DynamicTrialProtocol.PRESENTATION_POLICY, PresentationPolicy.forLaunch(
                 profile.presentationMode, BuildConfig.DEBUG, profile.isExperimental(), false));
         data.putString(DynamicTrialProtocol.LAUNCH_PATH, profile.launchPath);

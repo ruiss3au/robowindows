@@ -1,5 +1,10 @@
 # Tasks
 
+- [x] T014 Add remembered app-wide counter visibility in Tests/session controls;
+  preserve safety reporting and test lifecycle/visibility behavior.
+- [x] T015 Update mode/test labels and status; verify stopped-device UI and
+  disposable CPU reruns without changing existing machine settings.
+
 - [x] T001 Specify classic UI, draft settings, mode selection and clean persistence.
 - [x] T002 Implement and host-test settings drafts and classic shared components.
 - [x] T003 Implement batch save, selected-mode starts and clean recovery; add

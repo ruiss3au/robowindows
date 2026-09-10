@@ -10,6 +10,13 @@ public final class LaunchConfigTest {
     }
 
     public static void main(String[] args) throws Exception {
+        for (boolean debug : new boolean[]{false, true}) {
+            for (boolean experimental : new boolean[]{false, true}) {
+                require(DynamicCyclePolicy.FIXED_20K.available(debug, experimental), "20k opt-in available");
+                require(DynamicCyclePolicy.FIXED_30K.available(debug, experimental) == (debug && experimental), "30k diagnostic only");
+                require(DynamicCyclePolicy.AUTO_80_LIMIT_30K.available(debug, experimental) == (debug && experimental), "auto diagnostic only");
+            }
+        }
         String floppy = LaunchConfig.create("/private/disk.img", "img", 16, "normal", false);
         require(floppy.contains("memsize=16"), "memory missing");
         require(floppy.contains("core=normal"), "CPU missing");

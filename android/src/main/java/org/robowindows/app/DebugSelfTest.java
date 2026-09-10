@@ -25,6 +25,7 @@ final class DebugSelfTest {
         File testRoot = new File(context.getCacheDir(), "debug-machine-store");
         try {
             checkSessionOverlay(context);
+            checkDiagnosticPreferences(context);
             if (!directory.mkdirs() && !directory.isDirectory()) throw new Exception("mkdir");
             try (FileOutputStream output = new FileOutputStream(interrupted)) {
                 output.write(1);
@@ -328,17 +329,6 @@ final class DebugSelfTest {
         SettingsDraft normal = new SettingsDraft(p.name, p.memoryMb, p.fixedCycles, p.soundEnabled, true, p.cpuCore);
         normal.dynamic = false;
         normal.name = "Renamed Normal";
-        SettingsDraft invalidStable = new SettingsDraft(stable.name, stable.memoryMb, stable.fixedCycles,
-                stable.soundEnabled, false, stable.cpuCore);
-        invalidStable.dynamic = true;
-        boolean rejectedStable = false;
-        try { store.saveSettings(stable, invalidStable, true); } catch (IOException expected) { rejectedStable = true; }
-        require(rejectedStable, "stable machine cannot select DynRec");
-        invalidStable.dynamic = false;
-        invalidStable.presentationMode = PresentationPolicy.GPU;
-        rejectedStable = false;
-        try { store.saveSettings(stable, invalidStable, true); } catch (IOException expected) { rejectedStable = true; }
-        require(rejectedStable, "stable machine cannot select GPU");
         boolean rejectedGate = false;
         try { store.saveSettings(p, draft, false); } catch (IOException expected) { rejectedGate = true; }
         require(rejectedGate, "settings enforce CPU capability");
@@ -396,8 +386,80 @@ final class DebugSelfTest {
         store.deleteMachine(second);
         require(stableProfile.equals(store.load().get(0).toJson().toString()) &&
                 stableConfig.equals(readText(new File(stable.launchPath))), "settings preserve stable fixture");
+        exerciseOrdinaryModes(store, stable);
         Log.i(TAG, "classic settings and persistent clean-mode probes passed");
         return p;
+    }
+
+    private static void exerciseOrdinaryModes(MachineStore store, MachineProfile ordinary) throws Exception {
+        String diskPath = ordinary.runtimePath;
+        int diskByte = readFirstByte(new File(diskPath));
+        SettingsDraft draft = new SettingsDraft(ordinary.name, ordinary.memoryMb, ordinary.fixedCycles,
+                ordinary.soundEnabled, false, ordinary.cpuCore, ordinary.presentationMode);
+        draft.dynamic = true;
+        draft.presentationMode = PresentationPolicy.GPU;
+        ordinary = store.saveSettings(ordinary, draft, true);
+        require(!ordinary.isExperimental() && ordinary.isDynamicSelected() && ordinary.presentationMode == 1,
+                "ordinary machine opt-in modes preserve role");
+        for (DynamicCyclePolicy policy : new DynamicCyclePolicy[]{DynamicCyclePolicy.FIXED_30K,
+                DynamicCyclePolicy.AUTO_80_LIMIT_30K}) {
+            boolean rejected = false;
+            try { store.prepareDynamicStart(ordinary, policy); } catch (IOException expected) { rejected = true; }
+            require(rejected && !store.requiresDynamicMediaCheck(ordinary), "ordinary rejects diagnostic policies before journal");
+        }
+        DynamicAttempt attempt = store.prepareDynamicStart(ordinary);
+        require(store.diagnosticsBlocked(), "CPU tests blocked by dynamic journal");
+        require(store.validateDynamicChildHandoff(ordinary.id, attempt.attemptId,
+                ordinary.configurationGeneration).id.equals(ordinary.id), "ordinary child handoff");
+        attempt = store.markDynamicRunning(attempt);
+        store.closeDynamicAttemptCleanly(attempt);
+        ordinary = store.load().get(0);
+        require(ordinary.isDynamicSelected() && store.hasCleanGuestShutdown(ordinary.id), "ordinary clean preference");
+        attempt = store.markDynamicRunning(store.prepareDynamicStart(ordinary));
+        store.quarantineDynamicAttempt(attempt);
+        store.recoverDynamicAttempts();
+        ordinary = store.load().get(0);
+        require(!ordinary.isDynamicSelected() && store.requiresDynamicMediaCheck(ordinary), "ordinary Normal fallback");
+        MachineProfile recovery = store.prepareRecoveryStart(ordinary);
+        store.closeRecoveryAfterCleanShutdown(recovery);
+        ordinary = store.load().get(0);
+        require(!store.requiresDynamicMediaCheck(ordinary) && !ordinary.isExperimental() &&
+                ordinary.presentationMode == 1 && diskPath.equals(ordinary.runtimePath) &&
+                readFirstByte(new File(diskPath)) == diskByte, "ordinary recovery preserves disk and GPU preference");
+        Log.i(TAG, "ordinary opt-in and recovery probes passed");
+    }
+
+    private static void checkDiagnosticPreferences(Context context) {
+        Context isolated = new android.content.ContextWrapper(context) {
+            @Override public android.content.SharedPreferences getSharedPreferences(String name, int mode) {
+                return super.getSharedPreferences("promotion_probe_" + name, mode);
+            }
+        };
+        android.content.SharedPreferences gate = isolated.getSharedPreferences("cpu_fixture_gate", Context.MODE_PRIVATE);
+        android.content.SharedPreferences display = isolated.getSharedPreferences("performance_display", Context.MODE_PRIVATE);
+        gate.edit().clear().commit(); display.edit().clear().commit();
+        try {
+            PerformanceDisplayPreferences counters = new PerformanceDisplayPreferences(isolated);
+            require(!counters.visible(), "counters default hidden");
+            require(counters.setVisible(true) && new PerformanceDisplayPreferences(isolated).visible(), "counter persistence");
+            require(counters.setVisible(false) && !new PerformanceDisplayPreferences(isolated).visible(), "counters disabled");
+            require(!CpuFixtureGate.passed(isolated) && !CpuFixtureGate.attempted(isolated), "fresh CPU gate");
+            require(CpuFixtureGate.begin(isolated), "durable test begin");
+            String token = gate.getString("result_token", "");
+            gate.edit().putString("passed_token", token).commit();
+            require(CpuFixtureGate.passed(isolated), "current token accepted");
+            require(CpuFixtureGate.begin(isolated) && !CpuFixtureGate.passed(isolated), "rerun invalidates prior pass");
+            for (String result : new String[]{"Failed", "Cancelled"}) {
+                require(CpuFixtureGate.recordUnqualified(isolated, result) && !CpuFixtureGate.passed(isolated) &&
+                        CpuFixtureGate.summary(isolated).contains(result), "unqualified result " + result);
+            }
+            gate.edit().putString("passed_token", "old-core").putString("result_token", "old-core").commit();
+            require(!CpuFixtureGate.passed(isolated) && !CpuFixtureGate.attempted(isolated), "old build invalidation");
+            require(!CpuFixtureGate.markPassed(isolated, new ExpandedCpuReport()), "partial suite cannot authorize");
+            Log.i(TAG, "counter preferences and CPU rerun invalidation probes passed");
+        } finally {
+            gate.edit().clear().commit(); display.edit().clear().commit();
+        }
     }
 
     private static void checkSessionOverlay(Context context) {

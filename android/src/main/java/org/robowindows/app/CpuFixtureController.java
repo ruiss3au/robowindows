@@ -31,10 +31,22 @@ final class CpuFixtureController {
 
     void start() {
         if (client != null || finished) return;
+        if (new MachineStore(context).diagnosticsBlocked() ||
+                NativeHost.sessionStatus() != NativeHost.SESSION_STOPPED) {
+            finished = true;
+            listener.onComplete(false, "Stop the session and complete recovery before running CPU tests.");
+            return;
+        }
+        if (!CpuFixtureGate.begin(context)) {
+            fail("Cannot clear the previous CPU result; no test was started");
+            return;
+        }
         runStage("normal", null, NormalCpuFixtureService.class);
     }
 
     void cancel() {
+        if (finished) return;
+        CpuFixtureGate.recordUnqualified(context, "Cancelled");
         finished = true;
         generation++;
         handler.removeCallbacksAndMessages(null);
@@ -139,6 +151,7 @@ final class CpuFixtureController {
 
     private void fail(String message) {
         if (finished) return;
+        CpuFixtureGate.recordUnqualified(context, "Failed");
         finished = true;
         generation++;
         handler.removeCallbacksAndMessages(null);

@@ -1,5 +1,14 @@
 # Validation — 2026-09-09
 
+## Opt-in modes and optional diagnostics — 2026-09-10
+
+T014/T015 scoped acceptance passed: stopped ordinary-machine options, separate
+CPU action/status, two full passes and cancelled-rerun invalidation, remembered
+counter checkbox/session toggle, translucent control layout, host checks and
+both build variants. Existing profile selections remained unchanged. See
+[exact scope and artifacts](../../docs/opt-in-promotion.md); no new Windows
+DynRec visual session or long campaign was run.
+
 ## Launcher and pause wrap-up — 2026-09-10
 
 FR-012/T012 adds original generated retro-computer artwork with legacy and

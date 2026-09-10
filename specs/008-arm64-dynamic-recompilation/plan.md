@@ -1,5 +1,22 @@
 # Implementation Plan: ARM64 Dynamic Recompilation
 
+## Opt-in availability exception — 2026-09-10
+
+User chooses wider availability instead of retaining copy/debug-only access.
+The rejected simpler option was to keep the restriction indefinitely; it prevents
+ordinary use despite useful scoped correctness/presentation results. Risk: known
+Windows audio starvation and untested sustained behavior remain. Do not advertise
+universal compatibility or mark historical gates passed.
+Remove role/build checks only for fixed 20k across settings, parent and child.
+Preserve ownership, clean state, CPU gate, journal recovery and policy allowlists.
+Balanced timing remains mandatory for DynRec regardless of role. Ordinary Normal
+machines retain legacy timing. No profile-schema migration.
+Rollback is a forward eligibility fix or explicit Normal/Software selection,
+never disk restoration, metadata downgrade or silent preference rewriting.
+Run host/hygiene/pins, debug and unsigned release builds, then stopped-device
+disposable checks including ordinary-role storage/recovery. Do not boot real
+guests. CPU services stay private; debug intent controls stay debug-only.
+
 ## Approach
 
 Build the safety envelope first, reproduce and symbolicate the current ARM64

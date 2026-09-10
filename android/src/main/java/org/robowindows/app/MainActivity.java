@@ -88,6 +88,8 @@ public final class MainActivity extends Activity {
     private boolean appPaused;
     private boolean audioFocusPaused;
     private TextView diagnosticStats;
+    private TextView livePerformanceCounters;
+    private PerformanceDisplayPreferences performanceDisplay;
     private LinearLayout diagnosticDevices;
     private final HashMap<Integer, Integer> deviceHandles = new HashMap<>();
     private int nextDeviceHandle = 1;
@@ -153,6 +155,7 @@ public final class MainActivity extends Activity {
         getWindow().setNavigationBarColor(BG);
         machineStore = new MachineStore(this);
         experimentalRecoveryApplied = machineStore.recoverInterruptedExperimental();
+        performanceDisplay = new PerformanceDisplayPreferences(this);
         dynamicRecoveryApplied = machineStore.recoverDynamicAttempts();
         audioManager = (AudioManager) getSystemService(Context.AUDIO_SERVICE);
         ((InputManager) getSystemService(Context.INPUT_SERVICE))
@@ -352,15 +355,15 @@ public final class MainActivity extends Activity {
     }
 
     private void runCpuDiagnostic() {
-        if (cpuFixtureController != null || sessionActive || copyInProgress || machineStore.hasInterruptedSession()) return;
+        if (cpuFixtureController != null || sessionActive || copyInProgress || machineStore.diagnosticsBlocked()) return;
         properties = null;
         LinearLayout page = new LinearLayout(this);
         page.setOrientation(LinearLayout.VERTICAL);
         page.setPadding(dp(28), dp(22), dp(28), dp(22));
         page.setBackgroundColor(BG);
-        Button back = button("Back", v -> {
+        Button back = button("Cancel", v -> {
             cancelCpuDiagnostic();
-            showHome();
+            showTests();
         });
         page.addView(back, new LinearLayout.LayoutParams(dp(110), dp(46)));
         TextView title = text("CPU correctness test", 28, TEXT);
@@ -380,10 +383,13 @@ public final class MainActivity extends Activity {
         progressParams.topMargin = dp(28);
         page.addView(progress, progressParams);
         TextView status = text("Preparing CPU fixture…", 17, TEXT);
+        Button again = button("Run again", v -> runCpuDiagnostic());
+        again.setVisibility(View.GONE);
         LinearLayout.LayoutParams statusParams = new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         statusParams.topMargin = dp(16);
         page.addView(status, statusParams);
+        page.addView(again);
         setContentView(page);
 
         CpuFixtureController controller = new CpuFixtureController(this,
@@ -398,6 +404,7 @@ public final class MainActivity extends Activity {
                         progress.setVisibility(View.GONE);
                         status.setText(message);
                         back.setText("Done");
+                        again.setVisibility(View.VISIBLE);
                         android.util.Log.i("RoboWindowsCpuFixture",
                                 "status=" + (passed ? "pass" : "fail") + " " + message);
                         Toast.makeText(MainActivity.this, message, Toast.LENGTH_LONG).show();
@@ -503,6 +510,7 @@ public final class MainActivity extends Activity {
     private void showHome() {
         properties = null;
         diagnosticStats = null;
+        livePerformanceCounters = null;
         diagnosticDevices = null;
         handler.removeCallbacks(refreshInputStats);
         stopActiveSession();
@@ -543,11 +551,26 @@ public final class MainActivity extends Activity {
         if (sessionActive || cpuFixtureController != null || copyInProgress) return;
         LinearLayout page = hostPage("RoboWindows — Tests", true);
         page.addView(text("Tests run only when machines are stopped. CPU tests use disposable images, never machine disks.", 16, TEXT));
-        Button cpu = button(CpuFixtureGate.passed(this) ? "✓ CPU correctness — capability passed" : "Run CPU correctness test", v -> runCpuDiagnostic());
-        cpu.setEnabled(BuildConfig.DEBUG && !machineStore.hasInterruptedSession());
+        page.addView(text(CpuFixtureGate.summary(this), 16, TEXT));
+        Button cpu = button(CpuFixtureGate.attempted(this) ? "Run again" : "Run CPU tests", v -> runCpuDiagnostic());
+        cpu.setEnabled(!machineStore.diagnosticsBlocked());
+        if (machineStore.diagnosticsBlocked()) page.addView(text("Stop the session and finish disk-check recovery before testing.", 15, MUTED));
         page.addView(cpu);
         page.addView(text("Capability results apply to this core build. They do not certify Windows stability or performance.", 15, MUTED));
         page.addView(button("Keyboard and mouse input test", v -> showDiagnostics()));
+        android.widget.CheckBox counters = new android.widget.CheckBox(this);
+        counters.setText("Show performance counters");
+        counters.setTextColor(TEXT);
+        counters.setTextSize(16);
+        counters.setMinHeight(dp(48));
+        counters.setChecked(performanceDisplay.visible());
+        counters.setOnCheckedChangeListener((b, checked) -> {
+            if (!performanceDisplay.setVisible(checked)) {
+                Toast.makeText(this, "Could not save counter visibility.", Toast.LENGTH_LONG).show();
+            }
+        });
+        page.addView(counters);
+        page.addView(text("Shows live DynRec decoder counters. Safety checks stay active when hidden.", 15, MUTED));
         page.addView(text("For a guest trial, select a mode in machine Properties and choose Start. Launch the Windows benchmark manually. No long-test campaign runs automatically.", 16, TEXT));
         setContentView(page);
     }
@@ -556,7 +579,7 @@ public final class MainActivity extends Activity {
         LinearLayout page = hostPage("About RoboWindows", true);
         page.addView(text("A standalone Android interface for your DOS and compatible Windows software.", 18, TEXT));
         page.addView(text(BuildIdentity.label(BuildConfig.VERSION_NAME, BuildConfig.SOURCE_REVISION), 16, TEXT));
-        page.addView(text("DynRec is experimental and restricted to independent copies. Clock accuracy and long-term stability remain unverified. No proprietary guest software is included.", 16, TEXT));
+        page.addView(text("DynRec and GPU are opt-in modes. Performance varies; Windows audio issues, clock accuracy and sustained stability remain unresolved. GPU accelerates display presentation, not guest 3D graphics. No proprietary guest software is included.", 16, TEXT));
         setContentView(page);
     }
 
@@ -570,7 +593,7 @@ public final class MainActivity extends Activity {
         name.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
         labels.addView(name);
         String detail = (profile.isExperimental() ? "Experimental copy" : "Stable") + " · " +
-                (profile.isDynamicSelected() ? "DynRec (experimental) · 20k" : "Normal" +
+                (profile.isDynamicSelected() ? "DynRec · 20k" : "Normal" +
                 (profile.fixedCycles > 0 ? " · " + profile.fixedCycles / 1000 + "k" : "")) +
                 (machineStore.requiresDynamicMediaCheck(profile) ? " · Needs disk check" : " · Stopped");
         if (profile.lastBootedAt > 0) {
@@ -951,6 +974,7 @@ public final class MainActivity extends Activity {
         LinearLayout.LayoutParams mediaParams = new LinearLayout.LayoutParams(dp(170), dp(44));
         mediaParams.leftMargin = dp(10);
         controls.addView(button("Change media", v -> pickSessionMedia()), mediaParams);
+        addCounterControl(controls);
         ClassicUi.sessionOverlay(controls);
         page.addView(guest, new FrameLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
@@ -962,8 +986,8 @@ public final class MainActivity extends Activity {
         sessionPaused = false;
         requestGuestAudioFocus();
         sessionActive = NativeHost.startSession(sessionProfile.launchPath,
-                getFilesDir().getAbsolutePath(), RuntimeTimingPolicy.forExperimentalMachine(
-                        sessionProfile.isExperimental()), presentationPolicy);
+                getFilesDir().getAbsolutePath(), RuntimeTimingPolicy.forLaunch(
+                        sessionProfile.isExperimental(), false), presentationPolicy);
         if (!sessionActive) {
             showHome();
             Toast.makeText(this, "This machine could not start.", Toast.LENGTH_LONG).show();
@@ -986,9 +1010,11 @@ public final class MainActivity extends Activity {
         FrameLayout page = new FrameLayout(this);
         page.setBackgroundColor(BG);
         TextView decoderResidency = text("Decoder residency: waiting…", 13, MUTED);
+        livePerformanceCounters = decoderResidency;
+        decoderResidency.setVisibility(performanceDisplay.visible() ? View.VISIBLE : View.GONE);
         DynamicTrialController controller = new DynamicTrialController(this,
                 (status, error, residency) -> {
-            if (residency != null) decoderResidency.setText(residency +
+            if (residency != null && performanceDisplay.visible()) decoderResidency.setText(residency +
                     (dynamicTrial != null && dynamicTrial.presentationStatus() == -1 ?
                             " · GPU unavailable: Software · 15 FPS" : ""));
             if (dynamicTrial != null) reportPresentationFallback(dynamicTrial.presentationStatus());
@@ -1000,6 +1026,7 @@ public final class MainActivity extends Activity {
             }
         });
         dynamicTrial = controller;
+        controller.setShowCounters(performanceDisplay.visible());
         GuestDisplayView guest = new GuestDisplayView(this, this::deviceHandle,
                 new GuestDisplayView.SessionBridge() {
                     @Override public void setSurface(android.view.Surface surface) {
@@ -1024,7 +1051,7 @@ public final class MainActivity extends Activity {
         controls.setGravity(Gravity.CENTER_VERTICAL);
         controls.setPadding(dp(12), dp(8), dp(12), dp(8));
         sessionControls = controls;
-        controls.addView(button("Stop trial", v -> confirmSessionAction(false)),
+        controls.addView(button("Exit", v -> confirmSessionAction(false)),
                 new LinearLayout.LayoutParams(dp(130), dp(44)));
         TextView title = text(dynamicPolicy.label + " · " + sessionProfile.name, 20, PRIMARY);
         title.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
@@ -1034,6 +1061,7 @@ public final class MainActivity extends Activity {
         diagnosticLabels.addView(decoderResidency);
         controls.addView(diagnosticLabels, new LinearLayout.LayoutParams(0,
                 ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+        addCounterControl(controls);
         ClassicUi.sessionOverlay(controls);
         page.addView(guest, new FrameLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
@@ -1082,6 +1110,28 @@ public final class MainActivity extends Activity {
                 showHome();
             }
         });
+    }
+
+    private void addCounterControl(LinearLayout controls) {
+        Button counters = button(performanceDisplay.visible() ? "Counters: on" : "Counters: off", null);
+        counters.setContentDescription("Show performance counters");
+        counters.setSelected(performanceDisplay.visible());
+        counters.setOnClickListener(v -> {
+            releasePointerAndShowControls();
+            boolean visible = !performanceDisplay.visible();
+            if (!performanceDisplay.setVisible(visible)) {
+                Toast.makeText(this, "Could not save counter visibility.", Toast.LENGTH_LONG).show();
+            }
+            visible = performanceDisplay.visible();
+            counters.setText(visible ? "Counters: on" : "Counters: off");
+            counters.setSelected(visible);
+            if (livePerformanceCounters != null) {
+                livePerformanceCounters.setText("Decoder residency: waiting…");
+                livePerformanceCounters.setVisibility(visible ? View.VISIBLE : View.GONE);
+            }
+            if (dynamicTrial != null) dynamicTrial.setShowCounters(visible);
+        });
+        controls.addView(counters, new LinearLayout.LayoutParams(dp(150), dp(48)));
     }
 
     private void confirmDynamicReadiness(DynamicTrialController controller, int evidence,

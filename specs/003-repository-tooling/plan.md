@@ -1,5 +1,15 @@
 # Implementation Plan: Repository and Backup Tooling
 
+For promotion verification, extend the existing build entry point with an explicit
+`--release` branch using assembleRelease and the unsigned output. Keep --debug
+paths unchanged. Validate shell syntax, both builds and packaged CPU fixtures;
+rollback removes only the optional branch.
+
+Release verification exposed 18 unpinned lint artifacts (the pinned Android
+plugin's lint 32.0.1 toolchain and Groovy 3.0.22). Verify cached artifacts against
+their official Google Maven/Maven Central published checksums, then add SHA-256
+pins. Do not disable dependency verification or release lint to obtain a pass.
+
 **Feature**: `003-repository-tooling` | **Date**: 2026-08-13
 
 ## Summary

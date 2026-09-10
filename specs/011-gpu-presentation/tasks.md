@@ -1,5 +1,8 @@
 # Tasks
 
+- [x] T012 Promote GPU to opt-in availability across roles/builds; verify
+  unchanged defaults, independent CPU selection and recovery/fallback policies.
+
 - [x] T001 Record requirements, independent experimental rollout and rollback.
 - [x] T002 Implement schema-8 preference, Display drafts and policy boundaries.
 - [x] T003 Implement presenter-owned EGL backend, pacing and visible fallback.

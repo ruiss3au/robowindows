@@ -1,5 +1,9 @@
 # Dynamic execution safety contract
 
+The 2026-09-10 opt-in amendment in the feature specification supersedes role/build
+restrictions for fixed-20k only. Every durable-state, ownership, capability and
+recovery rule below applies to ordinary machines as well as experimental copies.
+
 ## Durable data and selection
 
 Persist one versioned authoritative machine record containing role, selected

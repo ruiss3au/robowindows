@@ -172,8 +172,9 @@ failure to a measured subsystem without relying only on subjective listening.
 - **FR-020**: Debug audio diagnostics MUST distinguish starvation from sample saturation
   using aggregate counters only; they MUST NOT persist or log guest PCM.
 - **FR-021**: Experimental machines MUST use the internal `balanced-100ms` timing
-  policy under both Normal and DynRec execution. Stable machines MUST retain the
-  existing scheduling and 200 ms startup-buffer behavior. The policy MUST be
+  policy under both Normal and DynRec execution. The 2026-09-10 opt-in amendment
+  also requires balanced timing for ordinary-machine DynRec. Ordinary Normal
+  machines retain existing scheduling and 200 ms startup-buffer behavior. The policy MUST be
   selected from a product-owned allowlist and MUST NOT be inferred from a media
   path or exposed as a raw user setting.
 - **FR-022**: The experimental scheduler MUST preserve fixed guest-frame deadlines

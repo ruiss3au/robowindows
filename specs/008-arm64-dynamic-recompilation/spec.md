@@ -1,5 +1,22 @@
 # Feature Specification: ARM64 Dynamic Recompilation
 
+## Opt-in availability amendment — 2026-09-10
+
+This user-approved amendment supersedes experimental-role/debug-build restrictions
+in FR-001/013/015 and the historical execution contract, not their safety checks.
+Fixed-20k DynRec is an ordinary opt-in choice in both build types. Existing
+selections and Normal defaults remain unchanged. Selection/start still require
+clean shutdown, current-build CPU correctness, owned non-aliased writable media,
+current generation and no active/recovery state. Journaling, isolated execution,
+Normal fallback and disk-check recovery apply equally to ordinary machines.
+Other cycle policies remain debug experimental diagnostics only.
+
+Availability is not quality certification: FR-013/014 long-duration/audio/clock
+gates remain incomplete, not passed. No engine optimization or Windows campaign
+is authorized. CPU tests are manually runnable and rerunnable in both builds;
+starting a rerun durably invalidates the old pass, and only a complete new pass
+authorizes DynRec. Normal/GPU do not require CPU-test success.
+
 **Feature**: `008-arm64-dynamic-recompilation`  
 **Status**: Correctness gate and first Windows DynRec 20k trial passed; performance validation in progress
 

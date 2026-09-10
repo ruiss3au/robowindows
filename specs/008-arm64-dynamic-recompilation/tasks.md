@@ -1,5 +1,10 @@
 # Tasks: ARM64 Dynamic Recompilation
 
+- [x] T047 Implement fixed-20k opt-in access for both roles/builds, preserve
+  safety boundaries and generalize recovery; verify disposable ordinary machines.
+- [x] T048 Expose CPU tests in both builds with durable rerun invalidation,
+  progress/result/cancel behavior and unchanged disposable fixture isolation.
+
 **Current campaign scope (user decision, 2026-09-09):** further AoE2/audio,
 pause/resume, ten start/shutdown cycles and the 30-minute thermal run are dropped
 from the execution queue. Their portions of T009/T010 remain incomplete, not

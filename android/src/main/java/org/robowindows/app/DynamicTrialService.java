@@ -122,8 +122,8 @@ public final class DynamicTrialService extends Service {
     }
 
     private void start(Bundle data) throws IOException {
-        if (!BuildConfig.DEBUG || !CpuFixtureGate.passed(this)) {
-            throw new IOException("DynRec requires a diagnostic build with a passed CPU gate");
+        if (!CpuFixtureGate.passed(this)) {
+            throw new IOException("DynRec requires a passed CPU test for this build");
         }
         if (started) throw new IOException("Dynamic runner already owns a session");
         if (data == null) throw new IOException("Dynamic launch description is missing");

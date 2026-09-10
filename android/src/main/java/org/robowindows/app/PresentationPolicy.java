@@ -8,6 +8,6 @@ final class PresentationPolicy {
     static boolean allowed(int value) { return value == SOFTWARE || value == GPU; }
     static int forLaunch(int saved, boolean debug, boolean experimental, boolean recovery) {
         if (!allowed(saved)) throw new IllegalArgumentException("Unknown presentation mode");
-        return debug && experimental && !recovery ? saved : SOFTWARE;
+        return recovery ? SOFTWARE : saved;
     }
 }

@@ -60,11 +60,9 @@ final class SettingsDraft {
 
     static String dynamicUnavailable(boolean debug, boolean experimental,
             boolean busy, boolean recovery, boolean clean, boolean cpuPassed) {
-        if (!experimental) return "DynRec requires an experimental copy.";
-        if (!debug) return "DynRec is available only in diagnostic builds.";
         if (busy) return "Stop the current session or test first.";
-        if (recovery) return "Complete this copy's disk-check recovery first.";
-        if (!clean) return "Shut down this copy normally inside Windows first.";
+        if (recovery) return "Complete this machine's disk-check recovery first.";
+        if (!clean) return "Shut down this machine normally inside Windows first.";
         if (!cpuPassed) return "Run and pass the CPU test in Tests for this build.";
         return null;
     }

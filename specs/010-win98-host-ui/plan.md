@@ -1,5 +1,17 @@
 # Implementation and rollback
 
+## Optional diagnostics amendment — 2026-09-10
+
+Use one app-private boolean preference (false default), shared by Tests and
+session controls. Hide residency TextViews and skip text formatting while hidden;
+retain polling, aggregate logs and fatal/fallback notifications. No new native
+metric API. Keep controls translucent, accessible and >=48 dp.
+Separate CPU test status from its action using the existing core token. Invalidate
+pass synchronously before fixtures; failed/cancelled tests stay unqualified.
+Keep bounded product-owned status only. Test persistence, busy guards,
+cancellation, stale-token rejection and both build types. Roll back UI through a
+forward fix without changing profiles or disks.
+
 Use existing Java Android Views with shared drawable/widget helpers; no new UI
 framework, fonts or dependencies. Gray #C0C0C0, navy #000080,
 white inset fields and system typography apply across host screens. Retain

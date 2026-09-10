@@ -1,5 +1,8 @@
 # Tasks: Repository and Backup Tooling
 
+- [x] T016 Add and verify unsigned release build entry point alongside unchanged
+  debug output, for opt-in mode/CPU-fixture packaging verification.
+
 - [x] T001 Inventory tracked source, ignored local data, scripts, and large files.
 - [x] T002 Record backup safety and GitHub-readiness requirements.
 - [x] T003 Add shared ADB/device discovery without hard-coded serials.

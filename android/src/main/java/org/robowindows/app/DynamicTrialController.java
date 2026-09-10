@@ -29,6 +29,8 @@ final class DynamicTrialController implements DynamicTrialClient.Listener {
     private long pausedAtMillis = -1;
     private long pausedMillis;
     private long residencyLoggedAtMillis;
+    private boolean showCounters;
+    void setShowCounters(boolean show) { showCounters = show; }
     private DynamicProgressWatchdog progressWatchdog;
     private final Handler handler = new Handler(Looper.getMainLooper());
     private final Runnable livenessPoll = this::pollLiveness;
@@ -56,8 +58,8 @@ final class DynamicTrialController implements DynamicTrialClient.Listener {
     void start(MachineProfile selected, Surface surface, DynamicCyclePolicy dynamicPolicy)
             throws IOException {
         if (attempt != null || finished) throw new IOException("Dynamic trial is already active");
-        if (!BuildConfig.DEBUG || !CpuFixtureGate.passed(context)) {
-            throw new IOException("Run and pass this build's CPU test before a DynRec trial");
+        if (!CpuFixtureGate.passed(context)) {
+            throw new IOException("Run and pass this build's CPU test before using DynRec");
         }
         profile = selected;
         latestSurface = surface;
@@ -196,7 +198,7 @@ final class DynamicTrialController implements DynamicTrialClient.Listener {
                     return;
                 }
             }
-            listener.onStatus(status, null, proof.residencySummary());
+            listener.onStatus(status, null, showCounters ? proof.residencySummary() : null);
         } catch (IOException failure) {
             quarantine(failure.getMessage());
         }

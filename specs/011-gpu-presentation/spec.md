@@ -1,5 +1,13 @@
 # Feature 011: Experimental GPU presentation
 
+## Opt-in availability amendment — 2026-09-10
+
+Supersedes FR-001's diagnostic-build/copy-only restriction. Offer GPU · 30 FPS
+independently of CPU on ordinary and experimental stopped machines in both
+builds. Preserve all existing selections and Software defaults. Recovery uses
+Software; session fallback retains saved GPU preference. Existing audio and
+sustained-quality failures remain recorded, not passed by wider availability.
+
 **Status:** Implemented; disposable acceptance passed, Normal and post-REP DynRec
 Windows smoke failed audio/timing acceptance; further trials on hold (2026-09-10)
 

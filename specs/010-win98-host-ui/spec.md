@@ -1,5 +1,19 @@
 # Feature 010: Classic host UI and CPU settings
 
+## Opt-in modes and optional counters amendment — 2026-09-10
+
+Supersedes FR-004's debug/copy restriction and experimental/trial mode labels:
+offer Normal / DynRec · fixed 20k on eligible stopped machines in both builds.
+Retain transactional and recovery rules. Describe known audio and unverified
+sustained behavior without implying quality qualification.
+FR-013: Add app-wide Show performance counters, initially false, remembered
+across launches, controllable in Tests and sessions. Hide only existing live
+diagnostic labels; retain safety polling, recovery/fallback notices and
+stop/readiness controls. Do not add instrumentation or resize guest video.
+FR-014: Tests separates current-build CPU status from Run CPU tests / Run again.
+Provide progress, cancellation and results, reject busy/recovery state, and never
+open machine disks. Reruns invalidate prior success until a complete new pass.
+
 **Status:** Scoped host-UI acceptance complete (2026-09-10)
 
 - **FR-001:** All project-owned screens use a touch-friendly classic Windows

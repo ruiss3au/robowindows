@@ -2,7 +2,7 @@ package org.robowindows.app;
 
 /** Named, allowlisted cycle policies for guarded DynRec diagnostics. */
 enum DynamicCyclePolicy {
-    FIXED_20K("fixed-20k", "fixed 20000", "DYNREC 20K · EXPERIMENTAL"),
+    FIXED_20K("fixed-20k", "fixed 20000", "DynRec · fixed 20k"),
     FIXED_30K("fixed-30k", "fixed 30000", "DYNREC 30K · EXPERIMENTAL"),
     AUTO_80_LIMIT_30K("auto-80-limit-30k", "auto 80% limit 30000",
             "DYNREC AUTO 80% · MAX 30K · EXPERIMENTAL");
@@ -15,6 +15,10 @@ enum DynamicCyclePolicy {
         this.id = id;
         this.configValue = configValue;
         this.label = label;
+    }
+
+    boolean available(boolean debug, boolean experimental) {
+        return this == FIXED_20K || (debug && experimental);
     }
 
     static DynamicCyclePolicy fromId(String id) {

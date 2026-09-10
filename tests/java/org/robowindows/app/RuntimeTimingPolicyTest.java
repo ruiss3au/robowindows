@@ -2,6 +2,12 @@ package org.robowindows.app;
 
 public final class RuntimeTimingPolicyTest {
     public static void main(String[] args) {
+        require(RuntimeTimingPolicy.forLaunch(false, true) == RuntimeTimingPolicy.BALANCED_100_MS,
+                "ordinary DynRec balanced timing");
+        require(RuntimeTimingPolicy.forLaunch(true, true) == RuntimeTimingPolicy.BALANCED_100_MS,
+                "experimental DynRec balanced timing");
+        require(RuntimeTimingPolicy.forLaunch(false, false) == RuntimeTimingPolicy.LEGACY,
+                "ordinary Normal unchanged");
         require(RuntimeTimingPolicy.forExperimentalMachine(false) == RuntimeTimingPolicy.LEGACY,
                 "stable machines retain legacy timing");
         require(RuntimeTimingPolicy.forExperimentalMachine(true) ==

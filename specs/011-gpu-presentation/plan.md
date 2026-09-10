@@ -1,5 +1,15 @@
 # Implementation and rollback
 
+## Opt-in availability exception — 2026-09-10
+
+User-approved wider availability removes role/build presentation gating in
+settings and parent/child policy validation. Retain unknown-policy rejection,
+recovery Software and runtime fallback. Keeping GPU restricted was the simpler
+rejected option; scoped presentation results justify opt-in use, not sustained
+quality claims. No renderer/audio/engine changes. Forward rollback disables new
+selection or selects Software explicitly; never silently rewrite preferences.
+Validate both roles/builds, unchanged defaults, recovery and independent modes.
+
 Use project-owned C++17/Java with pinned existing Android tools. Link platform
 EGL/OpenGL ES 2.0 only; no new redistributed dependency/license or emulator patch.
 This is an independent experimental feature, not a claim that Feature 008 passed.

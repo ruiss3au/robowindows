@@ -1,5 +1,9 @@
 # Feature Specification: Repository and Backup Tooling
 
+The opt-in promotion adds `scripts/build-android.sh --release`: build an unsigned
+release APK and checksum using the same pinned toolchain. No signing keys,
+installation or publication are implied; debug remains the default.
+
 **Feature**: `003-repository-tooling`
 
 **Created**: 2026-08-13

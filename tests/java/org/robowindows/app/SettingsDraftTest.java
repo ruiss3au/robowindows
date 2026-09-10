@@ -10,8 +10,16 @@ public final class SettingsDraftTest {
         d.dynamic = true; check(d.presentationMode == PresentationPolicy.GPU);
         d.dynamic = false; d.presentationMode = PresentationPolicy.SOFTWARE; check(!d.dirty());
         check(PresentationPolicy.forLaunch(1, true, true, false) == 1);
-        check(PresentationPolicy.forLaunch(1, false, true, false) == 0);
-        check(PresentationPolicy.forLaunch(1, true, false, false) == 0);
+        check(PresentationPolicy.forLaunch(1, false, true, false) == 1);
+        check(PresentationPolicy.forLaunch(1, true, false, false) == 1);
+        check(PresentationPolicy.forLaunch(1, false, false, false) == 1);
+        for (boolean debug : new boolean[]{true, false}) {
+            for (boolean experimental : new boolean[]{true, false}) {
+                check(PresentationPolicy.forLaunch(0, debug, experimental, false) == 0);
+                check(PresentationPolicy.forLaunch(1, debug, experimental, true) == 0);
+                check(SettingsDraft.dynamicUnavailable(debug, experimental, false, false, true, true) == null);
+            }
+        }
         check(PresentationPolicy.forLaunch(1, true, true, true) == 0);
         check(!PresentationPolicy.allowed(-1) && !PresentationPolicy.allowed(2));
         try { PresentationPolicy.forLaunch(9, true, true, false); throw new AssertionError(); }
@@ -40,8 +48,8 @@ public final class SettingsDraftTest {
         SettingsDraft saved = new SettingsDraft(d.name, d.memoryMb, d.normalCycles, d.sound, d.dynamic, d.normalCore);
         check(!saved.dirty());
         check(SettingsDraft.dynamicUnavailable(true, true, false, false, true, true) == null);
-        check(SettingsDraft.dynamicUnavailable(false, true, false, false, true, true) != null);
-        check(SettingsDraft.dynamicUnavailable(true, false, false, false, true, true) != null);
+        check(SettingsDraft.dynamicUnavailable(false, true, false, false, true, true) == null);
+        check(SettingsDraft.dynamicUnavailable(true, false, false, false, true, true) == null);
         check(SettingsDraft.dynamicUnavailable(true, true, true, false, true, true) != null);
         check(SettingsDraft.dynamicUnavailable(true, true, false, true, true, true) != null);
         check(SettingsDraft.dynamicUnavailable(true, true, false, false, false, true) != null);

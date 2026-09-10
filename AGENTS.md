@@ -60,8 +60,9 @@ evidence contradicts it.
 ## Implementation constraints
 
 - Start compatibility work with the conservative `core=normal` CPU path.
-  Automatic/dynamic execution remains experimental until it passes the same
-  correctness and stability gates on the SM-T500.
+  Fixed-20k DynRec and GPU are opt-in product options under the Feature 008/011
+  availability exception; unfinished stability gates remain unpassed. Automatic
+  execution and other dynamic cycle candidates remain diagnostic-only.
 - Keep upstream emulator modifications minimal, isolated under `patches/`, and
   suitable for review.
 - Maintain the narrow project-owned Android/JNI runtime boundary.

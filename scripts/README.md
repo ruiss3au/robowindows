@@ -17,6 +17,7 @@ guest media, and backups are intentionally outside Git.
 | Command | Purpose | Side effects |
 |---|---|---|
 | `scripts/build-android.sh --debug` | Build the ARM64 debug APK and checksum | Writes ignored build/artifact output |
+| `scripts/build-android.sh --release` | Build unsigned ARM64 release APK and checksum for verification | Writes ignored output; does not sign, install or publish |
 | `scripts/build-win98-benchmark.sh` | Build the source-owned Windows 98 benchmark EXE/ISO, map and checksums | Writes ignored `artifacts/win98-benchmark/` output |
 | `scripts/parse-win98-benchmark.sh FILE` | Strictly validate and normalize `RWBENCH.TXT` | Read-only |
 | `scripts/summarize-benchmark-telemetry.sh PROFILE LOG` | Validate and summarize matched benchmark telemetry | Read-only |
