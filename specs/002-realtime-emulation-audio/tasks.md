@@ -382,6 +382,16 @@ recoverable; it is not required for completion of the conservative MVP.
   passed at 29.77 FPS and 98.82% guest timing with zero captured audio/scheduling/
   graphics/clock errors. Final cleanup and unchanged clean/stopped profiles were
   verified. See device attribution evidence; Windows causality remains open.
+- [x] T083 Capture the separately user-started experimental Windows desktop with
+  FR-033 diagnostics, validate complete interval/terminal coverage and clean guest
+  shutdown, and review measured clear paths without runtime tuning. Recorded 39
+  complete desktop groups: 121 underruns, 17,565 missing frames, one deadline
+  reset and 29.81 FPS; 99.78% of clear calls were reclamation/page pressure.
+  Exact overlapping snapshots recovered all 227 periodic groups plus terminal;
+  strict diagnostics/calibration passed. Both profiles remain clean/stopped and
+  unchanged. Individual user activities were not confirmed; whole-session logs
+  also contain PageFault residency. See `translation-attribution.md` for coverage,
+  source review and sampling/causality limits. No fix or promotion is claimed.
 
 T062 remains open. The corrected scheduler passed the complete Normal workload,
 but the matched DynRec start failed before the benchmark when Windows Explorer

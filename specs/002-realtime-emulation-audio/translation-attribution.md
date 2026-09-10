@@ -1,7 +1,8 @@
 # Targeted translation/cache attribution — FR-033
 
 Status: implemented, installed and disposable-device validated (2026-09-10,
-T080–T082). Windows underrun attribution remains unresolved.
+T080–T082); coordinated Windows capture and source review recorded in T083.
+Windows underrun attribution remains unresolved.
 
 ## Decision and limits
 
@@ -411,3 +412,118 @@ changes. The next useful measurement requires a separately coordinated Windows
 session with confirmed user activity; it cannot be inferred from these control
 fixtures. No automatic Windows boot, promotion, push or dropped long/manual gate
 is queued. Preserve the deterministic-sampling and exact-attribution limits above.
+
+## Windows cache-pressure capture — 2026-09-10
+
+The user started `win98 dynrec exp` and confirmed desktop readiness, then shut
+Windows down through the guest after the capture. Read-only checks verified the
+installed APK identity recorded above, an awake/foreground isolated DynRec runner,
+fixed-20k experimental profile and GPU presentation. No agent guest input, boot,
+stop, settings, installation or media operation was performed. Ordinary window
+opening/moving was requested, but the specific actions and subjective sound/lag
+observations were not confirmed; do not label this a standardized workload or a
+human audio pass. Stable `incoming` was not used.
+
+### Coverage and lifecycle
+
+Ignored evidence is under `artifacts/cache-windows-2AbJY2/`. The primary analysis
+uses `window-complete.log`: 39 complete telemetry/worker/timing/cache groups,
+ending at device-log times 12:20:17.203 through 12:20:55.527, totaling 39,316 ms.
+The first of the live capture's 40 groups was excluded because its interval
+started before the 12:20:16.000 capture boundary. Both strict runtime/worker and
+cache summarizers passed; diagnostic clock/scope errors, discarded worker slices
+and discarded samples were zero. All primary groups were foreground/playing,
+configured/current DynRec, with GPU active. Battery temperature was 28.0 C at
+both endpoints; this is neither CPU temperature nor a thermal qualification.
+
+The shutdown logcat ring dump started mid-group and correctly failed the strict
+whole-session normalizer. The earlier `before.log` snapshot and final
+`session-final.log` shared **527 consecutive byte-identical log lines**, allowing
+an overlap-verified concatenation without invented records. The reconstructed
+session passed normalization, worker/cache validation and four-mode calibration:
+227 periodic groups plus a 794,688-us terminal residual, schema 2,
+`reason=guest_shutdown`, at 12:21:48.763. Full-mode calibration was 107,379 ns/slice,
+below the fixed 142,680-ns budget. The original failed partial normalization is
+not evidence. Raw snapshots and the reconstructed/normalized outputs remain
+ignored; no private guest contents or device identifiers are published.
+
+The complete session, including startup and teardown, recorded 2,311 underruns,
+334,576 missing frames and 26 deadline resets across 229,649 reported milliseconds
+(terminal milliseconds floored). Eleven periodic records sampled current
+PageFault, 216 current DynRec; the terminal current decoder was Other after stop.
+Do not merge these startup/unknown-activity observations into the selected desktop
+window or claim clean whole-session DynRec residency. All full-session graphics,
+stream, dropped/saturated audio, diagnostic clock/scope and discard counters were
+zero. Native `guest stopped cleanly` and read-only postflight independently
+verified clean shutdown: no isolated runner, active-session marker or dynamic
+recovery journal. Both profiles remained clean/stopped and unchanged: stable
+Normal/Software generation 1, experimental DynRec/GPU generation 31. The isolated
+DynRec running-state check uses its durable dynamic journal, not the ordinary
+runtime's `active_session` preference.
+
+### Primary desktop-window findings
+
+Presentation held **29.81 FPS**, but audio/timing failed: **121 underruns, 17,565
+missing frames and one deadline resynchronization**. Maximum frontend call was
+42,668 us, producer gap 45,158 us and scheduler lateness 255,474 us. Worker CPU
+totaled 32,525,583 us (82.73% of elapsed time), worker wall 33,066,691 us,
+frontend worker-wait 13,180,297 us and frontend mixing 28,321 us. No stream,
+graphics, post, dropped or saturated audio errors were recorded.
+
+| Primary-window quantity | Four groups with underruns | 35 groups without underruns |
+| --- | ---: | ---: |
+| Reported elapsed ms | 4,027 | 35,289 |
+| Worker CPU / elapsed | 94.74% | 81.36% |
+| Translation attempts | 299,016 | 532,578 |
+| Translation attempts / second | 74,252.79 | 15,091.90 |
+| Cache-reclamation clear calls | 122,836 | 337,695 |
+| Page-pressure clear calls | 169,109 | 199,785 |
+
+Translation rate was about 4.92 times higher in underrun groups. Across the
+whole primary window, 831,221 clear calls comprised 460,531 cache reclamation,
+368,894 page pressure, 1,708 code writes and 88 code-size changes; generic release
+and other were zero. Reclamation plus page pressure accounted for 99.78% of
+recorded clears. Unlike the disposable controls, this Windows session exercised
+both pressure paths heavily. These counts describe clear operations, including
+recursive partners, not unique evictions, bytes, occupancy or subsequent miss
+causes. Per-second grouping and carried audio-queue history establish association,
+not causation.
+
+Only 2,913 of 831,594 translation attempts were sampled (0.350%): sampled CPU
+total/max were 46,853/111 us; the publication subset was 3,982/50 us. Deterministic
+early-slice selection can miss expensive later work. Do not extrapolate sample
+totals into whole translation cost, infer that publication is globally cheap or
+subtract them from worker CPU to estimate execution cost. The invalidated fallback
+bucket totaled 7,196,493 and opcode fallback 3,811,453; neither is a timed cost.
+
+### Bounded source review and next decision
+
+The installed pinned source plus patches 0001–0010 retains `CACHE_TOTAL=8 MiB`,
+`CACHE_MAXSIZE=8 KiB`, `CACHE_PAGES=512` and `CACHE_BLOCKS=131,072` in
+`src/cpu/core_dynrec.cpp`. These are configured capacities, not measured occupancy.
+`cache_openblock` in `dyn_cache.h` clears the active allocation and adjacent
+allocations as necessary to reserve a maximum-sized block; `cache_closeblock`
+advances/wraps the storage cursor. Reclamation counts do not establish how many
+times the entire cache wrapped or how much generated code it held.
+
+`MakeCodePage` in `core_dynrec/decoder_basic.h` releases an existing used handler
+when no free handler remains, avoiding the current cross-page decode source when
+possible. `ClearRelease` clears that page's blocks; `Release` restores the old
+handler and clears the TLB. Crucially, the dispatcher's initial `MakeCodePage`
+precedes the sampled `CreateCacheBlock` scope. Its pressure/release work is not
+covered by those translation samples, while a nested cross-page call can be.
+The present counters do not time page release, TLB clearing, link cleanup or
+storage reclamation separately.
+
+The next bounded offline task is to specify a source-owned pressure/recycling
+reproducer and distinguish handler-pressure work from storage reclamation before
+considering a policy change. Require exact guest results, independent timing,
+direct reason coverage, Normal-first comparison and unchanged existing controls.
+If new reason-cost timing is needed, specify and validate its clock/selection
+budget first. Do not enlarge caches, change replacement/link policy, remove ARM
+publication barriers or claim a Windows fix from these counts. T076 remains open;
+no additional Windows trial, benchmark campaign, promotion or dropped manual/
+thermal gate is queued. This milestone changes documentation only and requires
+no rebuild or reinstall.
+Repository hygiene, `git diff --check` and pinned-source verification passed for
+this documentation milestone. Raw captures remain ignored and are not committed.

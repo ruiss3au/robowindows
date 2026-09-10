@@ -103,8 +103,15 @@ specification, plan, tasks, and validation record when work begins.
   held 29.77 FPS with 98.82% guest timing and zero captured audio/scheduling/
   graphics errors. Rewrite directly recorded 4,095 code-write clears; the controls
   did not hit cache-reclamation/page-pressure paths. Both real profiles remain
-  clean/stopped and unchanged. Next, coordinate a short instrumented Windows
-  session with confirmed user activity to measure the remaining underruns
+  clean/stopped and unchanged. The subsequent coordinated Windows capture (T083)
+  recorded 121 underruns, 17,565 missing frames and one reset in 39.316 seconds
+  at 29.81 FPS, with clean shutdown and strict complete-session coverage. Cache
+  reclamation/page pressure accounted for 99.78% of primary-window clear calls;
+  underrun groups had about 4.92 times the translation rate. Individual activity
+  was not confirmed, and bounded samples do not establish causal phase costs.
+  Next, specify an offline source-owned pressure/recycling reproducer: distinguish
+  handler release/TLB work (outside the initial translation sample) from storage
+  reclamation before considering any execution/cache policy change
   ([design and evidence](002-realtime-emulation-audio/translation-attribution.md)).
   No speculative engine/buffer tuning or
   Windows run is queued
